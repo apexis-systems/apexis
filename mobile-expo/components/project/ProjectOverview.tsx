@@ -158,9 +158,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             getFolders(projectId)
                 .then((data: any) => {
                     setProjectFolders(Array.isArray(data) ? data : []);
-                    if (Array.isArray(data)) {
-                        setSelectedFolders(data.map((f: any) => f.id));
-                    }
+                    setSelectedFolders([]);
                 })
                 .catch((err) => {
                     console.error("Failed to fetch folders mobile", err);

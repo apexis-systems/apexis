@@ -160,6 +160,28 @@ const FolderPickerDialog = ({
         effectiveSelection.length !== selectedFolderIds.length || 
         !selectedFolderIds.every(id => effectiveSelection.some(tId => String(tId) === String(id)));
 
+    const currentLevelFolders = getFoldersInCurrentLevel();
+    const visibleFolderIds = currentLevelFolders.map(f => String(f.id));
+    const isAnyVisibleSelected = currentLevelFolders.some(f => 
+        effectiveSelection.some(id => String(id) === String(f.id))
+    );
+
+    const handleToggleAll = () => {
+        if (isAnyVisibleSelected) {
+            setCurrentSelected(prev => prev.filter(id => !visibleFolderIds.includes(String(id))));
+        } else {
+            setCurrentSelected(prev => {
+                const newSelection = [...prev];
+                currentLevelFolders.forEach(f => {
+                    if (!newSelection.some(id => String(id) === String(f.id))) {
+                        newSelection.push(f.id);
+                    }
+                });
+                return newSelection;
+            });
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={(val) => {
             onOpenChange(val);
@@ -195,6 +217,34 @@ const FolderPickerDialog = ({
                         Photos
                     </button>
                 </div>
+
+                {/* Toggle All Button */}
+                {currentLevelFolders.length > 0 && (
+                    <div className="flex justify-end px-1.5 py-0.5">
+                        <button
+                            type="button"
+                            onClick={handleToggleAll}
+                            className={cn(
+                                "flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-all duration-200",
+                                isAnyVisibleSelected 
+                                    ? "bg-accent/10 border-accent/30 text-accent hover:bg-accent/20" 
+                                    : "bg-muted border-border text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                            )}
+                        >
+                            {isAnyVisibleSelected ? (
+                                <>
+                                    <FolderMinus className="h-3 w-3" />
+                                    <span>Unselect All</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="h-3 w-3 stroke-[3px]" />
+                                    <span>Select All</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
  
                 <div className="max-h-[320px] overflow-y-auto py-1 space-y-3 pr-1">
                     {/* Breadcrumbs */}

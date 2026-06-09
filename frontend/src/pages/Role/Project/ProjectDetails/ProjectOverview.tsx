@@ -92,9 +92,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       getFolders(project.id)
         .then((data: any) => {
           setProjectFolders(Array.isArray(data) ? data : []);
-          if (Array.isArray(data)) {
-            setSelectedFolders(data.map((f: any) => f.id));
-          }
+          setSelectedFolders([]);
         })
         .catch((err) => {
           console.error("Failed to fetch folders", err);

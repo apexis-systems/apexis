@@ -172,6 +172,28 @@ export default function MobileFolderPickerDialog({
         effectiveSelection.length !== selectedFolderIds.length || 
         !selectedFolderIds.every(id => effectiveSelection.some(tId => String(tId) === String(id)));
 
+    const currentLevelFolders = getFoldersInCurrentLevel();
+    const visibleFolderIds = currentLevelFolders.map(f => String(f.id));
+    const isAnyVisibleSelected = currentLevelFolders.some(f => 
+        effectiveSelection.some(id => String(id) === String(f.id))
+    );
+
+    const handleToggleAll = () => {
+        if (isAnyVisibleSelected) {
+            setTempSelection(prev => prev.filter(id => !visibleFolderIds.includes(String(id))));
+        } else {
+            setTempSelection(prev => {
+                const newSelection = [...prev];
+                currentLevelFolders.forEach(f => {
+                    if (!newSelection.some(id => String(id) === String(f.id))) {
+                        newSelection.push(f.id);
+                    }
+                });
+                return newSelection;
+            });
+        }
+    };
+
     return (
         <Modal visible={visible} transparent animationType="slide">
             <View style={styles.modalOverlay}>
@@ -186,7 +208,7 @@ export default function MobileFolderPickerDialog({
                         </TouchableOpacity>
                     </View>
  
-                    <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
+                    <View style={[styles.tabBar, { borderBottomColor: colors.border, marginBottom: 8 }]}>
                         <TouchableOpacity 
                             onPress={() => handleTabChange('document')}
                             style={[styles.tab, activeTab === 'document' && { borderBottomColor: colors.primary }]}
@@ -200,6 +222,41 @@ export default function MobileFolderPickerDialog({
                             <Text style={[styles.tabText, { color: activeTab === 'photo' ? colors.primary : colors.textMuted }]}>{t('projectRfi.photos')}</Text>
                         </TouchableOpacity>
                     </View>
+
+                    {currentLevelFolders.length > 0 && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 12, marginBottom: 12 }}>
+                            <TouchableOpacity 
+                                onPress={handleToggleAll}
+                                activeOpacity={0.7}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 6,
+                                    borderRadius: 20,
+                                    borderWidth: 1,
+                                    backgroundColor: isAnyVisibleSelected ? (colors.primary + '15') : (colors.border + '40'),
+                                    borderColor: isAnyVisibleSelected ? colors.primary : colors.border,
+                                }}
+                            >
+                                <Feather 
+                                    name={isAnyVisibleSelected ? "minus-square" : "check-square"} 
+                                    size={12} 
+                                    color={isAnyVisibleSelected ? colors.primary : colors.textMuted} 
+                                />
+                                <Text style={{ 
+                                    fontSize: 10, 
+                                    fontWeight: 'bold', 
+                                    color: isAnyVisibleSelected ? colors.primary : colors.textMuted,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 0.5
+                                }}>
+                                    {isAnyVisibleSelected ? "Unselect All" : "Select All"}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
  
                     <ScrollView style={styles.scrollContainer}>
                         {loading ? (
