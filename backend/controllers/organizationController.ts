@@ -54,18 +54,20 @@ export const updateOrganization = async (req: Request | any, res: Response | any
         }
 
         const orgId = user.organization_id;
-        const { name } = req.body;
+        const { name, restrict_onboarding } = req.body;
 
-        if (!name) {
-            return res.status(400).json({ error: "Name is required" });
+        const updateData: any = {};
+        if (name !== undefined) updateData.name = name;
+        if (restrict_onboarding !== undefined) updateData.restrict_onboarding = restrict_onboarding;
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ error: "Nothing to update" });
         }
 
-        await organizations.update(
-            { name },
-            { where: { id: orgId } }
-        );
+        await organizations.update(updateData, { where: { id: orgId } });
 
-        res.status(200).json({ message: "Organization updated successfully" });
+        const updated = await organizations.findByPk(orgId);
+        res.status(200).json({ message: "Organization updated successfully", organization: updated });
     } catch (error) {
         console.error("Update Organization Error:", error);
         res.status(500).json({ error: "Failed to update organization" });

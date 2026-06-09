@@ -1155,7 +1155,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                         <span className="text-[10px] text-muted-foreground">{t('rfi_id_label').replace('{id}', String(selectedRFI.id))}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id) || String(selectedRFI.assigned_to) === String(user?.id) || String(selectedRFI.assignee?.id) === String(user?.id)) && (
+                                        {isConversationParticipant && (
                                             <>
                                                 <Button 
                                                     variant="outline" 
@@ -1352,99 +1352,101 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     );
                                 })()}
 
-                                <div className="space-y-3 pt-4 border-t border-border">
-                                    <style>{`
-                                        .no-scrollbar::-webkit-scrollbar {
-                                            display: none;
-                                        }
-                                    `}</style>
-                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('response_title')}</p>
-                                    <div 
-                                        ref={chatContainerRef} 
-                                        className="space-y-3 max-h-[340px] overflow-y-auto pr-1 no-scrollbar" 
-                                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                                    >
-                                        {loadingMessages ? (
-                                            <div className="flex items-center text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2" /> {t('loading')}</div>
-                                        ) : (conversationMessages.length === 0 && !selectedRFI?.response && (!selectedRFI?.responsePhotoUrls || selectedRFI.responsePhotoUrls.length === 0)) ? (
-                                            <p className="text-xs text-muted-foreground">No messages yet.</p>
-                                        ) : (
-                                            <>
-                                                {/* Legacy Response Block */}
-                                                {(selectedRFI?.response || (selectedRFI?.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
-                                                    <div className="flex justify-start mb-3">
-                                                        <div className="max-w-[80%] rounded-2xl border border-border bg-card px-3 py-2 shadow-sm">
-                                                            <p className="text-[10px] font-bold mb-1 text-muted-foreground">
-                                                                Response
-                                                            </p>
-                                                            {selectedRFI.response && (
-                                                                <p className="text-sm text-foreground whitespace-pre-wrap break-words">{selectedRFI.response}</p>
-                                                            )}
-                                                            {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
-                                                                <div className="flex flex-wrap gap-2 mt-2">
-                                                                    {selectedRFI.responsePhotoUrls.map((url, idx) => {
-                                                                        const isAudioFile = isAudio(url);
-                                                                        if (isAudioFile) {
-                                                                            return (
-                                                                                <div key={idx} className="w-full max-w-sm mt-1">
-                                                                                    <VoiceNotePlayer url={url} isMe={false} />
-                                                                                </div>
-                                                                            );
-                                                                        } else {
-                                                                            return (
-                                                                                <img
-                                                                                    key={idx}
-                                                                                    src={url}
-                                                                                    alt="Response image"
-                                                                                    className="max-h-36 rounded-lg border border-black/5 cursor-pointer"
-                                                                                    onClick={() => setViewPhoto(url)}
-                                                                                />
-                                                                            );
-                                                                        }
-                                                                    })}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Chat Messages */}
-                                                {conversationMessages.map((message) => {
-                                                    const isMine = String(message.sender_id) === String(user?.id);
-                                                    return (
-                                                        <div key={message.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
-                                                            <div className={cn("max-w-[80%] rounded-2xl border px-3 py-2 shadow-sm", isMine ? "bg-accent text-accent-foreground border-accent/40" : "bg-card border-border")}>
-                                                                <p className={cn("text-[10px] font-bold mb-1", isMine ? "text-accent-foreground/80" : "text-muted-foreground")}>
-                                                                    {message.sender?.name || (isMine ? 'You' : 'User')}
+                                {isConversationParticipant && (
+                                    <div className="space-y-3 pt-4 border-t border-border">
+                                        <style>{`
+                                            .no-scrollbar::-webkit-scrollbar {
+                                                display: none;
+                                            }
+                                        `}</style>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('response_title')}</p>
+                                        <div 
+                                            ref={chatContainerRef} 
+                                            className="space-y-3 max-h-[340px] overflow-y-auto pr-1 no-scrollbar" 
+                                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                                        >
+                                            {loadingMessages ? (
+                                                <div className="flex items-center text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2" /> {t('loading')}</div>
+                                            ) : (conversationMessages.length === 0 && !selectedRFI?.response && (!selectedRFI?.responsePhotoUrls || selectedRFI.responsePhotoUrls.length === 0)) ? (
+                                                <p className="text-xs text-muted-foreground">No messages yet.</p>
+                                            ) : (
+                                                <>
+                                                    {/* Legacy Response Block */}
+                                                    {(selectedRFI?.response || (selectedRFI?.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
+                                                        <div className="flex justify-start mb-3">
+                                                            <div className="max-w-[80%] rounded-2xl border border-border bg-card px-3 py-2 shadow-sm">
+                                                                <p className="text-[10px] font-bold mb-1 text-muted-foreground">
+                                                                    Response
                                                                 </p>
-                                                                {message.text && <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>}
-                                                                {message.attachment_type === 'image' && message.downloadUrl && (
-                                                                    <img
-                                                                        src={message.downloadUrl}
-                                                                        alt={message.file_name || 'Message attachment'}
-                                                                        className="mt-2 max-h-56 rounded-lg border border-black/5 cursor-pointer"
-                                                                        onClick={() => setViewPhoto(message.downloadUrl!)}
-                                                                    />
+                                                                {selectedRFI.response && (
+                                                                    <p className="text-sm text-foreground whitespace-pre-wrap break-words">{selectedRFI.response}</p>
                                                                 )}
-                                                                {message.attachment_type === 'audio' && message.downloadUrl && (
-                                                                    <div className="mt-2">
-                                                                        <VoiceNotePlayer url={message.downloadUrl} isMe={isMine} />
+                                                                {selectedRFI.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0 && (
+                                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                                        {selectedRFI.responsePhotoUrls.map((url, idx) => {
+                                                                            const isAudioFile = isAudio(url);
+                                                                            if (isAudioFile) {
+                                                                                return (
+                                                                                    <div key={idx} className="w-full max-w-sm mt-1">
+                                                                                        <VoiceNotePlayer url={url} isMe={false} />
+                                                                                    </div>
+                                                                                );
+                                                                            } else {
+                                                                                return (
+                                                                                    <img
+                                                                                        key={idx}
+                                                                                        src={url}
+                                                                                        alt="Response image"
+                                                                                        className="max-h-36 rounded-lg border border-black/5 cursor-pointer"
+                                                                                        onClick={() => setViewPhoto(url)}
+                                                                                    />
+                                                                                );
+                                                                            }
+                                                                        })}
                                                                     </div>
                                                                 )}
-                                                                <p className={cn("mt-2 text-[10px]", isMine ? "text-accent-foreground/70" : "text-muted-foreground")}>
-                                                                    {new Date(message.createdAt).toLocaleString()}
-                                                                </p>
                                                             </div>
                                                         </div>
-                                                    );
-                                                })}
-                                            </>
-                                        )}
+                                                    )}
+
+                                                    {/* Chat Messages */}
+                                                    {conversationMessages.map((message) => {
+                                                        const isMine = String(message.sender_id) === String(user?.id);
+                                                        return (
+                                                            <div key={message.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
+                                                                <div className={cn("max-w-[80%] rounded-2xl border px-3 py-2 shadow-sm", isMine ? "bg-accent text-accent-foreground border-accent/40" : "bg-card border-border")}>
+                                                                    <p className={cn("text-[10px] font-bold mb-1", isMine ? "text-accent-foreground/80" : "text-muted-foreground")}>
+                                                                        {message.sender?.name || (isMine ? 'You' : 'User')}
+                                                                    </p>
+                                                                    {message.text && <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>}
+                                                                    {message.attachment_type === 'image' && message.downloadUrl && (
+                                                                        <img
+                                                                            src={message.downloadUrl}
+                                                                            alt={message.file_name || 'Message attachment'}
+                                                                            className="mt-2 max-h-56 rounded-lg border border-black/5 cursor-pointer"
+                                                                            onClick={() => setViewPhoto(message.downloadUrl!)}
+                                                                        />
+                                                                    )}
+                                                                    {message.attachment_type === 'audio' && message.downloadUrl && (
+                                                                        <div className="mt-2">
+                                                                            <VoiceNotePlayer url={message.downloadUrl} isMe={isMine} />
+                                                                        </div>
+                                                                    )}
+                                                                    <p className={cn("mt-2 text-[10px]", isMine ? "text-accent-foreground/70" : "text-muted-foreground")}>
+                                                                        {new Date(message.createdAt).toLocaleString()}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* Linked Attachments Pill */}
-                                {(selectedRFI.file_rfi_links && selectedRFI.file_rfi_links.length > 0) ? (
+                                {isConversationParticipant && (selectedRFI.file_rfi_links && selectedRFI.file_rfi_links.length > 0) ? (
                                     <div className="flex justify-end mt-3 mb-1">
                                         <button
                                             onClick={() => setShowFilePicker(true)}

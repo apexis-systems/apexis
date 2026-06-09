@@ -74,7 +74,7 @@ export const isAdmin = (req: AuthRequest, res: Response, next: NextFunction) => 
 };
 
 export const isContributorOrClient = (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (req.user && (req.user.role === "contributor" || req.user.role === "client")) {
+    if (req.user && ["contributor", "client", "consultant", "vendor"].includes(req.user.role)) {
         next();
     } else {
         res.status(403).json({ error: "Requires Project specific role" });

@@ -8,6 +8,7 @@ import {
     snags,
     rfis,
     organizations,
+    project_member_folders,
     sequelize
 } from "../models/index.ts";
 import jwt from "jsonwebtoken";
@@ -20,7 +21,7 @@ import { getIO } from "../socket.ts";
 
 export const inviteUser = async (req: Request, res: Response) => {
     try {
-        const { role, email, project_id, projectId } = req.body;
+        const { role, email, phone_number, project_id, projectId } = req.body;
         const actualProjectId = project_id || projectId;
         const authUser = (req as any).user;
 
@@ -28,26 +29,39 @@ export const inviteUser = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Only admins can invite users" });
         }
 
-        if (!["contributor", "admin", "client"].includes(role)) {
+        if (!["contributor", "admin", "client", "consultant", "vendor"].includes(role)) {
             return res.status(400).json({ error: "Invalid role specified" });
         }
 
-        if ((role === 'contributor' || role === 'client') && !actualProjectId) {
-            return res.status(400).json({ error: "ProjectId is required for contributor/client invitations" });
+        if (!email && !phone_number) {
+            return res.status(400).json({ error: "Either Email or Phone Number is required to invite a user" });
+        }
+
+        const isProjectRole = ["contributor", "client", "consultant", "vendor"].includes(role);
+        if (isProjectRole && !actualProjectId) {
+            return res.status(400).json({ error: "ProjectId is required for contributor/client/consultant/vendor invitations" });
         }
 
         // Unified Invitation Logic for all roles
-        let user = await users.findOne({ where: { email } });
+        let user = null;
+        if (email) {
+            user = await users.findOne({ where: { email } });
+        } else if (phone_number) {
+            user = await users.findOne({ where: { phone_number } });
+        }
+
         let isNewUser = false;
 
         if (!user) {
             user = await users.create({
                 organization_id: authUser.organization_id,
                 name: "New User",
-                email,
+                email: email || null,
+                phone_number: phone_number || null,
                 role,
                 is_primary: false,
                 email_verified: false,
+                phone_verified: false,
             });
             isNewUser = true;
         } else {
@@ -62,10 +76,18 @@ export const inviteUser = async (req: Request, res: Response) => {
             if (!user.organization_id) {
                 await user.update({ organization_id: authUser.organization_id });
             }
+
+            // If phone_number or email is added during invite to an existing user without it
+            if (phone_number && !user.phone_number) {
+                await user.update({ phone_number });
+            }
+            if (email && !user.email) {
+                await user.update({ email });
+            }
         }
 
         // For Project Roles, pre-associate with the project
-        if ((role === 'contributor' || role === 'client') && actualProjectId) {
+        if (isProjectRole && actualProjectId) {
             // Prevent assigning restricted project roles to organization admins within their own organization
             if (user && user.role === 'admin' && user.organization_id === authUser.organization_id) {
                 return res.status(400).json({ error: "This user is an Admin of this organization and already has full access to the project." });
@@ -76,11 +98,22 @@ export const inviteUser = async (req: Request, res: Response) => {
             });
 
             if (!existingMembership) {
-                await project_members.create({
+                const newMember = await project_members.create({
                     project_id: actualProjectId,
                     user_id: user.id,
                     role: role
                 });
+
+                // If consultant/vendor, map allowed folders
+                if ((role === 'consultant' || role === 'vendor') && req.body.folders && Array.isArray(req.body.folders)) {
+                    const folderMappingTasks = req.body.folders.map((folderId: number) => {
+                        return project_member_folders.create({
+                            project_member_id: newMember.id,
+                            folder_id: folderId
+                        });
+                    });
+                    await Promise.all(folderMappingTasks);
+                }
             } else if (existingMembership.role !== role) {
                 return res.status(400).json({ 
                     error: `User is already a ${existingMembership.role} in this project. You cannot assign multiple roles to the same project.` 
@@ -108,10 +141,10 @@ export const inviteUser = async (req: Request, res: Response) => {
         let inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/invite?token=${token}`;
         const roleName = role.charAt(0).toUpperCase() + role.slice(1);
 
-        if ((role === 'contributor' || role === 'client') && actualProjectId) {
+        if ((role === 'contributor' || role === 'client' || role === 'consultant' || role === 'vendor') && actualProjectId) {
             const project = await projects.findOne({ where: { id: actualProjectId } });
             if (project) {
-                const code = role === 'contributor' ? project.contributor_code : project.client_code;
+                const code = role === 'client' ? project.client_code : project.contributor_code;
                 inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/login-redirect?role=${role}&code=${code}`;
             }
         }
@@ -119,23 +152,29 @@ export const inviteUser = async (req: Request, res: Response) => {
         const org = await organizations.findByPk(authUser.organization_id);
         const organization_name = org ? org.name : "your organization";
 
-        await sendEmail(
-            email,
-            `Invitation to join APEXISpro™ as ${roleName}`,
-            `<div style="font-family: Arial, Helvetica, sans-serif; color: #14213d;">
-                <div style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 20px;">
-                    APEXIS <span style="font-size: 16px;">PRO™</span>
-                </div>
-                <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Welcome to APEXIS<span style="font-size: 14px;">PRO™</span></h1>
-                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 12px;">You have been invited to join <strong>"${organization_name}"</strong> on APEXIS <span style="font-size: 13px;">PRO™</span>.</p>
-                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 24px;">Please click the link below to securely login to your project in the APEXIS<span style="font-size: 13px;">PRO™</span> mobile app:</p>
-                <a href="${inviteUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Login to Project</a>
-                <p style="font-size: 14px; color: #64748b; margin-top: 24px;">If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>
-             </div>`,
-            true
-        );
+        if (email) {
+            try {
+                await sendEmail(
+                    email,
+                    `Invitation to join APEXISpro™ as ${roleName}`,
+                    `<div style="font-family: Arial, Helvetica, sans-serif; color: #14213d;">
+                        <div style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 20px;">
+                            APEXIS <span style="font-size: 16px;">PRO™</span>
+                        </div>
+                        <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Welcome to APEXIS<span style="font-size: 14px;">PRO™</span></h1>
+                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 12px;">You have been invited to join <strong>"${organization_name}"</strong> on APEXIS <span style="font-size: 13px;">PRO™</span>.</p>
+                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 24px;">Please click the link below to securely login to your project in the APEXIS<span style="font-size: 13px;">PRO™</span> mobile app:</p>
+                        <a href="${inviteUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Login to Project</a>
+                        <p style="font-size: 14px; color: #64748b; margin-top: 24px;">If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>
+                     </div>`,
+                    true
+                );
+            } catch (mailErr) {
+                console.error("Failed to send invitation email:", mailErr);
+            }
+        }
 
-        return res.status(201).json({ message: `${roleName} invited successfully`, user: user });
+        return res.status(201).json({ message: `${roleName} invited successfully`, user: user, inviteUrl });
 
     } catch (error) {
         console.error("Invite User Error:", error);
@@ -301,7 +340,7 @@ export const getProjectsUsers = async (req: Request, res: Response) => {
         const memberships = await project_members.findAll({
             where: {
                 project_id: { [Op.in]: projectIds },
-                role: { [Op.in]: ['contributor', 'client'] }
+                role: { [Op.in]: ['contributor', 'client', 'consultant', 'vendor'] }
             },
             attributes: ['user_id']
         });
