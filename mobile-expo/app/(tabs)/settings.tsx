@@ -419,7 +419,7 @@ export default function ProfileScreen() {
                                 </TouchableOpacity>
 
 
-                                <TouchableOpacity
+                                {/* <TouchableOpacity
                                     onPress={() => router.push('/subscription')}
                                     style={{
                                         borderRadius: 16,
@@ -440,7 +440,7 @@ export default function ProfileScreen() {
                                         <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.manageSubscriptionSubtitle')}</Text>
                                     </View>
                                     <Feather name="chevron-right" size={18} color={colors.textMuted} />
-                                </TouchableOpacity>
+                                </TouchableOpacity> */}
 
                             </>
                         )}

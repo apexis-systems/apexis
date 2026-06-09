@@ -8,6 +8,7 @@ import {
     snags,
     rfis,
     organizations,
+    project_member_folders,
     sequelize
 } from "../models/index.ts";
 import jwt from "jsonwebtoken";
@@ -28,12 +29,13 @@ export const inviteUser = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Only admins can invite users" });
         }
 
-        if (!["contributor", "admin", "client"].includes(role)) {
+        if (!["contributor", "admin", "client", "consultant", "vendor"].includes(role)) {
             return res.status(400).json({ error: "Invalid role specified" });
         }
 
-        if ((role === 'contributor' || role === 'client') && !actualProjectId) {
-            return res.status(400).json({ error: "ProjectId is required for contributor/client invitations" });
+        const isProjectRole = ["contributor", "client", "consultant", "vendor"].includes(role);
+        if (isProjectRole && !actualProjectId) {
+            return res.status(400).json({ error: "ProjectId is required for contributor/client/consultant/vendor invitations" });
         }
 
         // Unified Invitation Logic for all roles
@@ -65,7 +67,7 @@ export const inviteUser = async (req: Request, res: Response) => {
         }
 
         // For Project Roles, pre-associate with the project
-        if ((role === 'contributor' || role === 'client') && actualProjectId) {
+        if (isProjectRole && actualProjectId) {
             // Prevent assigning restricted project roles to organization admins within their own organization
             if (user && user.role === 'admin' && user.organization_id === authUser.organization_id) {
                 return res.status(400).json({ error: "This user is an Admin of this organization and already has full access to the project." });
@@ -76,11 +78,22 @@ export const inviteUser = async (req: Request, res: Response) => {
             });
 
             if (!existingMembership) {
-                await project_members.create({
+                const newMember = await project_members.create({
                     project_id: actualProjectId,
                     user_id: user.id,
                     role: role
                 });
+
+                // If consultant/vendor, map allowed folders
+                if ((role === 'consultant' || role === 'vendor') && req.body.folders && Array.isArray(req.body.folders)) {
+                    const folderMappingTasks = req.body.folders.map((folderId: number) => {
+                        return project_member_folders.create({
+                            project_member_id: newMember.id,
+                            folder_id: folderId
+                        });
+                    });
+                    await Promise.all(folderMappingTasks);
+                }
             } else if (existingMembership.role !== role) {
                 return res.status(400).json({ 
                     error: `User is already a ${existingMembership.role} in this project. You cannot assign multiple roles to the same project.` 
@@ -108,10 +121,10 @@ export const inviteUser = async (req: Request, res: Response) => {
         let inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/invite?token=${token}`;
         const roleName = role.charAt(0).toUpperCase() + role.slice(1);
 
-        if ((role === 'contributor' || role === 'client') && actualProjectId) {
+        if ((role === 'contributor' || role === 'client' || role === 'consultant' || role === 'vendor') && actualProjectId) {
             const project = await projects.findOne({ where: { id: actualProjectId } });
             if (project) {
-                const code = role === 'contributor' ? project.contributor_code : project.client_code;
+                const code = role === 'client' ? project.client_code : project.contributor_code;
                 inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/login-redirect?role=${role}&code=${code}`;
             }
         }
@@ -135,7 +148,7 @@ export const inviteUser = async (req: Request, res: Response) => {
             true
         );
 
-        return res.status(201).json({ message: `${roleName} invited successfully`, user: user });
+        return res.status(201).json({ message: `${roleName} invited successfully`, user: user, inviteUrl });
 
     } catch (error) {
         console.error("Invite User Error:", error);
@@ -301,7 +314,7 @@ export const getProjectsUsers = async (req: Request, res: Response) => {
         const memberships = await project_members.findAll({
             where: {
                 project_id: { [Op.in]: projectIds },
-                role: { [Op.in]: ['contributor', 'client'] }
+                role: { [Op.in]: ['contributor', 'client', 'consultant', 'vendor'] }
             },
             attributes: ['user_id']
         });

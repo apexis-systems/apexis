@@ -23,7 +23,7 @@ export const getProjectsUsers = async () => {
 
 export const getChatUsers = () => getOrgUsers('chat');
 
-export const inviteUser = async (data: { email: string, role: string, project_id?: string | number }) => {
+export const inviteUser = async (data: { email: string, role: string, project_id?: string | number, folders?: (string | number)[] }) => {
     try {
         const response = await PrivateAxios.post('/users/invite', data);
         return response.data;

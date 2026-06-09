@@ -1,18 +1,37 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { useUsage } from '@/contexts/UsageContext';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+// In-memory persistent set for dismissed alert messages during app session
+const dismissedAlerts = new Set<string>();
+
 export const UsageAlert: React.FC = () => {
     const { usageData } = useUsage();
     const router = useRouter();
+    const [isDismissed, setIsDismissed] = useState(false);
 
-    if (!usageData || !usageData.alert) return null;
+    useEffect(() => {
+        if (usageData?.alert?.message) {
+            setIsDismissed(dismissedAlerts.has(usageData.alert.message));
+        } else {
+            setIsDismissed(false);
+        }
+    }, [usageData?.alert?.message]);
+
+    if (isDismissed || !usageData || !usageData.alert) return null;
 
     const { alert } = usageData;
     const isError = alert.severity === 'error';
+
+    const handleDismiss = () => {
+        if (usageData?.alert?.message) {
+            dismissedAlerts.add(usageData.alert.message);
+        }
+        setIsDismissed(true);
+    };
 
     return (
         <View style={[
@@ -33,11 +52,14 @@ export const UsageAlert: React.FC = () => {
             <View style={styles.actions}>
                 <TouchableOpacity 
                     style={styles.button}
-                    onPress={() => router.push('/(tabs)/settings')}
+                    onPress={() => router.push('/subscription')}
                 >
                     <Text style={styles.buttonText}>Upgrade</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.closeButton}>
+                <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={handleDismiss}
+                >
                     <Feather name="x" color="white" size={16} />
                 </TouchableOpacity>
             </View>

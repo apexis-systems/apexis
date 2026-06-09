@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2, BarChart3, ChevronRight, Mail, Phone, Trash2 } from 'lucide-react';
+import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2, BarChart3, ChevronRight, Mail, Phone, Trash2, UserPlus, Folder } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,12 @@ import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjec
 import { useSocket } from '@/contexts/SocketContext';
 import { getReports, Report } from '@/services/reportService';
 import { getFiles, getSecureFileUrl } from '@/services/fileService';
+import { getFolders } from '@/services/folderService';
+import { inviteUser } from '@/services/userService';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { cn } from '@/lib/utils';
 import ShareDialog from '@/components/shared/ShareDialog';
+import FolderPickerDialog from './FolderPickerDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getApiErrorMessage } from '@/helpers/apiError';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -44,12 +49,28 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | number | null>(null);
 
+  // Consultant/Vendor Invite Modal States
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'consultant' | 'vendor'>('consultant');
+  const [projectFolders, setProjectFolders] = useState<any[]>([]);
+  const [selectedFolders, setSelectedFolders] = useState<(string | number)[]>([]);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+
   useEffect(() => {
     if (!memberModalType || !project?.id) return;
     setLoadingMembers(true);
     getProjectMembers(project.id)
       .then(async data => {
-         const fetchedMembers = data.members.filter((m: any) => m.role === memberModalType);
+         const fetchedMembers = data.members.filter((m: any) => {
+            if (memberModalType === 'contributor') {
+               return m.role === 'contributor' || m.role === 'consultant' || m.role === 'vendor';
+            }
+            return m.role === memberModalType;
+         });
          const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
             if (m.user.profile_pic) {
                 try {
@@ -65,6 +86,58 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       .finally(() => setLoadingMembers(false));
   }, [memberModalType, project?.id]);
 
+  useEffect(() => {
+    if (isInviteModalOpen && project?.id) {
+      setLoadingFolders(true);
+      getFolders(project.id)
+        .then((data: any) => {
+          setProjectFolders(Array.isArray(data) ? data : []);
+          if (Array.isArray(data)) {
+            setSelectedFolders(data.map((f: any) => f.id));
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch folders", err);
+          toast.error("Failed to load project folders");
+        })
+        .finally(() => setLoadingFolders(false));
+    } else {
+      setInviteEmail('');
+      setInviteRole('consultant');
+      setProjectFolders([]);
+      setSelectedFolders([]);
+      setGeneratedInviteUrl(null);
+    }
+  }, [isInviteModalOpen, project?.id]);
+
+  const handleInviteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    try {
+      setInviting(true);
+      const res = await inviteUser({
+        email: inviteEmail.trim(),
+        role: inviteRole,
+        project_id: project.id,
+        folders: selectedFolders
+      });
+      toast.success(`${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'} invited successfully`);
+      if (res.inviteUrl) {
+        setGeneratedInviteUrl(res.inviteUrl);
+      } else {
+        setIsInviteModalOpen(false);
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast.error(getApiErrorMessage(error, "Failed to send invitation"));
+    } finally {
+      setInviting(false);
+    }
+  };
+
   const handleRemoveMember = async (member: any) => {
     if (!project?.id || !member?.user?.id) return;
     try {
@@ -72,7 +145,12 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       await removeProjectMember(project.id, member.user.id);
       toast.success(t('project_access_removed'));
       const refreshed = await getProjectMembers(project.id);
-      const fetchedMembers = refreshed.members.filter((m: any) => m.role === memberModalType);
+      const fetchedMembers = refreshed.members.filter((m: any) => {
+        if (memberModalType === 'contributor') {
+          return m.role === 'contributor' || m.role === 'consultant' || m.role === 'vendor';
+        }
+        return m.role === memberModalType;
+      });
       const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
         if (m.user.profile_pic) {
           try {
@@ -276,7 +354,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           <>
             <div 
               className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
-              onClick={() => onEditClick?.('start_date')}
+              onClick={() => (userRole === 'admin' || userRole === 'superadmin') && onEditClick?.('start_date')}
             >
               <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
                 <CalendarDays className="h-4 w-4" />
@@ -286,7 +364,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
             </div>
             <div 
               className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
-              onClick={() => onEditClick?.('end_date')}
+              onClick={() => (userRole === 'admin' || userRole === 'superadmin') && onEditClick?.('end_date')}
             >
               <div className="flex items-center gap-2 text-muted-foreground group-hover:text-accent transition-colors">
                 <CalendarDays className="h-4 w-4" />
@@ -456,13 +534,15 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                   </button>
                 </div>
               </div>
-              <span 
-                 className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
-                 onClick={() => setMemberModalType('contributor')}
-              >
-                  {(project as any).totalContributors || 0} {t('active_label')} {t('contributor')}s
-                  <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
-              </span>
+              <div className="flex items-center justify-between mt-1">
+                <span 
+                   className="text-[10px] font-semibold text-muted-foreground ml-1 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+                   onClick={() => setMemberModalType('contributor')}
+                >
+                    {(project as any).totalContributors || 0} {t('active_label')} {t('contributor')}s
+                    <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </div>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('client_code_label')}</span>
@@ -494,6 +574,14 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
               </span>
             </div>
           </div>
+          <Button
+            onClick={() => setIsInviteModalOpen(true)}
+            variant="outline"
+            className="w-full h-10 border-dashed border-accent/40 text-accent hover:bg-accent/5 hover:text-accent font-semibold text-xs flex items-center justify-center gap-1.5 mt-2"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            Invite Consultant / Vendor
+          </Button>
         </div>
       )}
 
@@ -597,7 +685,24 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                         </div>
                      )}
                      <div className="flex flex-col flex-1 min-w-0">
-                        <span className="text-sm font-bold truncate text-foreground">{m.user.name} {m.user.is_primary && t('primary_label')}</span>
+                        <div className="flex items-center gap-2">
+                           <span className="text-sm font-bold truncate text-foreground">{m.user.name} {m.user.is_primary && t('primary_label')}</span>
+                           {m.role === 'consultant' && (
+                             <span className="text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded-full">
+                               Consultant
+                             </span>
+                           )}
+                           {m.role === 'vendor' && (
+                             <span className="text-[9px] font-bold uppercase tracking-wider bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full">
+                               Vendor
+                             </span>
+                           )}
+                           {m.role === 'contributor' && (
+                             <span className="text-[9px] font-bold uppercase tracking-wider bg-accent/10 text-accent px-2 py-0.5 rounded-full">
+                               Contributor
+                             </span>
+                           )}
+                        </div>
                         <div className="flex flex-col gap-1 mt-1.5">
                            {m.user.email && (
                              <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium"><Mail className="h-3 w-3 text-accent" />{m.user.email}</span>
@@ -623,6 +728,149 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isInviteModalOpen} onOpenChange={(open) => !open && setIsInviteModalOpen(false)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl tracking-wide">
+              <span className="text-accent uppercase tracking-widest text-sm bg-accent/10 px-3 py-1 rounded-full">Invite Contributor</span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          {generatedInviteUrl ? (
+            <div className="space-y-4 py-4">
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-2">
+                <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto animate-bounce" />
+                <h4 className="font-bold text-foreground">Invitation Link Generated!</h4>
+                <p className="text-xs text-muted-foreground">Share this secure link with the consultant/vendor so they can access the project.</p>
+              </div>
+              <div className="flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-2.5 font-mono text-xs break-all">
+                <span className="flex-1 select-all">{generatedInviteUrl}</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(generatedInviteUrl, 'invite-link')}
+                  className="p-2 bg-card border border-border hover:bg-secondary rounded-md transition-colors shrink-0"
+                  title="Copy Link"
+                >
+                  {copiedId === 'invite-link' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareItem({
+                      file_name: `Project Invite (${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'})`,
+                      downloadUrl: generatedInviteUrl,
+                      role: inviteRole
+                    });
+                  }}
+                  className="p-2 bg-card border border-border hover:bg-secondary rounded-md transition-colors shrink-0 text-accent"
+                  title="Share Invite"
+                >
+                  <Share2 className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button onClick={() => setIsInviteModalOpen(false)}>Close</Button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleInviteSubmit} className="space-y-4 py-2">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="consultant@company.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Role Type</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setInviteRole('consultant')}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all",
+                      inviteRole === 'consultant' 
+                        ? "border-accent bg-accent/5 text-foreground" 
+                        : "border-border bg-card text-muted-foreground hover:bg-secondary/50"
+                    )}
+                  >
+                    <span className="font-bold text-sm">Consultant</span>
+                    <span className="text-[10px] opacity-75 mt-0.5">Specialist access control</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInviteRole('vendor')}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all",
+                      inviteRole === 'vendor' 
+                        ? "border-accent bg-accent/5 text-foreground" 
+                        : "border-border bg-card text-muted-foreground hover:bg-secondary/50"
+                    )}
+                  >
+                    <span className="font-bold text-sm">Vendor</span>
+                    <span className="text-[10px] opacity-75 mt-0.5">Supplier access control</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Folder Permissions</label>
+                <div className="flex flex-wrap gap-2">
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="sm" 
+                    className="h-10 w-full justify-start text-xs font-semibold" 
+                    onClick={() => setShowFolderPicker(true)}
+                  >
+                    <Folder className="h-4 w-4 mr-2 text-accent" />
+                    {selectedFolders.length > 0 ? `Manage Folder Permissions (${selectedFolders.length})` : 'Select Folders'}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsInviteModalOpen(false)}
+                  disabled={inviting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={inviting || !inviteEmail.trim()}
+                  className="bg-accent hover:bg-accent/90 text-white font-bold px-5"
+                >
+                  {inviting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Send Invitation
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <FolderPickerDialog 
+        open={showFolderPicker}
+        onOpenChange={setShowFolderPicker}
+        project={project}
+        selectedFolderIds={selectedFolders}
+        onlyTopLevel={true}
+        hideCreate={true}
+        title="Folder Permissions"
+        onSelect={(ids) => {
+          setSelectedFolders(ids);
+          setShowFolderPicker(false);
+        }}
+      />
     </div>
   );
 };

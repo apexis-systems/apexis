@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { folders, files, project_members, activities, users as UsersModel, projects, organizations, sequelize } from "../models/index.ts";
+import { folders, files, project_members, activities, users as UsersModel, projects, organizations, project_member_folders, sequelize } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { Op } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
@@ -91,6 +91,20 @@ export const getFolders = async (req: Request, res: Response) => {
         let result = projectFolders.map((f: any) => f.toJSON());
         if (authUser && authUser.role === "client") {
             result = result.filter((folder: any) => folder.client_visible !== false);
+        } else if (authUser && (authUser.role === "consultant" || authUser.role === "vendor")) {
+            const membership = await project_members.findOne({
+                where: { project_id: projectId, user_id: authUser.user_id }
+            });
+            if (membership) {
+                const allowedFolders = await project_member_folders.findAll({
+                    where: { project_member_id: membership.id },
+                    attributes: ['folder_id']
+                });
+                const allowedFolderIds = allowedFolders.map((af: any) => af.folder_id);
+                result = result.filter((folder: any) => allowedFolderIds.includes(folder.id));
+            } else {
+                result = [];
+            }
         }
 
         res.status(200).json(result);

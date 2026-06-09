@@ -29,7 +29,7 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
             },
             role: {
-                type: DataTypes.ENUM("superadmin", "admin", "contributor", "client"),
+                type: DataTypes.ENUM("superadmin", "admin", "contributor", "client", "consultant", "vendor"),
                 allowNull: false,
             },
             is_primary: {
