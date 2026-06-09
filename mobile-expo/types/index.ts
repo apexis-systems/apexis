@@ -16,9 +16,9 @@ export interface User {
     mute_general_notifications?: boolean;
     project_id?: string | number | null;
     organization?: {
-        id: string;
-        name: string;
-        logo: string;
+        id?: string;
+        name?: string;
+        logo?: string;
         plan_name?: string;
         plan_end_date?: string;
         subscription_locked?: boolean;
@@ -26,6 +26,7 @@ export interface User {
         subscription_plan_end_date?: string;
         subscription_grace_end_date?: string;
         subscription_grace_days_remaining?: number;
+        restrict_onboarding?: boolean;
     };
 }
 

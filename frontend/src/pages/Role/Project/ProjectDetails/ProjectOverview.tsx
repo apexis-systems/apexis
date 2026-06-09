@@ -110,18 +110,37 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
 
   const handleInviteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) {
-      toast.error("Please enter a valid email address");
+    const inputVal = inviteEmail.trim();
+    if (!inputVal) {
+      toast.error("Please enter an email address or phone number");
       return;
     }
+
+    const isEmail = inputVal.includes('@');
+    let payload: any = {
+      role: inviteRole,
+      project_id: project.id,
+      folders: selectedFolders
+    };
+
+    if (isEmail) {
+      payload.email = inputVal;
+    } else {
+      // Clean non-numeric characters to extract digits
+      const digits = inputVal.replace(/\D/g, "");
+      if (digits.length === 10) {
+        payload.phone_number = `+91${digits}`;
+      } else if (digits.length > 10 && inputVal.startsWith("+")) {
+        payload.phone_number = `+${digits}`;
+      } else {
+        toast.error("Please enter a valid email address or 10-digit phone number");
+        return;
+      }
+    }
+
     try {
       setInviting(true);
-      const res = await inviteUser({
-        email: inviteEmail.trim(),
-        role: inviteRole,
-        project_id: project.id,
-        folders: selectedFolders
-      });
+      const res = await inviteUser(payload);
       toast.success(`${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'} invited successfully`);
       if (res.inviteUrl) {
         setGeneratedInviteUrl(res.inviteUrl);
@@ -399,24 +418,26 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t('client_project_code')}</div>
             <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
-              <span className="font-mono text-sm font-bold text-foreground">{project.client_code || '—'}</span>
-              {project.client_code && (
+              <span className="font-mono text-sm font-bold text-foreground">{(project as any).client_code || '—'}</span>
+              {(project as any).client_code ? (
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => handleCopy(project.client_code, 'client')}
+                    onClick={() => handleCopy((project as any).client_code, 'client')}
                     className="p-1.5 hover:bg-secondary rounded-md transition-colors"
                     title="Copy Code"
                   >
                     {copiedId === 'client' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
                   </button>
                   <button
-                    onClick={() => handleShareLink('client', project.client_code)}
+                    onClick={() => handleShareLink('client', (project as any).client_code)}
                     className="p-1.5 hover:bg-secondary rounded-md transition-colors text-accent"
                     title="Share Access Link"
                   >
                     <Share2 className="h-4 w-4" />
                   </button>
                 </div>
+              ) : (
+                <span className="text-[10px] text-muted-foreground italic">Restricted</span>
               )}
             </div>
             <button
@@ -458,7 +479,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('contributor_code_label')}</span>
               <div className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
                 <span className="font-mono text-sm font-bold text-foreground">{(project as any).contributor_code || '—'}</span>
-                {(project as any).contributor_code && (
+                {(project as any).contributor_code ? (
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleCopy((project as any).contributor_code, 'contributor')}
@@ -475,6 +496,8 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                       <Share2 className="h-4 w-4" />
                     </button>
                   </div>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground italic">Restricted</span>
                 )}
               </div>
               <span 
@@ -774,11 +797,10 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           ) : (
             <form onSubmit={handleInviteSubmit} className="space-y-4 py-2">
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email Address</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email or Phone Number</label>
                 <input
-                  type="email"
-                  required
-                  placeholder="consultant@company.com"
+                  type="text"
+                  placeholder="Email or 10-digit Phone Number"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"

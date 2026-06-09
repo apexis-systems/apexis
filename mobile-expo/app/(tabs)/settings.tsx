@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { fetchSecureLogo } from '@/services/organizationService';
+import { fetchSecureLogo, updateOrganization } from '@/services/organizationService';
 import { updateNotificationSettings, updateUserProfilePic, updateUserName } from '@/services/userService';
 import { getMyMemberships, switchContext } from '@/services/authService';
 import LogoPreviewModal from '@/components/shared/LogoPreviewModal';
@@ -528,34 +528,77 @@ export default function ProfileScreen() {
                                 {t('settings.notifications')}
                             </Text>
 
-                            <View
-                                style={{
-                                    borderRadius: 16,
-                                    backgroundColor: colors.surface,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                    padding: 16,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    gap: 14,
-                                    opacity: notificationSettingsLoading ? 0.7 : 1
-                                }}
-                            >
-                                <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
-                                    <Feather name="bell-off" size={20} color={colors.text} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.muteNotifications')}</Text>
-                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.muteNotificationsSubtitle')}</Text>
+                            <View style={{ gap: 12 }}>
+                                <View
+                                    style={{
+                                        borderRadius: 16,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        padding: 16,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 14,
+                                        opacity: notificationSettingsLoading ? 0.7 : 1
+                                    }}
+                                >
+                                    <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name="bell-off" size={20} color={colors.text} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('settings.muteNotifications')}</Text>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{t('settings.muteNotificationsSubtitle')}</Text>
+                                    </View>
+
+                                    <Switch
+                                        value={!!user.mute_general_notifications}
+                                        onValueChange={handleToggleMuteNotifications}
+                                        disabled={notificationSettingsLoading}
+                                        trackColor={{ false: colors.border, true: colors.primary }}
+                                        thumbColor={Platform.OS === 'ios' ? undefined : (user.mute_general_notifications ? '#fff' : '#f4f3f4')}
+                                    />
                                 </View>
 
-                                <Switch
-                                    value={!!user.mute_general_notifications}
-                                    onValueChange={handleToggleMuteNotifications}
-                                    disabled={notificationSettingsLoading}
-                                    trackColor={{ false: colors.border, true: colors.primary }}
-                                    thumbColor={Platform.OS === 'ios' ? undefined : (user.mute_general_notifications ? '#fff' : '#f4f3f4')}
-                                />
+                                <View
+                                    style={{
+                                        borderRadius: 16,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        padding: 16,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 14
+                                    }}
+                                >
+                                    <View style={{ backgroundColor: colors.background, width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name="user-check" size={20} color={colors.text} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Restrict Onboarding</Text>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Only admins can invite contributors/clients</Text>
+                                    </View>
+
+                                    <Switch
+                                        value={!!user.organization?.restrict_onboarding}
+                                        onValueChange={async (value) => {
+                                            try {
+                                                await updateOrganization({ restrict_onboarding: value });
+                                                updateUser({
+                                                    organization: {
+                                                        ...user.organization,
+                                                        restrict_onboarding: value
+                                                    }
+                                                });
+                                                Alert.alert('Success', value ? 'Onboarding restricted to Admins' : 'Onboarding restriction removed');
+                                            } catch (error) {
+                                                Alert.alert('Error', 'Failed to update onboarding preference');
+                                            }
+                                        }}
+                                        trackColor={{ false: colors.border, true: colors.primary }}
+                                        thumbColor={Platform.OS === 'ios' ? undefined : (user.organization?.restrict_onboarding ? '#fff' : '#f4f3f4')}
+                                    />
+                                </View>
                             </View>
                         </View>
                     )}

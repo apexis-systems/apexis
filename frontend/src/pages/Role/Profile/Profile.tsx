@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { KeyRound, CheckCircle2, Edit2, Check, Building, Layers, RefreshCw } from 'lucide-react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
@@ -375,6 +376,31 @@ const Profile = () => {
                                                 {compLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('save')}
                                             </Button>
                                         </div>
+                                    </div>
+
+                                    <div className="flex items-center space-x-2 pt-2 border-t border-border/30">
+                                        <Checkbox
+                                            id="restrict_onboarding"
+                                            checked={!!user.organization?.restrict_onboarding}
+                                            onCheckedChange={async (checked) => {
+                                                try {
+                                                    const updated = await updateOrganization({ restrict_onboarding: checked });
+                                                    setUser({
+                                                        ...user,
+                                                        organization: {
+                                                            ...user.organization,
+                                                            restrict_onboarding: checked
+                                                        }
+                                                    });
+                                                    toast.success(checked ? "Onboarding restricted to Admins" : "Onboarding restriction removed");
+                                                } catch (e) {
+                                                    toast.error("Failed to update onboarding restriction");
+                                                }
+                                            }}
+                                        />
+                                        <Label htmlFor="restrict_onboarding" className="text-sm font-medium cursor-pointer">
+                                            Restrict Onboarding (Only Admin can invite users)
+                                        </Label>
                                     </div>
                                 </div>
                             </div>

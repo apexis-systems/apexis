@@ -21,7 +21,7 @@ import { getIO } from "../socket.ts";
 
 export const inviteUser = async (req: Request, res: Response) => {
     try {
-        const { role, email, project_id, projectId } = req.body;
+        const { role, email, phone_number, project_id, projectId } = req.body;
         const actualProjectId = project_id || projectId;
         const authUser = (req as any).user;
 
@@ -33,23 +33,35 @@ export const inviteUser = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Invalid role specified" });
         }
 
+        if (!email && !phone_number) {
+            return res.status(400).json({ error: "Either Email or Phone Number is required to invite a user" });
+        }
+
         const isProjectRole = ["contributor", "client", "consultant", "vendor"].includes(role);
         if (isProjectRole && !actualProjectId) {
             return res.status(400).json({ error: "ProjectId is required for contributor/client/consultant/vendor invitations" });
         }
 
         // Unified Invitation Logic for all roles
-        let user = await users.findOne({ where: { email } });
+        let user = null;
+        if (email) {
+            user = await users.findOne({ where: { email } });
+        } else if (phone_number) {
+            user = await users.findOne({ where: { phone_number } });
+        }
+
         let isNewUser = false;
 
         if (!user) {
             user = await users.create({
                 organization_id: authUser.organization_id,
                 name: "New User",
-                email,
+                email: email || null,
+                phone_number: phone_number || null,
                 role,
                 is_primary: false,
                 email_verified: false,
+                phone_verified: false,
             });
             isNewUser = true;
         } else {
@@ -63,6 +75,14 @@ export const inviteUser = async (req: Request, res: Response) => {
             // If user exists but has no organization (invited but not registered), assign current one
             if (!user.organization_id) {
                 await user.update({ organization_id: authUser.organization_id });
+            }
+
+            // If phone_number or email is added during invite to an existing user without it
+            if (phone_number && !user.phone_number) {
+                await user.update({ phone_number });
+            }
+            if (email && !user.email) {
+                await user.update({ email });
             }
         }
 
@@ -132,21 +152,27 @@ export const inviteUser = async (req: Request, res: Response) => {
         const org = await organizations.findByPk(authUser.organization_id);
         const organization_name = org ? org.name : "your organization";
 
-        await sendEmail(
-            email,
-            `Invitation to join APEXISpro™ as ${roleName}`,
-            `<div style="font-family: Arial, Helvetica, sans-serif; color: #14213d;">
-                <div style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 20px;">
-                    APEXIS <span style="font-size: 16px;">PRO™</span>
-                </div>
-                <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Welcome to APEXIS<span style="font-size: 14px;">PRO™</span></h1>
-                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 12px;">You have been invited to join <strong>"${organization_name}"</strong> on APEXIS <span style="font-size: 13px;">PRO™</span>.</p>
-                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 24px;">Please click the link below to securely login to your project in the APEXIS<span style="font-size: 13px;">PRO™</span> mobile app:</p>
-                <a href="${inviteUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Login to Project</a>
-                <p style="font-size: 14px; color: #64748b; margin-top: 24px;">If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>
-             </div>`,
-            true
-        );
+        if (email) {
+            try {
+                await sendEmail(
+                    email,
+                    `Invitation to join APEXISpro™ as ${roleName}`,
+                    `<div style="font-family: Arial, Helvetica, sans-serif; color: #14213d;">
+                        <div style="font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 20px;">
+                            APEXIS <span style="font-size: 16px;">PRO™</span>
+                        </div>
+                        <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Welcome to APEXIS<span style="font-size: 14px;">PRO™</span></h1>
+                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 12px;">You have been invited to join <strong>"${organization_name}"</strong> on APEXIS <span style="font-size: 13px;">PRO™</span>.</p>
+                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 24px;">Please click the link below to securely login to your project in the APEXIS<span style="font-size: 13px;">PRO™</span> mobile app:</p>
+                        <a href="${inviteUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Login to Project</a>
+                        <p style="font-size: 14px; color: #64748b; margin-top: 24px;">If you don't have the app installed, the link will guide you to the App Store or Play Store.</p>
+                     </div>`,
+                    true
+                );
+            } catch (mailErr) {
+                console.error("Failed to send invitation email:", mailErr);
+            }
+        }
 
         return res.status(201).json({ message: `${roleName} invited successfully`, user: user, inviteUrl });
 

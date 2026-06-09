@@ -302,7 +302,14 @@ export const getProjectById = async (req: Request, res: Response) => {
                         'totalClients'
                     ]
                 ]
-            }
+            },
+            include: [
+                {
+                    model: organizations,
+                    as: 'organization',
+                    attributes: ['id', 'name', 'restrict_onboarding']
+                }
+            ]
         });
 
         if (!project) {
@@ -331,16 +338,23 @@ export const getProjectById = async (req: Request, res: Response) => {
         }
 
         let projectOutput = project.toJSON ? project.toJSON() : project;
+        const restrictOnboarding = !!projectOutput.organization?.restrict_onboarding;
 
         // Strip sensitive codes by role:
         // - admin/superadmin: can see both codes
-        // - contributor: can see contributor_code only
-        // - client: can see client_code only
+        // - contributor: can see contributor_code only (unless restricted onboarding is active)
+        // - client: can see client_code only (unless restricted onboarding is active)
         // - consultant/vendor: can see neither code
         if (authUser.role === "contributor") {
             delete projectOutput.client_code;
+            if (restrictOnboarding) {
+                delete projectOutput.contributor_code;
+            }
         } else if (authUser.role === "client") {
             delete projectOutput.contributor_code;
+            if (restrictOnboarding) {
+                delete projectOutput.client_code;
+            }
         } else if (["consultant", "vendor"].includes(authUser.role)) {
             delete projectOutput.contributor_code;
             delete projectOutput.client_code;
@@ -467,14 +481,16 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
         const requestedRole = typeof role === "string" ? role : undefined;
         const project =
             ["client", "contributor", "consultant", "vendor"].includes(authUser.role)
-                ? await projects.findByPk(id)
+                ? await projects.findByPk(id, { include: [{ model: organizations, as: 'organization', attributes: ['id', 'restrict_onboarding'] }] })
                 : authUser.role === "superadmin"
-                    ? await projects.findOne({ where: { id } })
-                    : await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+                    ? await projects.findOne({ where: { id }, include: [{ model: organizations, as: 'organization', attributes: ['id', 'restrict_onboarding'] }] })
+                    : await projects.findOne({ where: { id, organization_id: authUser.organization_id }, include: [{ model: organizations, as: 'organization', attributes: ['id', 'restrict_onboarding'] }] });
 
         if (!project) {
             return res.status(404).json({ error: "Project not found or not authorized" });
         }
+
+        const restrictOnboarding = !!project.organization?.restrict_onboarding;
 
         // Non-admin roles: each role can share their own type of link
         if (["client", "contributor", "consultant", "vendor"].includes(authUser.role)) {
@@ -494,6 +510,10 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
 
             if (["consultant", "vendor"].includes(authUser.role)) {
                 return res.status(403).json({ error: "Consultants and vendors cannot share project links" });
+            }
+
+            if (restrictOnboarding) {
+                return res.status(403).json({ error: "Onboarding is restricted. Only administrators can onboard users." });
             }
 
             if (authUser.role === "client") {

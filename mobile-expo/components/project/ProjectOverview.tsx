@@ -21,6 +21,7 @@ import { getSecureFileUrl } from '@/services/fileService';
 import { useSocket } from '@/contexts/SocketContext';
 import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember } from '@/services/projectService';
 import { parseApiError } from '@/helpers/apiError';
+import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
 
 interface Props {
     project: Project;
@@ -74,6 +75,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [inviting, setInviting] = useState(false);
     const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
     const [showFolderPicker, setShowFolderPicker] = useState(false);
+    const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]);
 
     useEffect(() => {
         if (!memberModalType || !projectId) return;
@@ -171,22 +173,38 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             setProjectFolders([]);
             setSelectedFolders([]);
             setGeneratedInviteUrl(null);
+            setSelectedCountry(countries[0]);
         }
     }, [isInviteModalOpen, projectId]);
 
     const handleInviteSubmit = async () => {
-        if (!inviteEmail.trim()) {
-            Alert.alert(t('projectOverview.error') as string, "Please enter a valid email address");
+        const inputVal = inviteEmail.trim();
+        if (!inputVal) {
+            Alert.alert(t('projectOverview.error') as string, "Please enter an email address or phone number");
             return;
         }
+
+        const isEmail = inputVal.includes('@');
+        let payload: any = {
+            role: inviteRole,
+            project_id: projectId,
+            folders: selectedFolders
+        };
+
+        if (isEmail) {
+            payload.email = inputVal;
+        } else {
+            const cleanPhone = inputVal.replace(selectedCountry.code, "").trim();
+            if (!/^\d{10}$/.test(cleanPhone)) {
+                Alert.alert(t('projectOverview.error') as string, "Please enter a valid 10-digit phone number");
+                return;
+            }
+            payload.phone_number = `${selectedCountry.code}${cleanPhone}`;
+        }
+
         try {
             setInviting(true);
-            const res = await inviteUser({
-                email: inviteEmail.trim(),
-                role: inviteRole,
-                project_id: projectId,
-                folders: selectedFolders
-            });
+            const res = await inviteUser(payload);
             Alert.alert("Success", `${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'} invited successfully`);
             if (res.inviteUrl) {
                 setGeneratedInviteUrl(res.inviteUrl);
@@ -541,7 +559,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, flex: 1 }}>
                                     {(project as any).client_code || '—'}
                                 </Text>
-                                {(project as any).client_code && (
+                                {(project as any).client_code ? (
                                     <View style={{ flexDirection: 'row', gap: 8 }}>
                                         <TouchableOpacity onPress={() => handleCopy((project as any).client_code, 'client')} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surface }}>
                                             <Feather name={copiedId === 'client' ? "check" : "copy"} size={16} color={copiedId === 'client' ? "#22c55e" : colors.textMuted} />
@@ -550,6 +568,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                             <Feather name="share-2" size={16} color={colors.primary} />
                                         </TouchableOpacity>
                                     </View>
+                                ) : (
+                                    <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic' }}>Restricted</Text>
                                 )}
                             </View>
                             <TouchableOpacity
@@ -618,7 +638,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                         </View>
                                     ) : (
                                         <View style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}>
-                                            <Feather name="users" size={14} color={colors.textMuted} />
+                                            <Feather name={item.id === 'client_list' ? "users" : "lock"} size={14} color={colors.textMuted} />
                                         </View>
                                     )}
                                 </View>
@@ -1023,25 +1043,34 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     ) : (
                         <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} keyboardShouldPersistTaps="handled">
                             <View style={{ gap: 8 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>Email Address</Text>
-                                <TextInput
-                                    placeholder="consultant@company.com"
-                                    placeholderTextColor={colors.textMuted}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                    value={inviteEmail}
-                                    onChangeText={setInviteEmail}
-                                    style={{
-                                        height: 48,
-                                        backgroundColor: colors.surface,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                        borderRadius: 12,
-                                        paddingHorizontal: 16,
-                                        color: colors.text,
-                                        fontSize: 14,
-                                    }}
-                                />
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>Email or Phone Number</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    {(inviteEmail.trim().length > 0 && /^\d/.test(inviteEmail.trim())) && (
+                                        <CountryCodePicker 
+                                            selectedCountry={selectedCountry} 
+                                            onSelect={setSelectedCountry} 
+                                        />
+                                    )}
+                                    <TextInput
+                                        placeholder="Email or Phone Number"
+                                        placeholderTextColor={colors.textMuted}
+                                        keyboardType={inviteEmail.includes('@') ? "email-address" : "default"}
+                                        autoCapitalize="none"
+                                        value={inviteEmail}
+                                        onChangeText={setInviteEmail}
+                                        style={{
+                                            flex: 1,
+                                            height: 48,
+                                            backgroundColor: colors.surface,
+                                            borderWidth: 1,
+                                            borderColor: colors.border,
+                                            borderRadius: 12,
+                                            paddingHorizontal: 16,
+                                            color: colors.text,
+                                            fontSize: 14,
+                                        }}
+                                    />
+                                </View>
                             </View>
 
                             <View style={{ gap: 8 }}>
