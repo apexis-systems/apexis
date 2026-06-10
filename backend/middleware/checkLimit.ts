@@ -156,9 +156,12 @@ export const checkLimit = (type: LimitType) => {
 
         case "member":
           const requestedRole = req.body?.role;
-          if (requestedRole === "contributor") {
+          if (["contributor", "consultant", "vendor"].includes(requestedRole)) {
             currentUsage = await users.count({
-              where: { organization_id: org.id, role: "contributor" },
+              where: { 
+                organization_id: org.id, 
+                role: { [Op.in]: ["contributor", "consultant", "vendor"] } 
+              },
             });
             limit = plan.contributor_limit;
             errorMessage = `Contributor limit reached (${limit}) for your ${plan.name} plan.`;

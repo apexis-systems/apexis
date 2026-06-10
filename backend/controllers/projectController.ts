@@ -143,7 +143,7 @@ export const getProjects = async (req: Request, res: Response) => {
                     adminProjectIds.length > 0 ? { id: { [Op.in]: adminProjectIds } } : null
                 ].filter(Boolean);
             }
-        } else if (activeRole === 'contributor' || activeRole === 'client') {
+        } else if (activeRole === 'contributor' || activeRole === 'client' || activeRole === 'consultant' || activeRole === 'vendor') {
             // Fetch projects where the user has an explicit membership record with the ACTIVE role
             const userMemberships = await project_members.findAll({
                 where: { user_id: authUser.user_id, role: activeRole },
@@ -175,25 +175,61 @@ export const getProjects = async (req: Request, res: Response) => {
             ];
         }
 
+        let totalPhotosQuery: any;
+        let totalDocsQuery: any;
+        let totalFoldersQuery: any;
+
+        if (activeRole === 'client') {
+            totalPhotosQuery = [
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id" AND "folders"."client_visible" = true) AND "files"."client_visible" = true AND "files"."file_type" LIKE 'image/%')`),
+                'totalPhotos'
+            ];
+            totalDocsQuery = [
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id" AND "folders"."client_visible" = true) AND "files"."client_visible" = true AND "files"."file_type" NOT LIKE 'image/%')`),
+                'totalDocs'
+            ];
+            totalFoldersQuery = [
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "folders" WHERE "folders"."project_id" = "projects"."id" AND "folders"."client_visible" = true)`),
+                'totalFolders'
+            ];
+        } else if (activeRole === 'consultant' || activeRole === 'vendor') {
+            totalPhotosQuery = [
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT pmf."folder_id" FROM "project_member_folders" pmf JOIN "project_members" pm ON pmf."project_member_id" = pm."id" WHERE pm."user_id" = ${authUser.user_id} AND pm."project_id" = "projects"."id") AND "files"."file_type" LIKE 'image/%')`),
+                'totalPhotos'
+            ];
+            totalDocsQuery = [
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT pmf."folder_id" FROM "project_member_folders" pmf JOIN "project_members" pm ON pmf."project_member_id" = pm."id" WHERE pm."user_id" = ${authUser.user_id} AND pm."project_id" = "projects"."id") AND "files"."file_type" NOT LIKE 'image/%')`),
+                'totalDocs'
+            ];
+            totalFoldersQuery = [
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "folders" WHERE "folders"."id" IN (SELECT pmf."folder_id" FROM "project_member_folders" pmf JOIN "project_members" pm ON pmf."project_member_id" = pm."id" WHERE pm."user_id" = ${authUser.user_id} AND pm."project_id" = "projects"."id"))`),
+                'totalFolders'
+            ];
+        } else {
+            totalPhotosQuery = [
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id") AND "files"."file_type" LIKE 'image/%')`),
+                'totalPhotos'
+            ];
+            totalDocsQuery = [
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id") AND "files"."file_type" NOT LIKE 'image/%')`),
+                'totalDocs'
+            ];
+            totalFoldersQuery = [
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "folders" WHERE "folders"."project_id" = "projects"."id")`),
+                'totalFolders'
+            ];
+        }
+
         const result = await projects.findAll({
             where: whereCondition,
             paranoid: !isTrash,
             attributes: {
                 include: [
+                    totalPhotosQuery,
+                    totalDocsQuery,
+                    totalFoldersQuery,
                     [
-                        literal(`CAST(COUNT(CASE WHEN "files"."file_type" LIKE 'image/%' THEN 1 END) AS INTEGER)`),
-                        'totalPhotos'
-                    ],
-                    [
-                        literal(`CAST(COUNT(CASE WHEN "files"."file_type" NOT LIKE 'image/%' THEN 1 END) AS INTEGER)`),
-                        'totalDocs'
-                    ],
-                    [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "folders" WHERE "folders"."project_id" = "projects"."id")`),
-                        'totalFolders'
-                    ],
-                    [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" IN ('contributor', 'consultant', 'vendor'))`),
                         'totalContributors'
                     ],
                     [
@@ -208,18 +244,8 @@ export const getProjects = async (req: Request, res: Response) => {
                     as: 'organization',
                     attributes: ['id', 'name'],
                 },
-                {
-                    model: files,
-                    attributes: [],
-                    required: false,
-                },
-            ],
-            group: [
-                literal('"projects"."id"'),
-                literal('"organization"."id"'),
             ],
             order: [['createdAt', 'DESC']],
-            subQuery: false,
         });
 
         // Strip sensitive codes for non-admins and calculate daysRemaining for trash
@@ -268,7 +294,7 @@ export const getProjectById = async (req: Request, res: Response) => {
             attributes: {
                 include: [
                     [
-                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" = 'contributor')`),
+                        literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "project_members" pm WHERE pm."project_id" = "projects"."id" AND pm."role" IN ('contributor', 'consultant', 'vendor'))`),
                         'totalContributors'
                     ],
                     [
@@ -276,7 +302,14 @@ export const getProjectById = async (req: Request, res: Response) => {
                         'totalClients'
                     ]
                 ]
-            }
+            },
+            include: [
+                {
+                    model: organizations,
+                    as: 'organization',
+                    attributes: ['id', 'name', 'restrict_onboarding']
+                }
+            ]
         });
 
         if (!project) {
@@ -294,7 +327,7 @@ export const getProjectById = async (req: Request, res: Response) => {
             }
         }
 
-        if (authUser.role === "contributor" || authUser.role === "client") {
+        if (["contributor", "client", "consultant", "vendor"].includes(authUser.role)) {
             // Check if user is a member of this project in the database with the active role
             const membership = await project_members.findOne({
                 where: { project_id: project.id, user_id: authUser.user_id, role: authUser.role }
@@ -305,11 +338,25 @@ export const getProjectById = async (req: Request, res: Response) => {
         }
 
         let projectOutput = project.toJSON ? project.toJSON() : project;
+        const restrictOnboarding = !!projectOutput.organization?.restrict_onboarding;
 
-        // Strip sensitive codes by role
-        if (authUser.role === "client") {
+        // Strip sensitive codes by role:
+        // - admin/superadmin: can see both codes
+        // - contributor: can see contributor_code only (unless restricted onboarding is active)
+        // - client: can see client_code only (unless restricted onboarding is active)
+        // - consultant/vendor: can see neither code
+        if (authUser.role === "contributor") {
+            delete projectOutput.client_code;
+            if (restrictOnboarding) {
+                delete projectOutput.contributor_code;
+            }
+        } else if (authUser.role === "client") {
             delete projectOutput.contributor_code;
-        } else if (authUser.role === "contributor") {
+            if (restrictOnboarding) {
+                delete projectOutput.client_code;
+            }
+        } else if (["consultant", "vendor"].includes(authUser.role)) {
+            delete projectOutput.contributor_code;
             delete projectOutput.client_code;
         } else if (authUser.role !== "admin" && authUser.role !== "superadmin") {
             delete projectOutput.contributor_code;
@@ -433,28 +480,27 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
 
         const requestedRole = typeof role === "string" ? role : undefined;
         const project =
-            authUser.role === "client" || authUser.role === "contributor"
-                ? await projects.findByPk(id)
+            ["client", "contributor", "consultant", "vendor"].includes(authUser.role)
+                ? await projects.findByPk(id, { include: [{ model: organizations, as: 'organization', attributes: ['id', 'restrict_onboarding'] }] })
                 : authUser.role === "superadmin"
-                    ? await projects.findOne({ where: { id } })
-                    : await projects.findOne({ where: { id, organization_id: authUser.organization_id } });
+                    ? await projects.findOne({ where: { id }, include: [{ model: organizations, as: 'organization', attributes: ['id', 'restrict_onboarding'] }] })
+                    : await projects.findOne({ where: { id, organization_id: authUser.organization_id }, include: [{ model: organizations, as: 'organization', attributes: ['id', 'restrict_onboarding'] }] });
 
         if (!project) {
             return res.status(404).json({ error: "Project not found or not authorized" });
         }
 
-        if (authUser.role === "client" || authUser.role === "contributor") {
-            const requestedRoleForNonAdmin = authUser.role as "client" | "contributor";
+        const restrictOnboarding = !!project.organization?.restrict_onboarding;
 
-            if (requestedRole && requestedRole !== requestedRoleForNonAdmin) {
-                return res.status(403).json({ error: `Only ${requestedRoleForNonAdmin} share links are available` });
-            }
+        // Non-admin roles: each role can share their own type of link
+        if (["client", "contributor", "consultant", "vendor"].includes(authUser.role)) {
+            const memberRole = authUser.role as string;
 
             const membership = await project_members.findOne({
                 where: {
                     project_id: id,
                     user_id: authUser.user_id,
-                    role: requestedRoleForNonAdmin,
+                    role: memberRole,
                 },
             });
 
@@ -462,21 +508,29 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
                 return res.status(403).json({ error: "Not authorized to view share links for this project" });
             }
 
-            const shareUrl = requestedRoleForNonAdmin === "client"
-                ? `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`
-                : `${FRONTEND_URL}/auth/login-redirect?role=contributor&code=${project.contributor_code}`;
-            const shareCode = requestedRoleForNonAdmin === "client" ? project.client_code : project.contributor_code;
-
-            const response: any = {};
-            if (requestedRoleForNonAdmin === "client") {
-                response.clientLink = shareUrl;
-                response.clientCode = shareCode;
-            } else {
-                response.contributorLink = shareUrl;
-                response.contributorCode = shareCode;
+            if (["consultant", "vendor"].includes(authUser.role)) {
+                return res.status(403).json({ error: "Consultants and vendors cannot share project links" });
             }
 
-            return res.status(200).json(response);
+            if (restrictOnboarding) {
+                return res.status(403).json({ error: "Onboarding is restricted. Only administrators can onboard users." });
+            }
+
+            if (authUser.role === "client") {
+                // Client can share client link
+                const shareUrl = `${FRONTEND_URL}/auth/login-redirect?role=client&code=${project.client_code}`;
+                return res.status(200).json({
+                    clientLink: shareUrl,
+                    clientCode: project.client_code,
+                });
+            }
+
+            // contributor — can share the contributor join link
+            const shareUrl = `${FRONTEND_URL}/auth/login-redirect?role=contributor&code=${project.contributor_code}`;
+            return res.status(200).json({
+                contributorLink: shareUrl,
+                contributorCode: project.contributor_code,
+            });
         }
 
         if (authUser.role !== "admin" && authUser.role !== "superadmin") {

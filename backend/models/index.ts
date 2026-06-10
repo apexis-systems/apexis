@@ -65,6 +65,14 @@ db.projects.hasMany(db.project_members, { foreignKey: 'project_id' });
 db.project_members.belongsTo(db.users, { foreignKey: 'user_id' });
 db.users.hasMany(db.project_members, { foreignKey: 'user_id' });
 
+// ProjectMember <-> ProjectMemberFolder
+db.project_members.hasMany(db.project_member_folders, { foreignKey: 'project_member_id' });
+db.project_member_folders.belongsTo(db.project_members, { foreignKey: 'project_member_id' });
+
+// Folder <-> ProjectMemberFolder
+db.folders.hasMany(db.project_member_folders, { foreignKey: 'folder_id' });
+db.project_member_folders.belongsTo(db.folders, { foreignKey: 'folder_id' });
+
 // Project <-> Folder
 db.folders.belongsTo(db.projects, { foreignKey: 'project_id' });
 db.projects.hasMany(db.folders, { foreignKey: 'project_id' });
@@ -229,6 +237,7 @@ export const transactions = db.transactions;
 export const file_links = db.file_links;
 export const file_rfi_links = db.file_rfi_links;
 export const file_snag_links = db.file_snag_links;
+export const project_member_folders = db.project_member_folders;
 
 export { sequelize, Sequelize };
 export default db;

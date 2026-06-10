@@ -158,12 +158,19 @@ export const projectLogin = async (req: Request, res: Response) => {
         });
 
         if (existingMembership) {
-            if (existingMembership.role !== roleForCode) {
+            const isCodeForContributor = roleForCode === 'contributor';
+            const isMemberContributorLike = ['contributor', 'consultant', 'vendor'].includes(existingMembership.role);
+            
+            if (isCodeForContributor && !isMemberContributorLike) {
                 return res.status(400).json({
-                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join with a different role.`
+                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join as a contributor.`
                 });
             }
-            // If they are already a member with the SAME role, we proceed to login (token generation)
+            if (!isCodeForContributor && existingMembership.role !== 'client') {
+                return res.status(400).json({
+                    error: `You are already a member of this project as a ${existingMembership.role}. You cannot join as a client.`
+                });
+            }
         } else {
             // Auto-add them to the project since they possess a valid code and are not yet a member
             await project_members.create({
@@ -221,11 +228,13 @@ export const projectLogin = async (req: Request, res: Response) => {
             }
         }
 
+        const resolvedRole = existingMembership ? existingMembership.role : roleForCode;
+
         const token = jwt.sign(
             {
                 user_id: user.id,
                 name: user.name,
-                role: roleForCode, // Use the role associated with the login code
+                role: resolvedRole, // Use the resolved project-specific role (e.g. contributor, client, consultant, vendor)
                 organization_id: project.organization_id, // Active org context
                 project_id: project.id
             },
@@ -242,7 +251,7 @@ export const projectLogin = async (req: Request, res: Response) => {
 
         res.status(200).json({
             token,
-            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: roleForCode },
+            user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: resolvedRole },
             isPendingName: user.name === "New User" || !user.name || user.name.trim() === ""
         });
     } catch (error: any) {

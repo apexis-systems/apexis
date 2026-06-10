@@ -1496,7 +1496,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                  {selectedRFI && (String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id) || String(selectedRFI.assigned_to) === String(user.id) || String(selectedRFI.assignee?.id) === String(user.id)) && (
+                  {selectedRFI && isConversationParticipant && (
                     <>
                       <TouchableOpacity onPress={() => setShowFilePicker(true)}>
                         <FilePaperclip size={20} color={colors.primary} bgColor={colors.background} />
@@ -1735,89 +1735,91 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </View>
                     )}
 
-                    <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('projectRfi.response')}</Text>
-                      {loadingMessages ? (
-                        <ActivityIndicator color={colors.primary} />
-                      ) : (conversationMessages.length === 0 && !selectedRFI?.response && (!selectedRFI?.responsePhotoUrls || selectedRFI.responsePhotoUrls.length === 0)) ? (
-                        <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectRfi.noMessagesYet')}</Text>
-                      ) : (
-                        <View style={{ gap: 10 }}>
-                          {/* Legacy Response Block */}
-                          {(selectedRFI?.response || (selectedRFI?.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
-                            <View style={{ alignItems: 'flex-start', marginBottom: 10 }}>
-                              <View style={{
-                                maxWidth: '86%',
-                                padding: 12,
-                                borderRadius: 16,
-                                backgroundColor: colors.surface,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                              }}>
-                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>
-                                  Response
-                                </Text>
-                                {selectedRFI.response ? (
-                                  <Text style={{ fontSize: 13, color: colors.text }}>{selectedRFI.response}</Text>
-                                ) : null}
-                                {selectedRFI.responsePhotoUrls?.map((url, idx) => {
-                                  const isAudioFile = isAudio(url);
-                                  if (isAudioFile) {
-                                    return (
-                                      <View key={idx} style={{ marginTop: 8 }}>
-                                        <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                      </View>
-                                    );
-                                  } else {
-                                    return (
-                                      <TouchableOpacity key={idx} onPress={() => setPreviewImage(url)}>
-                                        <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
-                                      </TouchableOpacity>
-                                    );
-                                  }
-                                })}
-                              </View>
-                            </View>
-                          )}
-                          {conversationMessages.map((message) => {
-                            const isMine = String(message.sender_id) === String(user.id);
-                            return (
-                              <View key={message.id} style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+                    {isConversationParticipant && (
+                      <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('projectRfi.response')}</Text>
+                        {loadingMessages ? (
+                          <ActivityIndicator color={colors.primary} />
+                        ) : (conversationMessages.length === 0 && !selectedRFI?.response && (!selectedRFI?.responsePhotoUrls || selectedRFI.responsePhotoUrls.length === 0)) ? (
+                          <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectRfi.noMessagesYet')}</Text>
+                        ) : (
+                          <View style={{ gap: 10 }}>
+                            {/* Legacy Response Block */}
+                            {(selectedRFI?.response || (selectedRFI?.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
+                              <View style={{ alignItems: 'flex-start', marginBottom: 10 }}>
                                 <View style={{
                                   maxWidth: '86%',
                                   padding: 12,
                                   borderRadius: 16,
-                                  backgroundColor: isMine ? colors.primary : colors.surface,
+                                  backgroundColor: colors.surface,
                                   borderWidth: 1,
-                                  borderColor: isMine ? colors.primary : colors.border,
+                                  borderColor: colors.border,
                                 }}>
-                                  <Text style={{ fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : colors.textMuted, marginBottom: 4 }}>
-                                    {message.sender?.name || (isMine ? 'You' : 'User')}
+                                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>
+                                    Response
                                   </Text>
-                                  {message.text ? <Text style={{ fontSize: 13, color: isMine ? '#fff' : colors.text }}>{message.text}</Text> : null}
-                                  {message.attachment_type === 'image' && message.downloadUrl ? (
-                                    <TouchableOpacity onPress={() => setPreviewImage(message.downloadUrl!)}>
-                                      <Image source={{ uri: message.downloadUrl }} style={{ width: 160, height: 160, borderRadius: 12, marginTop: 8 }} />
-                                    </TouchableOpacity>
+                                  {selectedRFI.response ? (
+                                    <Text style={{ fontSize: 13, color: colors.text }}>{selectedRFI.response}</Text>
                                   ) : null}
-                                  {message.attachment_type === 'audio' && message.downloadUrl ? (
-                                    <View style={{ marginTop: 8 }}>
-                                      <VoiceNotePlayer uri={message.downloadUrl} isMe={isMine} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                    </View>
-                                  ) : null}
-                                  <Text style={{ fontSize: 10, color: isMine ? 'rgba(255,255,255,0.8)' : colors.textMuted, marginTop: 6 }}>
-                                    {new Date(message.createdAt).toLocaleString()}
-                                  </Text>
+                                  {selectedRFI.responsePhotoUrls?.map((url, idx) => {
+                                    const isAudioFile = isAudio(url);
+                                    if (isAudioFile) {
+                                      return (
+                                        <View key={idx} style={{ marginTop: 8 }}>
+                                          <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                        </View>
+                                      );
+                                    } else {
+                                      return (
+                                        <TouchableOpacity key={idx} onPress={() => setPreviewImage(url)}>
+                                          <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
+                                        </TouchableOpacity>
+                                      );
+                                    }
+                                  })}
                                 </View>
                               </View>
-                            );
-                          })}
-                        </View>
-                      )}
-                    </View>
+                            )}
+                            {conversationMessages.map((message) => {
+                              const isMine = String(message.sender_id) === String(user.id);
+                              return (
+                                <View key={message.id} style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+                                  <View style={{
+                                    maxWidth: '86%',
+                                    padding: 12,
+                                    borderRadius: 16,
+                                    backgroundColor: isMine ? colors.primary : colors.surface,
+                                    borderWidth: 1,
+                                    borderColor: isMine ? colors.primary : colors.border,
+                                  }}>
+                                    <Text style={{ fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : colors.textMuted, marginBottom: 4 }}>
+                                      {message.sender?.name || (isMine ? 'You' : 'User')}
+                                    </Text>
+                                    {message.text ? <Text style={{ fontSize: 13, color: isMine ? '#fff' : colors.text }}>{message.text}</Text> : null}
+                                    {message.attachment_type === 'image' && message.downloadUrl ? (
+                                      <TouchableOpacity onPress={() => setPreviewImage(message.downloadUrl!)}>
+                                        <Image source={{ uri: message.downloadUrl }} style={{ width: 160, height: 160, borderRadius: 12, marginTop: 8 }} />
+                                      </TouchableOpacity>
+                                    ) : null}
+                                    {message.attachment_type === 'audio' && message.downloadUrl ? (
+                                      <View style={{ marginTop: 8 }}>
+                                        <VoiceNotePlayer uri={message.downloadUrl} isMe={isMine} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                      </View>
+                                    ) : null}
+                                    <Text style={{ fontSize: 10, color: isMine ? 'rgba(255,255,255,0.8)' : colors.textMuted, marginTop: 6 }}>
+                                      {new Date(message.createdAt).toLocaleString()}
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        )}
+                      </View>
+                    )}
 
                     {/* Linked Attachments Pill */}
-                    {(selectedRFI.file_rfi_links && selectedRFI.file_rfi_links.length > 0) ? (
+                    {isConversationParticipant && (selectedRFI.file_rfi_links && selectedRFI.file_rfi_links.length > 0) ? (
                       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, marginBottom: 4 }}>
                         <TouchableOpacity
                           onPress={() => setShowFilePicker(true)}

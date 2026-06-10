@@ -13,6 +13,9 @@ interface MobileFolderPickerDialogProps {
     selectedFolderIds: (string | number)[];
     onConfirm: (folderIds: (string | number)[]) => void;
     submitting?: boolean;
+    onlyTopLevel?: boolean;
+    hideCreate?: boolean;
+    title?: string;
 }
 
 export default function MobileFolderPickerDialog({
@@ -21,7 +24,10 @@ export default function MobileFolderPickerDialog({
     project,
     selectedFolderIds,
     onConfirm,
-    submitting = false
+    submitting = false,
+    onlyTopLevel = false,
+    hideCreate = false,
+    title
 }: MobileFolderPickerDialogProps) {
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
@@ -166,13 +172,35 @@ export default function MobileFolderPickerDialog({
         effectiveSelection.length !== selectedFolderIds.length || 
         !selectedFolderIds.every(id => effectiveSelection.some(tId => String(tId) === String(id)));
 
+    const currentLevelFolders = getFoldersInCurrentLevel();
+    const visibleFolderIds = currentLevelFolders.map(f => String(f.id));
+    const isAnyVisibleSelected = currentLevelFolders.some(f => 
+        effectiveSelection.some(id => String(id) === String(f.id))
+    );
+
+    const handleToggleAll = () => {
+        if (isAnyVisibleSelected) {
+            setTempSelection(prev => prev.filter(id => !visibleFolderIds.includes(String(id))));
+        } else {
+            setTempSelection(prev => {
+                const newSelection = [...prev];
+                currentLevelFolders.forEach(f => {
+                    if (!newSelection.some(id => String(id) === String(f.id))) {
+                        newSelection.push(f.id);
+                    }
+                });
+                return newSelection;
+            });
+        }
+    };
+
     return (
         <Modal visible={visible} transparent animationType="slide">
             <View style={styles.modalOverlay}>
                 <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
                     <View style={styles.header}>
                         <View>
-                            <Text style={[styles.title, { color: colors.text }]}>{t('projectRfi.linkFolders')}</Text>
+                            <Text style={[styles.title, { color: colors.text }]}>{title || t('projectRfi.linkFolders')}</Text>
                             <Text style={{ fontSize: 11, color: colors.textMuted }}>{t('projectRfi.foldersSelected', { count: effectiveSelection.length })}</Text>
                         </View>
                         <TouchableOpacity onPress={onClose}>
@@ -180,7 +208,7 @@ export default function MobileFolderPickerDialog({
                         </TouchableOpacity>
                     </View>
  
-                    <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
+                    <View style={[styles.tabBar, { borderBottomColor: colors.border, marginBottom: 8 }]}>
                         <TouchableOpacity 
                             onPress={() => handleTabChange('document')}
                             style={[styles.tab, activeTab === 'document' && { borderBottomColor: colors.primary }]}
@@ -194,6 +222,41 @@ export default function MobileFolderPickerDialog({
                             <Text style={[styles.tabText, { color: activeTab === 'photo' ? colors.primary : colors.textMuted }]}>{t('projectRfi.photos')}</Text>
                         </TouchableOpacity>
                     </View>
+
+                    {currentLevelFolders.length > 0 && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 12, marginBottom: 12 }}>
+                            <TouchableOpacity 
+                                onPress={handleToggleAll}
+                                activeOpacity={0.7}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 6,
+                                    borderRadius: 20,
+                                    borderWidth: 1,
+                                    backgroundColor: isAnyVisibleSelected ? (colors.primary + '15') : (colors.border + '40'),
+                                    borderColor: isAnyVisibleSelected ? colors.primary : colors.border,
+                                }}
+                            >
+                                <Feather 
+                                    name={isAnyVisibleSelected ? "minus-square" : "check-square"} 
+                                    size={12} 
+                                    color={isAnyVisibleSelected ? colors.primary : colors.textMuted} 
+                                />
+                                <Text style={{ 
+                                    fontSize: 10, 
+                                    fontWeight: 'bold', 
+                                    color: isAnyVisibleSelected ? colors.primary : colors.textMuted,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 0.5
+                                }}>
+                                    {isAnyVisibleSelected ? "Unselect All" : "Select All"}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
  
                     <ScrollView style={styles.scrollContainer}>
                         {loading ? (
@@ -233,7 +296,11 @@ export default function MobileFolderPickerDialog({
                                             <TouchableOpacity
                                                 key={folder.id}
                                                 onPress={() => {
-                                                    setCurrentParentId(folder.id);
+                                                    if (onlyTopLevel) {
+                                                        toggleFolder(folder.id);
+                                                    } else {
+                                                        setCurrentParentId(folder.id);
+                                                    }
                                                 }}
                                                 style={[
                                                     styles.folderItem,
@@ -242,17 +309,27 @@ export default function MobileFolderPickerDialog({
                                                 ]}
                                             >
                                                 {/* Absolute corner selection checkbox */}
-                                                <TouchableOpacity 
-                                                    onPress={() => toggleFolder(folder.id)}
-                                                    style={styles.checkboxContainer}
-                                                >
-                                                    <Feather 
-                                                        name={isSelected ? "check-circle" : "circle"} 
-                                                        size={16} 
-                                                        color={isSelected ? colors.primary : colors.textMuted} 
-                                                    />
-                                                </TouchableOpacity>
- 
+                                                {onlyTopLevel ? (
+                                                    <View style={styles.checkboxContainer}>
+                                                        <Feather 
+                                                            name={isSelected ? "check-circle" : "circle"} 
+                                                            size={16} 
+                                                            color={isSelected ? colors.primary : colors.textMuted} 
+                                                        />
+                                                    </View>
+                                                ) : (
+                                                    <TouchableOpacity 
+                                                        onPress={() => toggleFolder(folder.id)}
+                                                        style={styles.checkboxContainer}
+                                                    >
+                                                        <Feather 
+                                                            name={isSelected ? "check-circle" : "circle"} 
+                                                            size={16} 
+                                                            color={isSelected ? colors.primary : colors.textMuted} 
+                                                        />
+                                                    </TouchableOpacity>
+                                                )}
+
                                                 <Feather name="folder" size={22} color={colors.primary} />
                                                 <Text 
                                                     numberOfLines={2} 
@@ -263,22 +340,24 @@ export default function MobileFolderPickerDialog({
                                             </TouchableOpacity>
                                         );
                                     })}
- 
-                                    <TouchableOpacity
-                                        onPress={() => setShowNewFolderModal(true)}
-                                        style={[
-                                            styles.folderItem,
-                                            { borderColor: colors.border, borderStyle: 'dashed' },
-                                        ]}
-                                    >
-                                        <Feather name="folder-plus" size={22} color={colors.primary} />
-                                        <Text 
-                                            numberOfLines={1} 
-                                            style={[styles.folderName, { color: colors.text }]}
+
+                                    {!hideCreate && (
+                                        <TouchableOpacity
+                                            onPress={() => setShowNewFolderModal(true)}
+                                            style={[
+                                                styles.folderItem,
+                                                { borderColor: colors.border, borderStyle: 'dashed' },
+                                            ]}
                                         >
-                                            New Folder
-                                        </Text>
-                                    </TouchableOpacity>
+                                            <Feather name="folder-plus" size={22} color={colors.primary} />
+                                            <Text 
+                                                numberOfLines={1} 
+                                                style={[styles.folderName, { color: colors.text }]}
+                                            >
+                                                New Folder
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
  
                                     {getFoldersInCurrentLevel().length === 0 && currentParentId !== null && (
                                         <View style={styles.emptyContainer}>

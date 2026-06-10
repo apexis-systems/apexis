@@ -12,7 +12,7 @@ export const uploadOrganizationLogo = async (formData: FormData) => {
     }
 };
 
-export const updateOrganization = async (data: { name: string }) => {
+export const updateOrganization = async (data: { name?: string; restrict_onboarding?: boolean }) => {
     try {
         const response = await PrivateAxios.patch('/organizations', data);
         return response.data;

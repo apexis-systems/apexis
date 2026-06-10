@@ -51,6 +51,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: 100,
             },
+            restrict_onboarding: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
         },
         {
             tableName: "organizations",

@@ -1,7 +1,8 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUsage } from '@/contexts/UsageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { AlertTriangle, Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -9,15 +10,34 @@ import Link from 'next/link';
 
 export const UsageAlert: React.FC = () => {
     const { usageData } = useUsage();
+    const { user } = useAuth();
+    const [isDismissed, setIsDismissed] = useState(false);
 
-    if (!usageData || !usageData.alert) return null;
+    useEffect(() => {
+        if (usageData?.alert?.message) {
+            const dismissed = sessionStorage.getItem(`dismissed-alert-${usageData.alert.message}`);
+            setIsDismissed(dismissed === 'true');
+        } else {
+            setIsDismissed(false);
+        }
+    }, [usageData?.alert?.message]);
+
+    if (isDismissed || !usageData || !usageData.alert) return null;
 
     const { alert } = usageData;
     const isError = alert.severity === 'error';
+    const role = user?.role || 'admin';
+
+    const handleDismiss = () => {
+        if (usageData?.alert?.message) {
+            sessionStorage.setItem(`dismissed-alert-${usageData.alert.message}`, 'true');
+        }
+        setIsDismissed(true);
+    };
 
     return (
         <div className={cn(
-            "w-full px-4 py-2 flex items-center justify-between transition-all animate-in fade-in slide-in-from-top-2",
+            "w-full px-4 py-2 flex items-center justify-between transition-all animate-in fade-in slide-in-from-top-2 relative z-50",
             isError ? "bg-red-600 text-white" : "bg-orange-500 text-white"
         )}>
             <div className="flex items-center gap-3">
@@ -32,7 +52,7 @@ export const UsageAlert: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-2">
-                <Link href="/Role/Billing">
+                <Link href={`/${role}/billing`}>
                     <Button 
                         size="sm" 
                         variant="ghost" 
@@ -41,7 +61,11 @@ export const UsageAlert: React.FC = () => {
                         Upgrade Plan
                     </Button>
                 </Link>
-                <button className="p-1 hover:bg-white/10 rounded-full transition-colors">
+                <button 
+                    type="button"
+                    onClick={handleDismiss}
+                    className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                >
                     <X className="h-4 w-4" />
                 </button>
             </div>

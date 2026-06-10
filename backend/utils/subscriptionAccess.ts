@@ -59,7 +59,7 @@ export const getOrganizationWithPlan = async (organizationId: number) => {
 
 export const checkMemberLimit = async (
   organizationId: number,
-  role: "contributor" | "client",
+  role: "contributor" | "client" | "consultant" | "vendor",
 ) => {
   const org = await getOrganizationWithPlan(organizationId);
   if (!org || !org.plan) {
@@ -71,8 +71,12 @@ export const checkMemberLimit = async (
     };
   }
 
+  const isContributorType = role === "contributor" || role === "consultant" || role === "vendor";
+  const mappedRole = isContributorType ? "contributor" : "client";
+  const roleQuery = isContributorType ? ["contributor", "consultant", "vendor"] : ["client"];
+
   const limit =
-    role === "contributor" ? org.plan.contributor_limit : org.plan.client_limit;
+    mappedRole === "contributor" ? org.plan.contributor_limit : org.plan.client_limit;
 
   // Comprehensive counting: include users associated via project_members OR organization_id
   const projectIds = (
@@ -84,14 +88,14 @@ export const checkMemberLimit = async (
 
   // Users in this organization's projects
   const projectMemberIds = await project_members.findAll({
-    where: { project_id: { [Op.in]: projectIds }, role },
+    where: { project_id: { [Op.in]: projectIds }, role: { [Op.in]: roleQuery } },
     attributes: [[Sequelize.fn("DISTINCT", Sequelize.col("user_id")), "user_id"]],
     raw: true,
   }).then((pms: any[]) => pms.map(pm => pm.user_id));
 
   // Users directly assigned to this organization
   const directOrgUserIds = await users.findAll({
-    where: { organization_id: org.id, role },
+    where: { organization_id: org.id, role: { [Op.in]: roleQuery } },
     attributes: ["id"],
     raw: true,
   }).then((us: any[]) => us.map(u => u.id));
@@ -99,7 +103,7 @@ export const checkMemberLimit = async (
   const currentUsage = new Set([...projectMemberIds, ...directOrgUserIds]).size;
 
   if (currentUsage >= limit) {
-    const roleLabel = role === "contributor" ? "Contributor" : "Client";
+    const roleLabel = mappedRole === "contributor" ? "Contributor" : "Client";
     return {
       allowed: false,
       status: 403,
