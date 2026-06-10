@@ -40,6 +40,7 @@ if (!isExpoGo) {
     }
 }
 import { formatFileSize } from '@/helpers/format';
+import FileInformationModal from '../shared/FileInformationModal';
 import { groupItemsByMonth } from '@/helpers/grouping';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
@@ -91,6 +92,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [currentDoc, setCurrentDoc] = useState<any | null>(null);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
+    const [showInfoModal, setShowInfoModal] = useState(false);
     const [linkedItems, setLinkedItems] = useState<any[]>([]);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [sharing, setSharing] = useState(false);
@@ -1315,6 +1317,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 setPdfLoading(true);
                 setPdfViewerName(doc.file_name || 'Document');
                 setCurrentDoc(doc);
+                setShowInfoModal(false);
 
                 // 1. Prepare clean local path in cache (unique by ID to prevent collisions)
                 const ext = doc.file_name?.split('.').pop() || 'pdf';
@@ -2154,6 +2157,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     setCurrentDoc(null);
                     setShowComments(false);
                     setDocComments([]);
+                    setShowInfoModal(false);
                     const returnTab = searchParams?.returnTab as string;
                     if (returnTab) {
                         const rParams: any = { tab: returnTab };
@@ -2206,6 +2210,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 setCurrentDoc(null);
                                 setShowComments(false);
                                 setDocComments([]);
+                                setShowInfoModal(false);
                                 const returnTab = searchParams?.returnTab as string;
                                 if (returnTab) {
                                     const rParams: any = { tab: returnTab };
@@ -2247,6 +2252,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             {pdfViewerName}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                                <Feather name="info" size={18} color="#fff" />
+                            </TouchableOpacity>
                             <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
                                 <Feather name="link" size={18} color="#fff" />
                             </TouchableOpacity>
@@ -2581,6 +2589,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             handleLinkItemClick={handleLinkItemClick}
                         />
                     )}
+
+                    <FileInformationModal
+                        visible={showInfoModal}
+                        onClose={() => setShowInfoModal(false)}
+                        file={currentDoc}
+                        folders={folders}
+                        projectName={project?.name || ''}
+                    />
                 </View>
             </Modal>
 
@@ -3225,6 +3241,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     </KeyboardAvoidingView>
                 </View>
             </Modal>
+
         </View>
     );
 }

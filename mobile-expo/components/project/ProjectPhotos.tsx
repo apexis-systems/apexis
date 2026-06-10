@@ -23,6 +23,7 @@ import { formatFileSize } from '@/helpers/format';
 import { groupItemsByMonth } from '@/helpers/grouping';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import LinkFileModal from '../shared/LinkFileModal';
+import FileInformationModal from '../shared/FileInformationModal';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
@@ -98,6 +99,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const isUserScrollingRef = useRef(false);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
+    const [showInfoModal, setShowInfoModal] = useState(false);
     const [linkedItems, setLinkedItems] = useState<any[]>([]);
 
     // Comment state
@@ -822,6 +824,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setIsViewerZoomed(false);
         setShowViewerUI(true);
         setViewerOpen(true);
+        setShowInfoModal(false);
         loadMembers();
     };
 
@@ -829,6 +832,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setViewerOpen(false);
         setIsViewerZoomed(false);
         setViewerIndex(-1);
+        setShowInfoModal(false);
         const returnTab = searchParams?.returnTab as string;
         if (returnTab) {
             const rParams: any = { tab: returnTab };
@@ -2363,6 +2367,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     {viewerIndex + 1} / {sortedPhotos.length}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 4 }}>
+                                    <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8 }}>
+                                        <Feather name="info" size={20} color="#fff" />
+                                    </TouchableOpacity>
                                     <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8 }}>
                                         <Feather name="link" size={20} color="#fff" />
                                     </TouchableOpacity>
@@ -2603,6 +2610,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         handleLinkItemClick={handleLinkItemClick}
                     />
                 )}
+                <FileInformationModal
+                    visible={showInfoModal}
+                    onClose={() => setShowInfoModal(false)}
+                    file={sortedPhotos[viewerIndex]}
+                    folders={folders}
+                    projectName={project?.name || ''}
+                />
+
+
             </Modal>
 
             {/* Rename Folder Modal */}
@@ -2963,10 +2979,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     </TouchableOpacity>
                                 </TouchableOpacity>
                             </Modal>
+
+
                         </ScrollView>
                     </KeyboardAvoidingView>
                 </View>
             </Modal>
+
         </View>
     );
 }
