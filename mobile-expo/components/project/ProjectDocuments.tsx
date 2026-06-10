@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { FlatList, TouchableOpacity as GestureTouchableOpacity, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView, Keyboard } from 'react-native';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView, Keyboard, PanResponder } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
@@ -47,7 +47,7 @@ import FolderActionMenu from './FolderActionMenu';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectDocuments({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any, user: any, initialFolderId?: string, initialFileId?: string, searchQuery?: string }) {
+export default function ProjectDocuments({ project, user, initialFolderId, initialFileId, searchQuery, onFolderChange }: { project: any, user: any, initialFolderId?: string, initialFileId?: string, searchQuery?: string, onFolderChange?: (folderId: string | null) => void }) {
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
     const { socket } = useSocket();
@@ -56,6 +56,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const searchParams = useLocalSearchParams();
     const [docs, setDocs] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
+
+    useEffect(() => {
+        if (onFolderChange) {
+            onFolderChange(selectedFolder);
+        }
+    }, [selectedFolder, onFolderChange]);
+
     // Sync selectedFolder whenever the deep-link prop changes.
     // useState(initialFolderId) only runs on first mount — this effect handles
     // subsequent navigations while the component stays mounted in the FlatList.
@@ -1704,9 +1711,47 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         }
     };
 
+    const goBackRef = useRef(goBack);
+    const clearSelectionRef = useRef(clearSelection);
+    const selectedFolderRef = useRef(selectedFolder);
+    const isSelectionModeRef = useRef(isSelectionMode);
+    const isViewerOpenRef = useRef(!!pdfViewerUrl);
+
+    useEffect(() => {
+        goBackRef.current = goBack;
+        clearSelectionRef.current = clearSelection;
+        selectedFolderRef.current = selectedFolder;
+        isSelectionModeRef.current = isSelectionMode;
+        isViewerOpenRef.current = !!pdfViewerUrl;
+    }, [goBack, clearSelection, selectedFolder, isSelectionMode, pdfViewerUrl]);
+
+    const edgePanResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                if (Platform.OS !== 'ios' || !selectedFolderRef.current || isViewerOpenRef.current) {
+                    return false;
+                }
+                const isEdgeStart = gestureState.x0 < 40;
+                const isHorizontalSwipeRight = gestureState.dx > 20 && Math.abs(gestureState.dy) < 20;
+                return isEdgeStart && isHorizontalSwipeRight;
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dx > 40) {
+                    if (isSelectionModeRef.current) {
+                        clearSelectionRef.current();
+                    } else {
+                        goBackRef.current();
+                    }
+                }
+            },
+            onPanResponderTerminationRequest: () => false,
+        })
+    ).current;
+
     // Unified View
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1 }} {...(Platform.OS === 'ios' && selectedFolder ? edgePanResponder.panHandlers : {})}>
             <ScrollView
                 ref={mainScrollRef}
                 style={{ flex: 1 }}

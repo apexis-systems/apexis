@@ -1,5 +1,5 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl, Keyboard
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl, Keyboard, PanResponder
 } from 'react-native';
 import { Image } from 'expo-image';
 import { FlatList, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
@@ -38,7 +38,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectPhotos({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any; user: any; initialFolderId?: string; initialFileId?: string; searchQuery?: string }) {
+export default function ProjectPhotos({ project, user, initialFolderId, initialFileId, searchQuery, onFolderChange }: { project: any; user: any; initialFolderId?: string; initialFileId?: string; searchQuery?: string; onFolderChange?: (folderId: string | null) => void }) {
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
@@ -51,6 +51,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [linkedSnags, setLinkedSnags] = useState<any[]>([]);
     const [loadingRFIs, setLoadingRFIs] = useState(false);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
+
+    useEffect(() => {
+        if (onFolderChange) {
+            onFolderChange(selectedFolder);
+        }
+    }, [selectedFolder, onFolderChange]);
+
     // Sync selectedFolder whenever the deep-link prop changes.
     // useState(initialFolderId) only runs on first mount — this effect handles
     // subsequent navigations while the component stays mounted in the FlatList.
@@ -1419,10 +1426,48 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         return path;
     };
 
+    const goBackRef = useRef(goBack);
+    const clearSelectionRef = useRef(clearSelection);
+    const selectedFolderRef = useRef(selectedFolder);
+    const isSelectionModeRef = useRef(isSelectionMode);
+    const isViewerOpenRef = useRef(viewerOpen);
+
+    useEffect(() => {
+        goBackRef.current = goBack;
+        clearSelectionRef.current = clearSelection;
+        selectedFolderRef.current = selectedFolder;
+        isSelectionModeRef.current = isSelectionMode;
+        isViewerOpenRef.current = viewerOpen;
+    }, [goBack, clearSelection, selectedFolder, isSelectionMode, viewerOpen]);
+
+    const edgePanResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                if (Platform.OS !== 'ios' || !selectedFolderRef.current || isViewerOpenRef.current) {
+                    return false;
+                }
+                const isEdgeStart = gestureState.x0 < 40;
+                const isHorizontalSwipeRight = gestureState.dx > 20 && Math.abs(gestureState.dy) < 20;
+                return isEdgeStart && isHorizontalSwipeRight;
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dx > 40) {
+                    if (isSelectionModeRef.current) {
+                        clearSelectionRef.current();
+                    } else {
+                        goBackRef.current();
+                    }
+                }
+            },
+            onPanResponderTerminationRequest: () => false,
+        })
+    ).current;
+
     // ── Unified Layout ───────────────────────────────────────────────────────────
 
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1 }} {...(Platform.OS === 'ios' && selectedFolder ? edgePanResponder.panHandlers : {})}>
             <ScrollView
                 ref={mainScrollRef}
                 style={{ flex: 1 }}
