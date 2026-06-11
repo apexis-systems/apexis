@@ -1,5 +1,5 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl, Keyboard
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl, Keyboard, PanResponder
 } from 'react-native';
 import { Image } from 'expo-image';
 import { FlatList, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
@@ -23,6 +23,7 @@ import { formatFileSize } from '@/helpers/format';
 import { groupItemsByMonth } from '@/helpers/grouping';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import LinkFileModal from '../shared/LinkFileModal';
+import FileInformationModal from '../shared/FileInformationModal';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
@@ -37,7 +38,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectPhotos({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any; user: any; initialFolderId?: string; initialFileId?: string; searchQuery?: string }) {
+export default function ProjectPhotos({ project, user, initialFolderId, initialFileId, searchQuery, onFolderChange }: { project: any; user: any; initialFolderId?: string; initialFileId?: string; searchQuery?: string; onFolderChange?: (folderId: string | null) => void }) {
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
@@ -50,6 +51,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [linkedSnags, setLinkedSnags] = useState<any[]>([]);
     const [loadingRFIs, setLoadingRFIs] = useState(false);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
+
+    useEffect(() => {
+        if (onFolderChange) {
+            onFolderChange(selectedFolder);
+        }
+    }, [selectedFolder, onFolderChange]);
+
     // Sync selectedFolder whenever the deep-link prop changes.
     // useState(initialFolderId) only runs on first mount — this effect handles
     // subsequent navigations while the component stays mounted in the FlatList.
@@ -98,6 +106,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const isUserScrollingRef = useRef(false);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
+    const [showInfoModal, setShowInfoModal] = useState(false);
     const [linkedItems, setLinkedItems] = useState<any[]>([]);
 
     // Comment state
@@ -822,6 +831,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setIsViewerZoomed(false);
         setShowViewerUI(true);
         setViewerOpen(true);
+        setShowInfoModal(false);
         loadMembers();
     };
 
@@ -829,6 +839,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setViewerOpen(false);
         setIsViewerZoomed(false);
         setViewerIndex(-1);
+        setShowInfoModal(false);
         const returnTab = searchParams?.returnTab as string;
         if (returnTab) {
             const rParams: any = { tab: returnTab };
@@ -1415,10 +1426,48 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         return path;
     };
 
+    const goBackRef = useRef(goBack);
+    const clearSelectionRef = useRef(clearSelection);
+    const selectedFolderRef = useRef(selectedFolder);
+    const isSelectionModeRef = useRef(isSelectionMode);
+    const isViewerOpenRef = useRef(viewerOpen);
+
+    useEffect(() => {
+        goBackRef.current = goBack;
+        clearSelectionRef.current = clearSelection;
+        selectedFolderRef.current = selectedFolder;
+        isSelectionModeRef.current = isSelectionMode;
+        isViewerOpenRef.current = viewerOpen;
+    }, [goBack, clearSelection, selectedFolder, isSelectionMode, viewerOpen]);
+
+    const edgePanResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                if (Platform.OS !== 'ios' || !selectedFolderRef.current || isViewerOpenRef.current) {
+                    return false;
+                }
+                const isEdgeStart = gestureState.x0 < 40;
+                const isHorizontalSwipeRight = gestureState.dx > 20 && Math.abs(gestureState.dy) < 20;
+                return isEdgeStart && isHorizontalSwipeRight;
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dx > 40) {
+                    if (isSelectionModeRef.current) {
+                        clearSelectionRef.current();
+                    } else {
+                        goBackRef.current();
+                    }
+                }
+            },
+            onPanResponderTerminationRequest: () => false,
+        })
+    ).current;
+
     // ── Unified Layout ───────────────────────────────────────────────────────────
 
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1 }} {...(Platform.OS === 'ios' && selectedFolder ? edgePanResponder.panHandlers : {})}>
             <ScrollView
                 ref={mainScrollRef}
                 style={{ flex: 1 }}
@@ -2363,6 +2412,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     {viewerIndex + 1} / {sortedPhotos.length}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 4 }}>
+                                    <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8 }}>
+                                        <Feather name="info" size={20} color="#fff" />
+                                    </TouchableOpacity>
                                     <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8 }}>
                                         <Feather name="link" size={20} color="#fff" />
                                     </TouchableOpacity>
@@ -2603,6 +2655,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         handleLinkItemClick={handleLinkItemClick}
                     />
                 )}
+                <FileInformationModal
+                    visible={showInfoModal}
+                    onClose={() => setShowInfoModal(false)}
+                    file={sortedPhotos[viewerIndex]}
+                    folders={folders}
+                    projectName={project?.name || ''}
+                />
+
+
             </Modal>
 
             {/* Rename Folder Modal */}
@@ -2963,10 +3024,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     </TouchableOpacity>
                                 </TouchableOpacity>
                             </Modal>
+
+
                         </ScrollView>
                     </KeyboardAvoidingView>
                 </View>
             </Modal>
+
         </View>
     );
 }

@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
+import https from "https";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import admin from "../config/firebase.ts";
 import { users, organizations, project_members, projects } from "../models/index.ts";
 import { Op } from "sequelize";
 import redis from "../config/redis.ts";
@@ -64,6 +66,91 @@ export const adminLogin = async (req: Request, res: Response) => {
         res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: user.role } });
     } catch (error) {
         console.error("Admin Login Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const adminGoogleLogin = async (req: Request, res: Response) => {
+    try {
+        const { idToken, fcmToken } = req.body;
+
+        if (!idToken) {
+            return res.status(400).json({ error: "ID Token is required" });
+        }
+
+        // Verify the Google ID Token using Google's tokeninfo API via Node's native https module
+        const decodedToken: any = await new Promise((resolve, reject) => {
+            https.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`, (res) => {
+                let data = "";
+                res.on("data", (chunk) => {
+                    data += chunk;
+                });
+                res.on("end", () => {
+                    if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                        try {
+                            resolve(JSON.parse(data));
+                        } catch (e) {
+                            reject(new Error("Failed to parse tokeninfo response"));
+                        }
+                    } else {
+                        reject(new Error(`Google Verification API returned status ${res.statusCode}: ${data}`));
+                    }
+                });
+            }).on("error", (err) => {
+                reject(err);
+            });
+        }).catch((verifyError) => {
+            console.error("Google Token Verification Failed:", verifyError);
+            return null;
+        });
+
+        if (!decodedToken) {
+            return res.status(401).json({ error: "Invalid Google credentials" });
+        }
+
+        // Validate that the token was issued to one of our app's Google Client IDs
+        // const allowedClients = [
+
+        // ];
+
+        // if (!allowedClients.includes(decodedToken.aud)) {
+        //     console.warn("Google token audience mismatch:", decodedToken.aud);
+        //     return res.status(401).json({ error: "Invalid Google credentials" });
+        // }
+
+        const email = decodedToken.email?.toLowerCase();
+        if (!email) {
+            return res.status(400).json({ error: "Google account must have an associated email" });
+        }
+
+        // Find user by email
+        const user = await users.findOne({
+            where: { email }
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: "No account found matching this Google email address." });
+        }
+
+        // Strict Role Check: Google Login is only for admin
+        if (user.role !== "admin") {
+            return res.status(403).json({ error: "Access denied. Google login is restricted to Admin accounts." });
+        }
+
+        const token = jwt.sign(
+            { user_id: user.id, name: user.name, role: user.role, organization_id: user.organization_id },
+            process.env.JWT_SECRET || "default_secret",
+            { expiresIn: "30d" }
+        );
+
+        if (fcmToken) {
+            await users.update({ fcm_token: null }, { where: { fcm_token: fcmToken, id: { [Op.ne]: user.id } } });
+            await user.update({ fcm_token: fcmToken });
+        }
+
+        res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email, phone_number: user.phone_number, role: user.role } });
+    } catch (error) {
+        console.error("Admin Google Login Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -160,7 +247,7 @@ export const projectLogin = async (req: Request, res: Response) => {
         if (existingMembership) {
             const isCodeForContributor = roleForCode === 'contributor';
             const isMemberContributorLike = ['contributor', 'consultant', 'vendor'].includes(existingMembership.role);
-            
+
             if (isCodeForContributor && !isMemberContributorLike) {
                 return res.status(400).json({
                     error: `You are already a member of this project as a ${existingMembership.role}. You cannot join as a contributor.`

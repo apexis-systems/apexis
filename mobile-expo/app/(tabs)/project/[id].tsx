@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler, FlatList, Platform, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -58,6 +58,19 @@ export default function ProjectWorkspaceScreen() {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editModalFocus, setEditModalFocus] = useState<'start_date' | 'end_date' | null>(null);
     const [hasPendingRFI, setHasPendingRFI] = useState(false);
+
+    const [docsFolderId, setDocsFolderId] = useState<string | null>(null);
+    const [photosFolderId, setPhotosFolderId] = useState<string | null>(null);
+
+    const isScrollEnabled = useMemo(() => {
+        if (activeTab === 'documents') {
+            return !docsFolderId;
+        }
+        if (activeTab === 'photos') {
+            return !photosFolderId;
+        }
+        return true;
+    }, [activeTab, docsFolderId, photosFolderId]);
 
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -258,9 +271,9 @@ export default function ProjectWorkspaceScreen() {
                     />
                 );
             case 'documents':
-                return <ProjectDocuments project={project} user={user} initialFolderId={tab === 'documents' ? folderId : undefined} initialFileId={fileId} searchQuery={searchQuery} />;
+                return <ProjectDocuments project={project} user={user} initialFolderId={tab === 'documents' ? folderId : undefined} initialFileId={fileId} searchQuery={searchQuery} onFolderChange={setDocsFolderId} />;
             case 'photos':
-                return <ProjectPhotos project={project} user={user} initialFolderId={tab === 'photos' ? folderId : undefined} initialFileId={fileId || photoId} searchQuery={searchQuery} />;
+                return <ProjectPhotos project={project} user={user} initialFolderId={tab === 'photos' ? folderId : undefined} initialFileId={fileId || photoId} searchQuery={searchQuery} onFolderChange={setPhotosFolderId} />;
             case 'rfi':
                 return <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />;
             default:
@@ -521,6 +534,7 @@ export default function ProjectWorkspaceScreen() {
                                 data={visibleTabs}
                                 horizontal
                                 pagingEnabled
+                                scrollEnabled={isScrollEnabled}
                                 showsHorizontalScrollIndicator={false}
                                 keyExtractor={(item) => item.key}
                                 renderItem={({ item }) => (
