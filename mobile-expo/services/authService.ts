@@ -80,6 +80,16 @@ export const loginAdmin = async (data: any) => {
     }
 };
 
+export const loginAdminWithGoogle = async (data: { idToken: string, fcmToken?: string | null }) => {
+    try {
+        const response = await PublicAxios.post('/auth/admin/google-login', data);
+        return response.data;
+    } catch (error: any) {
+        console.error("loginAdminWithGoogle Error:", error?.response?.data || error.message);
+        throw error;
+    }
+};
+
 export const loginSuperAdmin = async (data: any) => {
     try {
         const response = await PublicAxios.post('/auth/superadmin/login', data);
