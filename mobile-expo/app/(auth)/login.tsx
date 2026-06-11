@@ -9,7 +9,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserRole } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { loginAdmin, loginProject } from '@/services/authService';
+import { loginAdmin, loginProject, loginAdminWithGoogle } from '@/services/authService';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useGlobalSearchParams } from 'expo-router';
 import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
@@ -47,6 +48,13 @@ export default function LoginScreen() {
     const hasLoggedOutForInvitation = useRef(false);
 
     useEffect(() => {
+        GoogleSignin.configure({
+            webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
+            offlineAccess: false,
+        });
+    }, []);
+
+    useEffect(() => {
         if (!params.code || hasLoggedOutForInvitation.current) return;
         // Wait for auth state to fully resolve from SecureStore before checking
         // isLoggedIn — if we act while isAuthLoading=true, isLoggedIn is always
@@ -60,7 +68,7 @@ export default function LoginScreen() {
                 params.role === 'contributor' || params.role === 'client'
                     ? (params.role as UserRole)
                     : 'contributor';
-            
+
             // Set fields BEFORE any potential logout delay to guarantee UI updates
             setSelectedRole(deepRole);
             setProjectCode(params.code as string);
@@ -70,9 +78,9 @@ export default function LoginScreen() {
         };
 
         handleInvitation();
-    // isAuthLoading added so we re-run once auth resolves.
-    // isLoggedIn/logout intentionally omitted to avoid re-firing after logout().
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // isAuthLoading added so we re-run once auth resolves.
+        // isLoggedIn/logout intentionally omitted to avoid re-firing after logout().
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params.code, params.role, isAuthLoading]);
 
     useEffect(() => {
@@ -149,8 +157,8 @@ export default function LoginScreen() {
             return;
         }
 
-        const normalizedIdentifier = isEmail 
-            ? identifier.trim() 
+        const normalizedIdentifier = isEmail
+            ? identifier.trim()
             : `${selectedCountry.code}${cleanIdentifier}`;
 
         const payload: any = {
@@ -179,10 +187,54 @@ export default function LoginScreen() {
         }
     };
 
+    const handleGoogleLogin = async () => {
+        setIsLoading(true);
+        setError('');
+
+        try {
+            await GoogleSignin.hasPlayServices();
+            // Force account selection screen by signing out first
+            await GoogleSignin.signOut().catch(() => { });
+            const response = await GoogleSignin.signIn();
+            const idToken = response.data?.idToken;
+
+            if (!idToken) {
+                setError("Google authentication failed to produce an ID token.");
+                setIsLoading(false);
+                return;
+            }
+
+            const fcmToken = await SecureStore.getItemAsync('fcmToken').catch(() => null);
+
+            const res = await loginAdminWithGoogle({ idToken, fcmToken });
+
+            if (res?.token) {
+                await login(res.token);
+                if (res.isPendingName) {
+                    router.replace('/(auth)/setup-name');
+                } else {
+                    router.replace('/(tabs)');
+                }
+            }
+        } catch (err: any) {
+            if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+                setError('Google sign-in cancelled.');
+            } else if (err.code === statusCodes.IN_PROGRESS) {
+                setError('Sign-in already in progress.');
+            } else if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+                setError('Google Play Services are not available.');
+            } else {
+                setError(err.response?.data?.error || err.message || "Google Sign-In failed.");
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-            <KeyboardAvoidingView 
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
             >
@@ -222,9 +274,9 @@ export default function LoginScreen() {
                             <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6 }}>Email or Phone Number</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 {(identifier.length > 0 && /^\d/.test(identifier)) && (
-                                    <CountryCodePicker 
-                                        selectedCountry={selectedCountry} 
-                                        onSelect={setSelectedCountry} 
+                                    <CountryCodePicker
+                                        selectedCountry={selectedCountry}
+                                        onSelect={setSelectedCountry}
                                     />
                                 )}
                                 <TextInput
@@ -289,13 +341,39 @@ export default function LoginScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity 
-                        onPress={handleLogin} 
-                        disabled={isLoading || isProcessingLink} 
+                    <TouchableOpacity
+                        onPress={handleLogin}
+                        disabled={isLoading || isProcessingLink}
                         style={{ height: 52, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 20, opacity: (isLoading || isProcessingLink) ? 0.7 : 1 }}
                     >
                         {(isLoading || isProcessingLink) ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 16, fontWeight: '700', color: '#fff' }}>Sign In</Text>}
                     </TouchableOpacity>
+
+                    {selectedRole === 'admin' && (
+                        <View style={{ marginBottom: 20, alignItems: 'center' }}>
+                            <Text style={{ color: colors.textMuted, marginBottom: 12, fontSize: 12 }}>OR</Text>
+                            <TouchableOpacity
+                                onPress={handleGoogleLogin}
+                                disabled={isLoading || isProcessingLink}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    height: 52,
+                                    borderRadius: 14,
+                                    borderWidth: 1,
+                                    borderColor: colors.border,
+                                    backgroundColor: colors.surface,
+                                    width: '100%',
+                                    gap: 10,
+                                    opacity: (isLoading || isProcessingLink) ? 0.7 : 1
+                                }}
+                            >
+                                <Ionicons name="logo-google" size={20} color={colors.text} />
+                                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>Continue with Google</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     {selectedRole === 'admin' && (
                         <TouchableOpacity onPress={() => router.push('/(auth)/signup')} style={{ alignItems: 'center' }}>
