@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, ScrollView, TouchableOpacity, ActivityIndicator, BackHandler, FlatList, Platform, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -39,6 +39,9 @@ export default function ProjectWorkspaceScreen() {
     const { id, tab, folderId: qFolderId, initialFolderId: qInitialFolderId, rfiId, snagId, fileId, photoId } = useLocalSearchParams<{ id: string; tab?: string; folderId?: string; initialFolderId?: string; rfiId?: string; snagId?: string; fileId?: string; photoId?: string }>();
     const folderId = qFolderId || qInitialFolderId;
     const { user, isScreenCaptureProtected } = useAuth();
+    const isConsultant = user?.role === 'consultant';
+    const isVendor = user?.role === 'vendor';
+    const isConsultantVendor = isConsultant || isVendor;
     const { colors, isDark } = useTheme();
     const router = useRouter();
     const { t } = useTranslation();
@@ -48,12 +51,26 @@ export default function ProjectWorkspaceScreen() {
     const [loading, setLoading] = useState(true);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const initialTabKey = (tab && FLATLIST_TABS.includes(tab as Tab) ? tab : 'overview') as Tab;
+    const defaultTabKey = isConsultantVendor ? 'documents' : 'overview';
+    const initialTabKey = (tab && (isConsultantVendor ? ['documents', 'photos', 'rfi'] : FLATLIST_TABS).includes(tab as Tab) ? tab : defaultTabKey) as Tab;
     const [activeTab, setActiveTab] = useState<Tab>(initialTabKey);
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editModalFocus, setEditModalFocus] = useState<'start_date' | 'end_date' | null>(null);
     const [hasPendingRFI, setHasPendingRFI] = useState(false);
+
+    const [docsFolderId, setDocsFolderId] = useState<string | null>(null);
+    const [photosFolderId, setPhotosFolderId] = useState<string | null>(null);
+
+    const isScrollEnabled = useMemo(() => {
+        if (activeTab === 'documents') {
+            return !docsFolderId;
+        }
+        if (activeTab === 'photos') {
+            return !photosFolderId;
+        }
+        return true;
+    }, [activeTab, docsFolderId, photosFolderId]);
 
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -74,7 +91,7 @@ export default function ProjectWorkspaceScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            const defaultTab = 'overview';
+            const defaultTab = isConsultantVendor ? 'documents' : 'overview';
             const onBackPress = () => {
                 if (activeTab !== defaultTab) {
                     setActiveTab(defaultTab as Tab);
@@ -86,7 +103,7 @@ export default function ProjectWorkspaceScreen() {
 
             const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
             return () => subscription.remove();
-        }, [activeTab])
+        }, [activeTab, isConsultantVendor])
     );
 
     // EXTERNAL navigation effect — handles incoming deep links, notifications, activity taps.
@@ -101,7 +118,8 @@ export default function ProjectWorkspaceScreen() {
             return;
         }
 
-        if (!['overview', 'documents', 'photos', 'rfi', 'reports', 'snags', 'sops'].includes(tab)) return;
+        const allowedTabs = isConsultantVendor ? ['overview', 'documents', 'photos', 'rfi'] : ['overview', 'documents', 'photos', 'rfi', 'reports', 'snags', 'sops'];
+        if (!allowedTabs.includes(tab)) return;
 
         setActiveTab(tab as Tab);
         const targetIndex = visibleTabs.findIndex(t => t.key === tab);
@@ -112,8 +130,8 @@ export default function ProjectWorkspaceScreen() {
                 setTimeout(() => { ignoreScrollSync.current = false; }, 350);
             }, 150);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [tab, fileId, folderId, rfiId, snagId, photoId, id, qInitialFolderId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab, fileId, folderId, rfiId, snagId, photoId, id, qInitialFolderId, isConsultantVendor]);
 
     const fetchProject = useCallback(async () => {
         try {
@@ -188,15 +206,22 @@ export default function ProjectWorkspaceScreen() {
     }, [socket, isConnected, id, checkRFIs]);
 
     type TabDef = { key: Tab; label: string; hideForClient?: boolean };
-    const tabs: TabDef[] = [
+    const tabs: TabDef[] = isConsultantVendor ? [
+        { key: 'documents', label: t('projectWorkspace.tabs.documents') },
+        { key: 'photos', label: t('projectWorkspace.tabs.photos') },
+        { key: 'rfi', label: t('projectWorkspace.tabs.rfi') },
+    ] : [
         { key: 'overview', label: t('projectWorkspace.tabs.overview') },
         { key: 'documents', label: t('projectWorkspace.tabs.documents') },
         { key: 'photos', label: t('projectWorkspace.tabs.photos') },
         { key: 'rfi', label: t('projectWorkspace.tabs.rfi') },
     ];
 
-
-    const visibleTabs = tabs.filter((t) => !(t.hideForClient && user?.role === 'client'));
+    const visibleTabs = tabs.filter((t) => {
+        if (t.hideForClient && user?.role === 'client') return false;
+        if (t.key === 'overview' && isConsultantVendor) return false;
+        return true;
+    });
 
     const flatListRef = useRef<FlatList<TabDef>>(null);
     const ignoreScrollSync = useRef(false);
@@ -246,9 +271,9 @@ export default function ProjectWorkspaceScreen() {
                     />
                 );
             case 'documents':
-                return <ProjectDocuments project={project} user={user} initialFolderId={tab === 'documents' ? folderId : undefined} initialFileId={fileId} searchQuery={searchQuery} />;
+                return <ProjectDocuments project={project} user={user} initialFolderId={tab === 'documents' ? folderId : undefined} initialFileId={fileId} searchQuery={searchQuery} onFolderChange={setDocsFolderId} />;
             case 'photos':
-                return <ProjectPhotos project={project} user={user} initialFolderId={tab === 'photos' ? folderId : undefined} initialFileId={fileId || photoId} searchQuery={searchQuery} />;
+                return <ProjectPhotos project={project} user={user} initialFolderId={tab === 'photos' ? folderId : undefined} initialFileId={fileId || photoId} searchQuery={searchQuery} onFolderChange={setPhotosFolderId} />;
             case 'rfi':
                 return <ProjectRFI project={project} user={user} onUpdate={checkRFIs} initialRfiId={rfiId} />;
             default:
@@ -292,9 +317,9 @@ export default function ProjectWorkspaceScreen() {
             // next external navigation (activity/notification tap).
             suppressNavEffect.current = true;
             setTimeout(() => { suppressNavEffect.current = false; }, 100);
-            
+
             // router.setParams({ tab: settledTab, folderId: '', initialFolderId: '', fileId: '', photoId: '', rfiId: '', snagId: '' });
-            
+
         }
     }, [visibleTabs]);
 
@@ -307,9 +332,10 @@ export default function ProjectWorkspaceScreen() {
     // 'overview' (the default) because state updates from sibling effects
     // aren't reflected yet. Read `tab` directly from the URL params instead.
     useEffect(() => {
-        const targetKey = (tab && ['overview', 'documents', 'photos', 'rfi'].includes(tab))
+        const allowed = isConsultantVendor ? ['overview', 'documents', 'photos', 'rfi'] : ['overview', 'documents', 'photos', 'rfi'];
+        const targetKey = (tab && allowed.includes(tab))
             ? tab as Tab
-            : 'overview';
+            : defaultTabKey;
         setActiveTab(targetKey);
         const index = visibleTabs.findIndex(t => t.key === targetKey);
         if (index !== -1) {
@@ -317,8 +343,8 @@ export default function ProjectWorkspaceScreen() {
                 flatListRef.current?.scrollToIndex({ index, animated: false });
             }, 100);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id]); // Reset when project changes — intentionally excludes `tab` from deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id, isConsultantVendor]); // Reset when project changes — intentionally excludes `tab` from deps
 
     // Centralized Screen Capture Protection for the entire Project Workspace
     // Note: On Android, this prevents screenshots and recordings.
@@ -508,6 +534,7 @@ export default function ProjectWorkspaceScreen() {
                                 data={visibleTabs}
                                 horizontal
                                 pagingEnabled
+                                scrollEnabled={isScrollEnabled}
                                 showsHorizontalScrollIndicator={false}
                                 keyExtractor={(item) => item.key}
                                 renderItem={({ item }) => (
@@ -533,7 +560,7 @@ export default function ProjectWorkspaceScreen() {
                             />
                         ) : (
                             <View style={{ flex: 1 }}>
-                                {activeTab === 'snags' && (
+                                {activeTab === 'snags' && !isConsultantVendor && (
                                     <View style={{ flex: 1 }}>
                                         <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                             <TouchableOpacity onPress={() => setActiveTab('overview')}>
@@ -557,7 +584,7 @@ export default function ProjectWorkspaceScreen() {
                                         <ProjectManuals project={project} />
                                     </View>
                                 )}
-                                {activeTab === 'reports' && (
+                                {activeTab === 'reports' && !isConsultantVendor && (
                                     <View style={{ flex: 1 }} {...panHandlers}>
                                         <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

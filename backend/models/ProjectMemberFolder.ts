@@ -2,8 +2,8 @@ import type { Sequelize } from "sequelize";
 import { DataTypes } from "sequelize";
 
 export default (sequelize: Sequelize) => {
-    const ProjectMember = sequelize.define(
-        "project_members",
+    const ProjectMemberFolder = sequelize.define(
+        "project_member_folders",
         {
             id: {
                 type: DataTypes.INTEGER,
@@ -11,24 +11,20 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 autoIncrement: true,
             },
-            project_id: {
+            project_member_id: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
             },
-            user_id: {
+            folder_id: {
                 type: DataTypes.INTEGER,
-                allowNull: false,
-            },
-            role: {
-                type: DataTypes.ENUM("contributor", "client", "consultant", "vendor"),
                 allowNull: false,
             },
         },
         {
-            tableName: "project_members",
+            tableName: "project_member_folders",
             timestamps: true,
         }
     );
 
-    return ProjectMember;
+    return ProjectMemberFolder;
 };

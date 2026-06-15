@@ -2,7 +2,7 @@
   "expo": {
     "name": "APEXISpro",
     "slug": "apexis",
-    "version": "1.7.4",
+    "version": "1.7.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "apexis",
@@ -11,12 +11,19 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apexis.ios",
-      "buildNumber": "49",
+      "buildNumber": "50",
       "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:web.apexis.in"
       ],
       "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.707152932877-d4hacdq0q6tjqpql3vdls14pjk8cjt8j"
+            ]
+          }
+        ],
         "NSPhotoLibraryUsageDescription": "APEXISpro needs access to your photo library to attach photos to snags and upload site images.",
         "NSPhotoLibraryAddUsageDescription": "APEXISpro needs permission to save downloaded photos to your library.",
         "NSCameraUsageDescription": "APEXISpro needs camera access to capture site photos.",
@@ -28,7 +35,7 @@
     },
     "android": {
       "package": "com.apexis.app",
-      "versionCode": 49,
+      "versionCode": 50,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -134,6 +141,7 @@
       ],
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
+      "@react-native-google-signin/google-signin",
       [
         "expo-build-properties",
         {

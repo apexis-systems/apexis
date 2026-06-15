@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import 'multer';
 import db from "../models/index.ts";
-const { files, folders, project_members, activities, users, organizations, projects, file_links, file_rfi_links, file_snag_links } = db;
+const { files, folders, project_members, activities, users, organizations, projects, file_links, file_rfi_links, file_snag_links, project_member_folders } = db;
 
 import { Op } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
@@ -229,9 +229,11 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const file_type = (req as any).file.mimetype;
         const file_size_mb = Math.max(1, Math.round((req as any).file.size / (1024 * 1024)));
 
-        // Ensure contributors have access to this project
-        if (authUser.role === "contributor" || authUser.role === "client") {
-            const access = await checkProjectAccess(authUser.user_id, project_id, authUser.role, authUser.organization_id);
+        // Ensure contributors/clients/consultants/vendors have access to this project
+        const isProjectUser = ["contributor", "client", "consultant", "vendor"].includes(authUser.role);
+        let access: any = null;
+        if (isProjectUser) {
+            access = await checkProjectAccess(authUser.user_id, project_id, authUser.role, authUser.organization_id);
             if (!access) {
                 return res.status(403).json({ error: "Forbidden: No access to this project" });
             }
@@ -239,6 +241,20 @@ export const uploadFile = async (req: Request | any, res: Response) => {
 
         const validFolderId = (folder_id !== undefined && folder_id !== null && folder_id !== 'undefined' && folder_id !== '') ? parseInt(folder_id, 10) : null;
         let finalFolderId = validFolderId;
+
+        // Restriction: Consultant/Vendor can only upload to allowed folders, not root
+        if (authUser.role === "consultant" || authUser.role === "vendor") {
+            if (!finalFolderId) {
+                return res.status(403).json({ error: "Forbidden: Cannot upload to root folder" });
+            }
+            const { project_member_folders } = await import("../models/index.ts");
+            const isAllowed = await project_member_folders.findOne({
+                where: { project_member_id: access.id, folder_id: finalFolderId }
+            });
+            if (!isAllowed) {
+                return res.status(403).json({ error: "Forbidden: You do not have access to this folder" });
+            }
+        }
 
         const folderPath = finalFolderId ? finalFolderId.toString() : 'root';
 
@@ -420,19 +436,36 @@ export const listFiles = async (req: Request, res: Response) => {
         const folderData = await folders.findAll({
             where: folderWhere,
         });
-
         const folderIds = folderData.map((f: any) => f.id);
+
+        let filteredFolders = folderData.map((f: any) => f.toJSON());
+        if (authUser.role === "client") {
+            // Remove hidden folders
+            filteredFolders = filteredFolders.filter((folder: any) => folder.client_visible !== false);
+        } else if (authUser.role === "consultant" || authUser.role === "vendor") {
+            const allowedFolders = await project_member_folders.findAll({
+                where: { project_member_id: access.id },
+                attributes: ['folder_id']
+            });
+            const allowedFolderIds = allowedFolders.map((af: any) => af.folder_id);
+            filteredFolders = filteredFolders.filter((folder: any) => allowedFolderIds.includes(folder.id));
+        }
+
+        const allowedFolderIdsForFiles = filteredFolders.map((f: any) => f.id);
+        const isRestrictedRole = authUser.role === "consultant" || authUser.role === "vendor";
 
         // Get all files for this project (either by explicit project_id or via folder_id)
         const fileData = await files.findAll({
             where: {
                 [Op.and]: [
-                    {
-                        [Op.or]: [
-                            { project_id: projectId },
-                            { folder_id: { [Op.in]: folderIds } }
-                        ]
-                    },
+                    isRestrictedRole
+                        ? { folder_id: { [Op.in]: allowedFolderIdsForFiles } }
+                        : {
+                            [Op.or]: [
+                                { project_id: projectId },
+                                { folder_id: { [Op.in]: folderIds } }
+                            ]
+                        },
                     search ? { file_name: { [Op.iLike]: `%${search}%` } } : {}
                 ].filter(Boolean) as any
             },
@@ -450,12 +483,9 @@ export const listFiles = async (req: Request, res: Response) => {
             ]
         });
 
-        let filteredFolders = folderData.map((f: any) => f.toJSON());
         let filteredFiles = fileData.map((f: any) => f.toJSON());
 
         if (authUser.role === "client") {
-            // Remove hidden folders
-            filteredFolders = filteredFolders.filter((folder: any) => folder.client_visible !== false);
             // Remove hidden files
             filteredFiles = filteredFiles.filter((file: any) => file.client_visible !== false);
         }

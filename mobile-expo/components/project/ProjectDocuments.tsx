@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { FlatList, TouchableOpacity as GestureTouchableOpacity, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView, Keyboard } from 'react-native';
+import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView, Keyboard, PanResponder } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Project, User, Folder } from '@/types';
@@ -40,13 +40,14 @@ if (!isExpoGo) {
     }
 }
 import { formatFileSize } from '@/helpers/format';
+import FileInformationModal from '../shared/FileInformationModal';
 import { groupItemsByMonth } from '@/helpers/grouping';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-export default function ProjectDocuments({ project, user, initialFolderId, initialFileId, searchQuery }: { project: any, user: any, initialFolderId?: string, initialFileId?: string, searchQuery?: string }) {
+export default function ProjectDocuments({ project, user, initialFolderId, initialFileId, searchQuery, onFolderChange }: { project: any, user: any, initialFolderId?: string, initialFileId?: string, searchQuery?: string, onFolderChange?: (folderId: string | null) => void }) {
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
     const { socket } = useSocket();
@@ -55,6 +56,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const searchParams = useLocalSearchParams();
     const [docs, setDocs] = useState<any[]>([]);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(initialFolderId || null);
+
+    useEffect(() => {
+        if (onFolderChange) {
+            onFolderChange(selectedFolder);
+        }
+    }, [selectedFolder, onFolderChange]);
+
     // Sync selectedFolder whenever the deep-link prop changes.
     // useState(initialFolderId) only runs on first mount — this effect handles
     // subsequent navigations while the component stays mounted in the FlatList.
@@ -91,6 +99,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [currentDoc, setCurrentDoc] = useState<any | null>(null);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
+    const [showInfoModal, setShowInfoModal] = useState(false);
     const [linkedItems, setLinkedItems] = useState<any[]>([]);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [sharing, setSharing] = useState(false);
@@ -1315,6 +1324,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 setPdfLoading(true);
                 setPdfViewerName(doc.file_name || 'Document');
                 setCurrentDoc(doc);
+                setShowInfoModal(false);
 
                 // 1. Prepare clean local path in cache (unique by ID to prevent collisions)
                 const ext = doc.file_name?.split('.').pop() || 'pdf';
@@ -1701,9 +1711,47 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         }
     };
 
+    const goBackRef = useRef(goBack);
+    const clearSelectionRef = useRef(clearSelection);
+    const selectedFolderRef = useRef(selectedFolder);
+    const isSelectionModeRef = useRef(isSelectionMode);
+    const isViewerOpenRef = useRef(!!pdfViewerUrl);
+
+    useEffect(() => {
+        goBackRef.current = goBack;
+        clearSelectionRef.current = clearSelection;
+        selectedFolderRef.current = selectedFolder;
+        isSelectionModeRef.current = isSelectionMode;
+        isViewerOpenRef.current = !!pdfViewerUrl;
+    }, [goBack, clearSelection, selectedFolder, isSelectionMode, pdfViewerUrl]);
+
+    const edgePanResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_, gestureState) => {
+                if (Platform.OS !== 'ios' || !selectedFolderRef.current || isViewerOpenRef.current) {
+                    return false;
+                }
+                const isEdgeStart = gestureState.x0 < 40;
+                const isHorizontalSwipeRight = gestureState.dx > 20 && Math.abs(gestureState.dy) < 20;
+                return isEdgeStart && isHorizontalSwipeRight;
+            },
+            onPanResponderRelease: (_, gestureState) => {
+                if (gestureState.dx > 40) {
+                    if (isSelectionModeRef.current) {
+                        clearSelectionRef.current();
+                    } else {
+                        goBackRef.current();
+                    }
+                }
+            },
+            onPanResponderTerminationRequest: () => false,
+        })
+    ).current;
+
     // Unified View
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1 }} {...(Platform.OS === 'ios' && selectedFolder ? edgePanResponder.panHandlers : {})}>
             <ScrollView
                 ref={mainScrollRef}
                 style={{ flex: 1 }}
@@ -2154,6 +2202,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     setCurrentDoc(null);
                     setShowComments(false);
                     setDocComments([]);
+                    setShowInfoModal(false);
                     const returnTab = searchParams?.returnTab as string;
                     if (returnTab) {
                         const rParams: any = { tab: returnTab };
@@ -2206,6 +2255,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 setCurrentDoc(null);
                                 setShowComments(false);
                                 setDocComments([]);
+                                setShowInfoModal(false);
                                 const returnTab = searchParams?.returnTab as string;
                                 if (returnTab) {
                                     const rParams: any = { tab: returnTab };
@@ -2247,6 +2297,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             {pdfViewerName}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                                <Feather name="info" size={18} color="#fff" />
+                            </TouchableOpacity>
                             <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
                                 <Feather name="link" size={18} color="#fff" />
                             </TouchableOpacity>
@@ -2581,6 +2634,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             handleLinkItemClick={handleLinkItemClick}
                         />
                     )}
+
+                    <FileInformationModal
+                        visible={showInfoModal}
+                        onClose={() => setShowInfoModal(false)}
+                        file={currentDoc}
+                        folders={folders}
+                        projectName={project?.name || ''}
+                    />
                 </View>
             </Modal>
 
@@ -3225,6 +3286,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     </KeyboardAvoidingView>
                 </View>
             </Modal>
+
         </View>
     );
 }

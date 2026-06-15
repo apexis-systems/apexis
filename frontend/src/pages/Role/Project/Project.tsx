@@ -61,8 +61,19 @@ export default function Project({ id }: ProjectProps) {
 
     // Sync from URL if it changes (e.g. on back navigation)
     useEffect(() => {
-        if (urlTab && urlTab !== activeTab) setActiveTab(urlTab);
-    }, [urlTab]);
+        if (user) {
+            const isConsultantVendor = user.role === 'consultant' || user.role === 'vendor';
+            const defaultTab = isConsultantVendor ? 'documents' : 'overview';
+            const allowedForConsultantVendor = ['documents', 'photos', 'manuals', 'rfi'];
+            const allowedTabs = isConsultantVendor ? allowedForConsultantVendor : ['overview', 'documents', 'photos', 'reports', 'snags', 'rfi', 'manuals'];
+            const targetTab = urlTab && allowedTabs.includes(urlTab)
+                ? urlTab
+                : defaultTab;
+            if (activeTab !== targetTab) {
+                setActiveTab(targetTab);
+            }
+        }
+    }, [user, urlTab, activeTab]);
 
     const fetchProject = useCallback(async () => {
         try {
@@ -168,16 +179,33 @@ export default function Project({ id }: ProjectProps) {
     }
 
     const navItems = [
-        { key: 'overview' as TabKey, label: t('project_overview'), icon: LayoutDashboard },
+        { key: 'overview' as TabKey, label: t('project_overview'), icon: LayoutDashboard, hideForConsultantVendor: true },
         { key: 'documents' as TabKey, label: t('documents'), icon: FileText },
         { key: 'photos' as TabKey, label: t('photos'), icon: Camera },
-        { key: 'reports' as TabKey, label: t('reports_label'), icon: ClipboardList, adminOnly: true },
-        { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle },
-        { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle, adminOnly: true },
+        { key: 'reports' as TabKey, label: t('reports_label'), icon: ClipboardList, adminOnly: true, hideForConsultantVendor: true },
+        { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle, hideForConsultantVendor: true },
+        { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle, adminOnly: true, hideForConsultantVendor: true },
         { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen },
     ];
 
-    const visibleNav = navItems.filter((item) => !(item.adminOnly && isClient));
+    const isConsultant = user?.role === 'consultant';
+    const isVendor = user?.role === 'vendor';
+    const isConsultantVendor = isConsultant || isVendor;
+    
+    let visibleNav = navItems.filter((item) => {
+        if (item.adminOnly && isClient) return false;
+        if (item.key === 'rfi' && isConsultantVendor) return true;
+        if (item.hideForConsultantVendor && isConsultantVendor) return false;
+        if (item.adminOnly && !['admin', 'superadmin'].includes(user?.role || '')) return false;
+        return true;
+    });
+
+    if (isConsultantVendor) {
+        const rfiItem = visibleNav.find(item => item.key === 'rfi');
+        if (rfiItem) {
+            visibleNav = [rfiItem, ...visibleNav.filter(item => item.key !== 'rfi')];
+        }
+    }
 
     return (
         <div className="flex flex-1 min-h-[calc(100vh-3.5rem)]">

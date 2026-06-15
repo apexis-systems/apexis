@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
     superadminLogin,
     adminLogin,
+    adminGoogleLogin,
     projectLogin,
     me,
     verifyInvitation,
@@ -24,6 +25,7 @@ const router = Router();
 // Logins
 router.post("/superadmin/login", superadminLogin);
 router.post("/admin/login", adminLogin);
+router.post("/admin/google-login", adminGoogleLogin);
 router.post("/project/login", projectLogin);
 router.post("/logout", verifyToken, logout);
 

@@ -42,7 +42,7 @@ export const getOrganizations = async () => {
         throw error;
     }
 };
-export const updateOrganization = async (data: { name: string }) => {
+export const updateOrganization = async (data: { name?: string; restrict_onboarding?: boolean }) => {
     try {
         const response = await PrivateAxios.patch('/organizations', data);
         return response.data;

@@ -15,6 +15,9 @@ interface FolderPickerDialogProps {
     selectedFolderIds: (string | number)[];
     onSelect: (folderIds: (string | number)[]) => void;
     submitting?: boolean;
+    onlyTopLevel?: boolean;
+    hideCreate?: boolean;
+    title?: string;
 }
 
 const FolderPickerDialog = ({
@@ -23,7 +26,10 @@ const FolderPickerDialog = ({
     project = null,
     selectedFolderIds = [],
     onSelect = () => { },
-    submitting = false
+    submitting = false,
+    onlyTopLevel = false,
+    hideCreate = false,
+    title
 }: FolderPickerDialogProps) => {
     const [folders, setFolders] = useState<any[]>([]);
     const [type, setType] = useState<'document' | 'photo'>('document');
@@ -154,6 +160,28 @@ const FolderPickerDialog = ({
         effectiveSelection.length !== selectedFolderIds.length || 
         !selectedFolderIds.every(id => effectiveSelection.some(tId => String(tId) === String(id)));
 
+    const currentLevelFolders = getFoldersInCurrentLevel();
+    const visibleFolderIds = currentLevelFolders.map(f => String(f.id));
+    const isAnyVisibleSelected = currentLevelFolders.some(f => 
+        effectiveSelection.some(id => String(id) === String(f.id))
+    );
+
+    const handleToggleAll = () => {
+        if (isAnyVisibleSelected) {
+            setCurrentSelected(prev => prev.filter(id => !visibleFolderIds.includes(String(id))));
+        } else {
+            setCurrentSelected(prev => {
+                const newSelection = [...prev];
+                currentLevelFolders.forEach(f => {
+                    if (!newSelection.some(id => String(id) === String(f.id))) {
+                        newSelection.push(f.id);
+                    }
+                });
+                return newSelection;
+            });
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={(val) => {
             onOpenChange(val);
@@ -165,7 +193,7 @@ const FolderPickerDialog = ({
         }}>
             <DialogContent className="sm:max-w-[450px] overflow-hidden">
                 <DialogHeader className="flex flex-row items-center justify-between border-b pb-3">
-                    <DialogTitle className="text-sm font-semibold">Link RFI or Snag to Folders</DialogTitle>
+                    <DialogTitle className="text-sm font-semibold">{title || "Link RFI or Snag to Folders"}</DialogTitle>
                 </DialogHeader>
  
                 {/* Tabs */}
@@ -189,6 +217,34 @@ const FolderPickerDialog = ({
                         Photos
                     </button>
                 </div>
+
+                {/* Toggle All Button */}
+                {currentLevelFolders.length > 0 && (
+                    <div className="flex justify-end px-1.5 py-0.5">
+                        <button
+                            type="button"
+                            onClick={handleToggleAll}
+                            className={cn(
+                                "flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-all duration-200",
+                                isAnyVisibleSelected 
+                                    ? "bg-accent/10 border-accent/30 text-accent hover:bg-accent/20" 
+                                    : "bg-muted border-border text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                            )}
+                        >
+                            {isAnyVisibleSelected ? (
+                                <>
+                                    <FolderMinus className="h-3 w-3" />
+                                    <span>Unselect All</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="h-3 w-3 stroke-[3px]" />
+                                    <span>Select All</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
  
                 <div className="max-h-[320px] overflow-y-auto py-1 space-y-3 pr-1">
                     {/* Breadcrumbs */}
@@ -220,23 +276,37 @@ const FolderPickerDialog = ({
                                         isSelected && "border-accent bg-accent/5"
                                     )}
                                     onClick={() => {
-                                        setCurrentParentId(folder.id);
+                                        if (onlyTopLevel) {
+                                            toggleFolder(folder.id);
+                                        } else {
+                                            setCurrentParentId(folder.id);
+                                        }
                                     }}
                                 >
                                     {/* Corner checkbox overlay */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation(); // Avoid entering folder when toggling checkbox
-                                            toggleFolder(folder.id);
-                                        }}
-                                        className="absolute top-1.5 right-1.5 p-0.5 rounded-full hover:bg-muted/80 z-10"
-                                    >
-                                        {isSelected ? (
-                                            <Check className="h-3.5 w-3.5 text-accent stroke-[3px]" />
-                                        ) : (
-                                            <div className="h-3 w-3 rounded-full border-2 border-muted-foreground/40 group-hover:border-muted-foreground" />
-                                        )}
-                                    </button>
+                                    {onlyTopLevel ? (
+                                        <div className="absolute top-1.5 right-1.5 p-0.5 z-10">
+                                            {isSelected ? (
+                                                <Check className="h-3.5 w-3.5 text-accent stroke-[3px]" />
+                                            ) : (
+                                                <div className="h-3 w-3 rounded-full border-2 border-muted-foreground/40 group-hover:border-muted-foreground" />
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation(); // Avoid entering folder when toggling checkbox
+                                                toggleFolder(folder.id);
+                                            }}
+                                            className="absolute top-1.5 right-1.5 p-0.5 rounded-full hover:bg-muted/80 z-10"
+                                        >
+                                            {isSelected ? (
+                                                <Check className="h-3.5 w-3.5 text-accent stroke-[3px]" />
+                                            ) : (
+                                                <div className="h-3 w-3 rounded-full border-2 border-muted-foreground/40 group-hover:border-muted-foreground" />
+                                            )}
+                                        </button>
+                                    )}
  
                                     <FolderIcon className={cn("h-5 w-5 text-primary group-hover:scale-105 transition-transform", isSelected && "text-accent")} />
                                     <span className="text-[10px] font-semibold leading-tight max-h-[24px] overflow-hidden text-ellipsis line-clamp-2 px-1">
@@ -246,15 +316,17 @@ const FolderPickerDialog = ({
                             );
                         })}
  
-                        <button
-                            onClick={() => setShowNewFolderModal(true)}
-                            className="flex flex-col items-center justify-center p-3 rounded-xl border border-dashed border-border hover:bg-muted transition-colors aspect-square text-center gap-1.5"
-                        >
-                            <FolderPlus className="h-5 w-5 text-primary" />
-                            <span className="text-[10px] font-semibold text-muted-foreground leading-tight">
-                                New Folder
-                            </span>
-                        </button>
+                        {!hideCreate && (
+                            <button
+                                onClick={() => setShowNewFolderModal(true)}
+                                className="flex flex-col items-center justify-center p-3 rounded-xl border border-dashed border-border hover:bg-muted transition-colors aspect-square text-center gap-1.5"
+                            >
+                                <FolderPlus className="h-5 w-5 text-primary" />
+                                <span className="text-[10px] font-semibold text-muted-foreground leading-tight">
+                                    New Folder
+                                </span>
+                            </button>
+                        )}
                     </div>
  
                     {getFoldersInCurrentLevel().length === 0 && currentParentId !== null && (
