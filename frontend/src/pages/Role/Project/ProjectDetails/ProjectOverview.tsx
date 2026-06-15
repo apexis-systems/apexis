@@ -714,7 +714,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                              </span>
                            )}
                            {m.role === 'vendor' && (
-                             <span className="text-[9px] font-bold uppercase tracking-wider bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full">
+                             <span className="text-[9px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full">
                                Vendor
                              </span>
                            )}

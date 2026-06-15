@@ -264,6 +264,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             await Share.share({
                 title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
                 message: `You've been invited to access the project "${project.name}" on Apexis as a "${role}".\n\nClick the link below to securely login to your project:\n${shareUrl}`,
+                url: shareUrl,
             });
         } catch (e) {
             console.error('Share error:', e);
@@ -556,7 +557,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                             </Text>
 
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 }}>
-                                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, flex: 1 }}>
+                                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, flexShrink: 1 }}>
                                     {(project as any).client_code || '—'}
                                 </Text>
                                 {(project as any).client_code ? (
@@ -569,7 +570,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                         </TouchableOpacity>
                                     </View>
                                 ) : (
-                                    <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic' }}>Restricted</Text>
+                                    <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic', paddingRight: 4 }}>Restricted</Text>
                                 )}
                             </View>
                             <TouchableOpacity
@@ -930,8 +931,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                                 </View>
                                             )}
                                             {m.role === 'vendor' && (
-                                                <View style={{ backgroundColor: 'rgba(249, 115, 22, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 }}>
-                                                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#f97316', textTransform: 'uppercase' }}>Vendor</Text>
+                                                <View style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 }}>
+                                                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#3b82f6', textTransform: 'uppercase' }}>Vendor</Text>
                                                 </View>
                                             )}
                                             {m.role === 'contributor' && (
@@ -1022,6 +1023,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                             await Share.share({
                                                 title: `Join Project as ${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'}`,
                                                 message: `You've been invited to access the project "${project.name}" on Apexis as a "${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'}".\n\nClick the link below to securely login to your project:\n${generatedInviteUrl}`,
+                                                url: generatedInviteUrl,
                                             });
                                         } catch (e) {
                                             console.error('Share error:', e);
