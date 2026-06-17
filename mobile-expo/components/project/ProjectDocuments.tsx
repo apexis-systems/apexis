@@ -1423,7 +1423,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 // Fallback to link sharing if system sharing is unavailable
                 await Share.share({
                     title: doc.file_name,
-                    message: `${doc.file_name}\n${urlToDownload}`,
+                    message: Platform.OS === 'android' ? `${doc.file_name}\n${urlToDownload}` : doc.file_name,
                     url: urlToDownload,
                 });
             }

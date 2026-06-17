@@ -1351,7 +1351,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     } else {
                         await RNShare.share({
                             title: firstPhoto.file_name,
-                            message: `${firstPhoto.file_name}\n${firstPhoto.downloadUrl}`,
+                            message: Platform.OS === 'android' ? `${firstPhoto.file_name}\n${firstPhoto.downloadUrl}` : firstPhoto.file_name,
                             url: firstPhoto.downloadUrl,
                         });
                     }
