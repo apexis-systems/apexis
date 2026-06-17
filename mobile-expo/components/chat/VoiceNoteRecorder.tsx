@@ -24,6 +24,13 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
             if (recordingRef.current) {
                 recordingRef.current.stopAndUnloadAsync().catch(() => {});
             }
+            // Reset audio mode when recorder is unmounted, in case it was left in recording mode
+            Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: true,
+                playThroughEarpieceAndroid: false,
+            }).catch(() => {});
+
             if (timerRef.current) clearInterval(timerRef.current);
         };
     }, []);
@@ -42,6 +49,7 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
             await Audio.setAudioModeAsync({
                 allowsRecordingIOS: true,
                 playsInSilentModeIOS: true,
+                playThroughEarpieceAndroid: false,
             });
 
             const { recording } = await Audio.Recording.createAsync(
@@ -131,6 +139,16 @@ export default function VoiceNoteRecorder({ colors, onSend, onRecordingStateChan
             recordingRef.current = null;
         } catch (error) {
             console.error('Failed to stop recording', error);
+        } finally {
+            try {
+                await Audio.setAudioModeAsync({
+                    allowsRecordingIOS: false,
+                    playsInSilentModeIOS: true,
+                    playThroughEarpieceAndroid: false,
+                });
+            } catch (e) {
+                console.error('Failed to reset audio mode', e);
+            }
         }
     };
 

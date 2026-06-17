@@ -131,6 +131,13 @@ export default function VoiceNotePlayer({ uri, isMe, colors, playingUri, onPlay 
                 await s.pauseAsync();
                 currentlyPlayingRef = null;
             } else {
+                // Ensure audio mode plays through the speaker (loudspeaker)
+                await Audio.setAudioModeAsync({
+                    allowsRecordingIOS: false,
+                    playsInSilentModeIOS: true,
+                    playThroughEarpieceAndroid: false,
+                });
+
                 // Stop whatever is currently playing (different player instance)
                 if (currentlyPlayingRef && currentlyPlayingRef.sound !== s) {
                     currentlyPlayingRef.pause();
