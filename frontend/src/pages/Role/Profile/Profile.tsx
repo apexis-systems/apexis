@@ -498,6 +498,20 @@ const Profile = () => {
                 >
                     <LogOut className="h-4 w-4 mr-2" /> {t('sign_out')}
                 </Button>
+
+                <a
+                    href="https://rhinonlabs.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1 mt-6 opacity-60 hover:opacity-100 transition-opacity"
+                >
+                    <span className="text-[14px] text-muted-foreground tracking-wide">Developed by</span>
+                    <img
+                        src="/rhinon_tech.png"
+                        alt="Rhinon Labs"
+                        className="w-[95px] h-[35px] object-contain ml-0.5"
+                    />
+                </a>
             </div>
 
             {/* Hidden File Input */}

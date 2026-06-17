@@ -83,7 +83,8 @@ export default function ChatDetailScreen() {
     const flatListRef = useRef<FlatList>(null);
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-    const [attachment, setAttachment] = useState<any>(null);
+    const [attachments, setAttachments] = useState<any[]>([]);
+    const [editingAttachmentIndex, setEditingAttachmentIndex] = useState<number | null>(null);
     const [annotatingImage, setAnnotatingImage] = useState<any>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
@@ -345,64 +346,89 @@ export default function ChatDetailScreen() {
         }
 
         setIsSending(true);
-        const fileToUpload = overrideFile || attachment;
-        if (!message.trim() && !fileToUpload) {
+        const filesToUpload = overrideFile ? [overrideFile] : attachments;
+        const textToSubmit = message.trim();
+
+        if (filesToUpload.length === 0 && !textToSubmit) {
             setIsSending(false);
             return;
         }
 
-        const textToSubmit = message.trim();
-
         if (!overrideFile) {
             setMessage('');
-            setAttachment(null);
+            setAttachments([]);
             setShowEmojis(false);
         }
 
-
         try {
-            let fileData = null;
-            if (fileToUpload) {
-                setIsUploading(true);
-                const uploadRes = await uploadChatFile(
-                    fileToUpload.uri,
-                    fileToUpload.name,
-                    fileToUpload.mimeType || fileToUpload.type || 'application/octet-stream'
-                );
-                if (uploadRes.success) {
-                    fileData = uploadRes;
+            if (filesToUpload.length === 0) {
+                const payload: any = {
+                    roomId: id as string,
+                    type: 'text',
+                    parent_id: replyTo?.id ? Number(replyTo.id) : null
+                };
+                if (textToSubmit) payload.text = textToSubmit;
+                setReplyTo(null);
+
+                const res = await sendChatMessage(payload);
+                if (res.success && res.message) {
+                    setMessages(prev => {
+                        const exists = prev.some(m => String(m.id) === String(res.message.id));
+                        if (exists) {
+                            return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                        }
+                        return [res.message, ...prev];
+                    });
                 }
-                setIsUploading(false);
-            }
+            } else {
+                for (let i = 0; i < filesToUpload.length; i++) {
+                    const file = filesToUpload[i];
+                    setIsUploading(true);
+                    const uploadRes = await uploadChatFile(
+                        file.uri,
+                        file.name,
+                        file.mimeType || file.type || 'application/octet-stream'
+                    );
 
-            const payload: any = {
-                roomId: id as string,
-                type: fileData ? (
-                    fileData.file_type?.startsWith('image/') ? 'image' :
-                        fileData.file_type?.startsWith('audio/') ? 'audio' : 'file'
-                ) : 'text',
-                file_url: fileData?.file_url,
-                file_name: fileData?.file_name,
-                file_type: fileData?.file_type,
-                file_size: fileData?.file_size,
-                parent_id: replyTo?.id ? Number(replyTo.id) : null
-            };
-            if (textToSubmit) payload.text = textToSubmit;
-
-            console.log("[CHAT] Sending payload:", payload);
-            setReplyTo(null);
-
-            const res = await sendChatMessage(payload);
-            console.log("[CHAT] Response from server:", res);
-
-            if (res.success && res.message) {
-                setMessages(prev => {
-                    const exists = prev.some(m => String(m.id) === String(res.message.id));
-                    if (exists) {
-                        return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                    let fileData = null;
+                    if (uploadRes.success) {
+                        fileData = uploadRes;
                     }
-                    return [res.message, ...prev];
-                });
+                    setIsUploading(false);
+
+                    if (fileData) {
+                        const payload: any = {
+                            roomId: id as string,
+                            type: fileData.file_type?.startsWith('image/') ? 'image' :
+                                fileData.file_type?.startsWith('audio/') ? 'audio' : 'file',
+                            file_url: fileData.file_url,
+                            file_name: fileData.file_name,
+                            file_type: fileData.file_type,
+                            file_size: fileData.file_size,
+                            parent_id: replyTo?.id ? Number(replyTo.id) : null
+                        };
+
+                        // Send the text message with the first file
+                        if (i === 0 && textToSubmit) {
+                            payload.text = textToSubmit;
+                        }
+
+                        if (i === 0) {
+                            setReplyTo(null);
+                        }
+
+                        const res = await sendChatMessage(payload);
+                        if (res.success && res.message) {
+                            setMessages(prev => {
+                                const exists = prev.some(m => String(m.id) === String(res.message.id));
+                                if (exists) {
+                                    return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                                }
+                                return [res.message, ...prev];
+                            });
+                        }
+                    }
+                }
             }
         } catch (error) {
             console.error("handleSend error:", error);
@@ -415,28 +441,49 @@ export default function ChatDetailScreen() {
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            allowsEditing: false,
+            allowsMultipleSelection: true,
             quality: 0.9,
         });
 
         if (!result.canceled) {
-            const asset = result.assets[0];
-            let uri = asset.uri;
-            try {
-                const manipulated = await ImageManipulator.manipulateAsync(
-                    uri,
-                    [{ resize: { width: 1920 } }],
-                    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-                );
-                uri = manipulated.uri;
-            } catch (e) { }
+            if (result.assets.length === 1) {
+                const asset = result.assets[0];
+                let uri = asset.uri;
+                try {
+                    const manipulated = await ImageManipulator.manipulateAsync(
+                        uri,
+                        [{ resize: { width: 1920 } }],
+                        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                    );
+                    uri = manipulated.uri;
+                } catch (e) { }
 
-            setAnnotatingImage({
-                uri,
-                name: asset.fileName || `image_${Date.now()}.jpg`,
-                type: 'image/jpeg',
-                size: asset.fileSize || 0
-            });
+                setAnnotatingImage({
+                    uri,
+                    name: asset.fileName || `image_${Date.now()}.jpg`,
+                    type: 'image/jpeg',
+                    size: asset.fileSize || 0
+                });
+            } else {
+                const newAttachments = await Promise.all(result.assets.map(async (asset) => {
+                    let uri = asset.uri;
+                    try {
+                        const manipulated = await ImageManipulator.manipulateAsync(
+                            uri,
+                            [{ resize: { width: 1920 } }],
+                            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                        );
+                        uri = manipulated.uri;
+                    } catch (e) { }
+                    return {
+                        uri,
+                        name: asset.fileName || `image_${Date.now()}.jpg`,
+                        type: 'image/jpeg',
+                        size: asset.fileSize || 0
+                    };
+                }));
+                setAttachments(prev => [...prev, ...newAttachments]);
+            }
         }
     };
 
@@ -470,12 +517,12 @@ export default function ChatDetailScreen() {
                 }
             }
 
-            setAttachment({
+            setAttachments(prev => [...prev, {
                 uri,
                 name: asset.name,
                 type: mimeType,
                 size: asset.size || 0
-            });
+            }]);
         }
     };
 
@@ -1068,22 +1115,75 @@ export default function ChatDetailScreen() {
                                 </View>
                             )}
 
-                            {attachment && (
-                                <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                    <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                                        {attachment.type?.startsWith('image/') ? (
-                                            <Image source={{ uri: attachment.uri }} style={{ width: 44, height: 44 }} />
-                                        ) : (
-                                            <Feather name="file" size={20} color={colors.textMuted} />
-                                        )}
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }} numberOfLines={1}>{attachment.name}</Text>
-                                        <Text style={{ fontSize: 11, color: colors.textMuted }}>{(attachment.size / 1024).toFixed(1)} KB</Text>
-                                    </View>
-                                    <TouchableOpacity onPress={() => setAttachment(null)} style={{ padding: 4 }}>
-                                        <Ionicons name="close-circle" size={24} color={colors.textMuted} />
-                                    </TouchableOpacity>
+                            {attachments.length > 0 && (
+                                <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }}>
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        style={{ overflow: 'visible' }}
+                                        contentContainerStyle={{ gap: 14, paddingRight: 12, paddingVertical: 8 }}
+                                    >
+                                        {attachments.map((item, index) => (
+                                            <View key={index} style={{ width: 68, height: 68, borderRadius: 8, backgroundColor: colors.border, position: 'relative', overflow: 'visible' }}>
+                                                {item.type?.startsWith('image/') ? (
+                                                    <Image source={{ uri: item.uri }} style={{ width: 68, height: 68, borderRadius: 8 }} />
+                                                ) : (
+                                                    <View style={{ width: 68, height: 68, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                                                        <Feather name="file" size={26} color={colors.textMuted} />
+                                                    </View>
+                                                )}
+
+                                                {/* Edit Icon on top-left of image/file */}
+                                                {item.type?.startsWith('image/') && (
+                                                    <TouchableOpacity
+                                                        onPress={() => setEditingAttachmentIndex(index)}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: -6,
+                                                            left: -6,
+                                                            backgroundColor: colors.primary,
+                                                            width: 22,
+                                                            height: 22,
+                                                            borderRadius: 11,
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderWidth: 1.5,
+                                                            borderColor: colors.surface,
+                                                            shadowColor: '#000',
+                                                            shadowOffset: { width: 0, height: 1 },
+                                                            shadowOpacity: 0.2,
+                                                            shadowRadius: 1,
+                                                            elevation: 2
+                                                        }}
+                                                    >
+                                                        <Feather name="edit-2" size={10} color="#fff" />
+                                                    </TouchableOpacity>
+                                                )}
+
+                                                {/* Close/Remove button on top-right */}
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        setAttachments(prev => prev.filter((_, idx) => idx !== index));
+                                                    }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: -6,
+                                                        right: -6,
+                                                        backgroundColor: 'rgba(0,0,0,0.6)',
+                                                        width: 22,
+                                                        height: 22,
+                                                        borderRadius: 11,
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        borderWidth: 1.5,
+                                                        borderColor: colors.surface,
+                                                    }}
+                                                >
+                                                    <Ionicons name="close" size={12} color="#fff" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        ))}
+                                    </ScrollView>
                                 </View>
                             )}
 
@@ -1165,7 +1265,7 @@ export default function ChatDetailScreen() {
                                     </View>
                                 )}
 
-                                {(!message.trim() && !attachment) || isRecordingVoice ? (
+                                {(!message.trim() && attachments.length === 0) || isRecordingVoice ? (
                                     <View style={{ flex: isRecordingVoice ? 1 : 0, height: isRecordingVoice ? 50 : 35 }}>
                                         <VoiceNoteRecorder
                                             colors={colors}
@@ -1234,12 +1334,29 @@ export default function ChatDetailScreen() {
                 <ImageAnnotator
                     uri={annotatingImage.uri}
                     onSave={(newUri: string) => {
-                        setAttachment({ ...annotatingImage, uri: newUri });
+                        setAttachments(prev => [...prev, { ...annotatingImage, uri: newUri }]);
                         setAnnotatingImage(null);
                     }}
                     onCancel={() => {
-                        setAttachment(annotatingImage);
+                        setAttachments(prev => [...prev, annotatingImage]);
                         setAnnotatingImage(null);
+                    }}
+                />
+            )}
+
+            {editingAttachmentIndex !== null && attachments[editingAttachmentIndex] && (
+                <ImageAnnotator
+                    uri={attachments[editingAttachmentIndex].uri}
+                    onSave={(newUri: string) => {
+                        setAttachments(prev => {
+                            const copy = [...prev];
+                            copy[editingAttachmentIndex] = { ...copy[editingAttachmentIndex], uri: newUri };
+                            return copy;
+                        });
+                        setEditingAttachmentIndex(null);
+                    }}
+                    onCancel={() => {
+                        setEditingAttachmentIndex(null);
                     }}
                 />
             )}
