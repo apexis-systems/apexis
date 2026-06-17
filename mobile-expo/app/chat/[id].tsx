@@ -768,172 +768,183 @@ export default function ChatDetailScreen() {
         };
 
         return (
-            <ReanimatedSwipeable
-                ref={swipeableRef}
-                renderLeftActions={renderLeftActions}
-                onSwipeableWillOpen={() => {
-                    setReplyTo(item);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    focusInput?.();
-                    setTimeout(() => {
-                        swipeableRef.current?.close();
-                    }, 0);
-                }}
-                friction={1.5}
-                enableTrackpadTwoFingerGesture
-                leftThreshold={20}
+
+            <TouchableOpacity
+                activeOpacity={0.9}
+                onLongPress={() => onLongPress?.(item)}
+                delayLongPress={500}
+                style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}
             >
-                <TouchableOpacity
-                    activeOpacity={0.9}
-                    onLongPress={() => onLongPress?.(item)}
-                    delayLongPress={500}
-                    style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}
-                >
-                    <View style={{
-                        maxWidth: '80%',
-                        backgroundColor: isMe ? colors.primary : colors.surface,
-                        borderWidth: isMe ? 0 : 1,
-                        borderColor: colors.border,
-                        paddingVertical: 10,
-                        paddingHorizontal: 14,
-                        marginHorizontal: 8,
-                        borderRadius: 18,
-                        borderBottomRightRadius: isMe ? 4 : 18,
-                        borderBottomLeftRadius: isMe ? 18 : 4,
-                        overflow: 'visible',
-                        elevation: 1,
-                    }}>
-                        {!isMe && (
-                            <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
-                        )}
 
-                        {(item.parent || item.parent_id) && (
-                            <TouchableOpacity
-                                onPress={() => scrollToMessage(item.parent_id || item.parent?.id)}
-                                style={{
-                                    backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)',
-                                    padding: 8,
-                                    borderRadius: 8,
-                                    borderLeftWidth: 4,
-                                    borderLeftColor: colors.primary,
-                                    marginBottom: 8
-                                }}
-                            >
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: isMe ? '#fff' : colors.primary, marginBottom: 2 }}>
-                                    {item.parent?.sender?.name || 'User'}
-                                </Text>
-                                <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : colors.textMuted }}>
-                                    {item.parent ? (
-                                        (item.parent.type === 'audio' || item.parent.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : item.parent.type === 'image' ? '📷 Photo' : item.parent.type === 'file' ? '📄 File' : item.parent.text
-                                    ) : 'Replied to message'}
-                                </Text>
-                            </TouchableOpacity>
-                        )}
+                <View style={{
+                    maxWidth: '80%',
 
-                        {item.type === 'image' && item.downloadUrl && (
-                            <View>
+                }}>
+                    <ReanimatedSwipeable
+                        ref={swipeableRef}
+                        renderLeftActions={renderLeftActions}
+                        onSwipeableWillOpen={() => {
+                            setReplyTo(item);
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            focusInput?.();
+                            setTimeout(() => {
+                                swipeableRef.current?.close();
+                            }, 0);
+                        }}
+                        friction={1.5}
+                        enableTrackpadTwoFingerGesture
+                        leftThreshold={20}
+
+                    >
+                        <View
+                            style={{
+                                backgroundColor: isMe ? colors.primary : colors.surface,
+                                borderWidth: isMe ? 0 : 1,
+                                borderColor: colors.border,
+                                paddingVertical: 10,
+                                paddingHorizontal: 14,
+                                marginHorizontal: 8,
+                                borderRadius: 18,
+                                borderBottomRightRadius: isMe ? 4 : 18,
+                                borderBottomLeftRadius: isMe ? 18 : 4,
+                                overflow: 'visible',
+                                elevation: 1,
+                            }}
+                        >
+                            {!isMe && (
+                                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
+                            )}
+
+                            {(item.parent || item.parent_id) && (
                                 <TouchableOpacity
-                                    onPress={() => setFullScreenImage(item.downloadUrl)}
-                                    style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}
-                                >
-                                    <Image
-                                        source={{ uri: item.downloadUrl }}
-                                        style={{ width: 240, height: 240, borderRadius: 12 }}
-                                        resizeMode="cover"
-                                    />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => handleDownload(item)}
-                                    disabled={isDownloading === String(item.id)}
-                                    style={{ position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 15 }}
-                                >
-                                    {isDownloading === String(item.id) ? (
-                                        <ActivityIndicator size="small" color="#fff" />
-                                    ) : (
-                                        <Feather name="download" size={16} color="#fff" />
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        )}
-
-                        {(item.type === 'audio' || item.file_type?.startsWith('audio/')) && item.downloadUrl && (
-                            <View style={{ minWidth: 220 }}>
-                                <VoiceNotePlayer
-                                    uri={item.downloadUrl}
-                                    isMe={isMe}
-                                    colors={colors}
-                                    playingUri={playingAudioUri}
-                                    onPlay={setPlayingAudioUri}
-                                />
-                            </View>
-                        )}
-
-                        {item.type === 'file' && !item.file_type?.startsWith('audio/') && item.downloadUrl && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                                <TouchableOpacity
-                                    onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
+                                    onPress={() => scrollToMessage(item.parent_id || item.parent?.id)}
                                     style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                                        padding: 12,
-                                        borderRadius: 12,
-                                        gap: 12,
-                                        flex: 1
+                                        backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)',
+                                        padding: 8,
+                                        borderRadius: 8,
+                                        borderLeftWidth: 4,
+                                        borderLeftColor: colors.primary,
+                                        marginBottom: 8
                                     }}
                                 >
-                                    <View style={{ width: 44, height: 40, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name="file-text" size={20} color="#fff" />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: isMe ? '#fff' : colors.text }} numberOfLines={1}>{item.file_name}</Text>
-                                        <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
-                                    </View>
+                                    <Text style={{ fontSize: 11, fontWeight: '800', color: isMe ? '#fff' : colors.primary, marginBottom: 2 }}>
+                                        {item.parent?.sender?.name || 'User'}
+                                    </Text>
+                                    <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : colors.textMuted }}>
+                                        {item.parent ? (
+                                            (item.parent.type === 'audio' || item.parent.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : item.parent.type === 'image' ? '📷 Photo' : item.parent.type === 'file' ? '📄 File' : item.parent.text
+                                        ) : 'Replied to message'}
+                                    </Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => handleDownload(item)}
-                                    disabled={isDownloading === String(item.id)}
-                                    style={{ padding: 10, borderRadius: 12, backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
-                                >
-                                    {isDownloading === String(item.id) ? (
-                                        <ActivityIndicator size="small" color={isMe ? '#fff' : colors.primary} />
-                                    ) : (
-                                        <Feather name="download" size={20} color={isMe ? '#fff' : colors.primary} />
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        )}
+                            )}
 
-                        {item.text ? (
-                            <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
-                                {item.text}
-                            </Text>
-                        ) : null}
+                            {item.type === 'image' && item.downloadUrl && (
+                                <View>
+                                    <TouchableOpacity
+                                        onPress={() => setFullScreenImage(item.downloadUrl)}
+                                        style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}
+                                    >
+                                        <Image
+                                            source={{ uri: item.downloadUrl }}
+                                            style={{ width: 240, height: 240, borderRadius: 12 }}
+                                            resizeMode="cover"
+                                        />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => handleDownload(item)}
+                                        disabled={isDownloading === String(item.id)}
+                                        style={{ position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 15 }}
+                                    >
+                                        {isDownloading === String(item.id) ? (
+                                            <ActivityIndicator size="small" color="#fff" />
+                                        ) : (
+                                            <Feather name="download" size={16} color="#fff" />
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            )}
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 4 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
-                                    {time}
-                                </Text>
-                                {isMe && (
-                                    <Ionicons
-                                        name="checkmark-done"
-                                        size={14}
-                                        color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
+                            {(item.type === 'audio' || item.file_type?.startsWith('audio/')) && item.downloadUrl && (
+                                <View style={{ minWidth: 220 }}>
+                                    <VoiceNotePlayer
+                                        uri={item.downloadUrl}
+                                        isMe={isMe}
+                                        colors={colors}
+                                        playingUri={playingAudioUri}
+                                        onPlay={setPlayingAudioUri}
                                     />
-                                )}
-                                <TouchableOpacity onPress={() => {
-                                    setReplyTo(item);
-                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                    focusInput?.();
-                                }}>
-                                    <Feather name="corner-up-left" size={14} color={isMe ? "rgba(255,255,255,0.7)" : colors.primary} />
-                                </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {item.type === 'file' && !item.file_type?.startsWith('audio/') && item.downloadUrl && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                    <TouchableOpacity
+                                        onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                                            padding: 12,
+                                            borderRadius: 12,
+                                            gap: 12,
+                                            flex: 1
+                                        }}
+                                    >
+                                        <View style={{ width: 44, height: 40, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                            <Feather name="file-text" size={20} color="#fff" />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: isMe ? '#fff' : colors.text }} numberOfLines={1}>{item.file_name}</Text>
+                                            <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => handleDownload(item)}
+                                        disabled={isDownloading === String(item.id)}
+                                        style={{ padding: 10, borderRadius: 12, backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+                                    >
+                                        {isDownloading === String(item.id) ? (
+                                            <ActivityIndicator size="small" color={isMe ? '#fff' : colors.primary} />
+                                        ) : (
+                                            <Feather name="download" size={20} color={isMe ? '#fff' : colors.primary} />
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {item.text ? (
+                                <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
+                                    {item.text}
+                                </Text>
+                            ) : null}
+
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 4 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                    <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
+                                        {time}
+                                    </Text>
+                                    {isMe && (
+                                        <Ionicons
+                                            name="checkmark-done"
+                                            size={14}
+                                            color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
+                                        />
+                                    )}
+                                    <TouchableOpacity onPress={() => {
+                                        setReplyTo(item);
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                        focusInput?.();
+                                    }}>
+                                        <Feather name="corner-up-left" size={14} color={isMe ? "rgba(255,255,255,0.7)" : colors.primary} />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
-                    </View>
-                </TouchableOpacity>
-            </ReanimatedSwipeable>
+                    </ReanimatedSwipeable>
+                </View>
+
+            </TouchableOpacity>
+
         );
     });
 
