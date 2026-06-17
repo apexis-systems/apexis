@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import { activities, users, projects, project_members, organizations } from '../models/index.ts';
+import { activities, users, projects, project_members, organizations, project_member_folders } from '../models/index.ts';
 import { Op } from "sequelize";
-import { logActivity } from "../utils/activityUtils.ts";
+import { logActivity, checkActivityAccess } from "../utils/activityUtils.ts";
 
 export const getActivities = async (req: Request | any, res: Response) => {
     try {
@@ -49,10 +49,10 @@ export const getActivities = async (req: Request | any, res: Response) => {
                 // Implicitly filtered by projectWhere.organization_id in the Join
             }
         } else {
-            // Contributor / Client: MUST be a member of the project
+            // Contributor / Client / Consultant / Vendor
             const userProjects = await project_members.findAll({
                 where: { user_id: authUser.user_id },
-                attributes: ['project_id']
+                attributes: ['id', 'project_id', 'role']
             });
             const accessibleProjectIds = userProjects.map((p: any) => p.project_id);
 
@@ -72,6 +72,28 @@ export const getActivities = async (req: Request | any, res: Response) => {
             }
         }
 
+        // Fetch restricted folder info if user is not superadmin/admin
+        let userProjects: any[] = [];
+        let allowedFolderIds: number[] = [];
+        let memberFolders: any[] = [];
+        const isRestrictedRole = authUser.role === 'consultant' || authUser.role === 'vendor';
+        
+        if (authUser.role !== 'superadmin' && authUser.role !== 'admin') {
+            userProjects = await project_members.findAll({
+                where: { user_id: authUser.user_id },
+                attributes: ['id', 'project_id', 'role']
+            });
+            const restrictedMembers = userProjects.filter((m: any) => m.role === 'consultant' || m.role === 'vendor');
+            const restrictedMemberIds = restrictedMembers.map((m: any) => m.id);
+            if (restrictedMemberIds.length > 0) {
+                memberFolders = await project_member_folders.findAll({
+                    where: { project_member_id: { [Op.in]: restrictedMemberIds } },
+                    attributes: ['folder_id', 'project_member_id']
+                });
+                allowedFolderIds = memberFolders.map((mf: any) => Number(mf.folder_id));
+            }
+        }
+
         // Apply user filter (multi or single)
         if (userIdList.length === 1) where.user_id = userIdList[0];
         else if (userIdList.length > 1) where.user_id = { [Op.in]: userIdList };
@@ -81,7 +103,7 @@ export const getActivities = async (req: Request | any, res: Response) => {
         // Fetch activities only for projects within the determined organization(s) and membership scope
         const feed = await activities.findAll({
             where,
-            limit: 50,
+            limit: isRestrictedRole ? 150 : 50,
             order: [['createdAt', 'DESC']],
             include: [
                 {
@@ -99,7 +121,8 @@ export const getActivities = async (req: Request | any, res: Response) => {
         });
 
         // Format for frontend
-        const formattedFeed = feed.map((act: any) => {
+        const formattedFeed: any[] = [];
+        for (const act of feed) {
             let desc = act.description;
             let metadata = act.metadata; // Prioritize new column
 
@@ -116,20 +139,37 @@ export const getActivities = async (req: Request | any, res: Response) => {
                 }
             }
 
-            return {
-                id: act.id,
-                type: act.type,
-                description: desc,
-                metadata,
-                projectName: act.project ? act.project.name : 'System',
-                organizationName: act.project?.organization?.name || 'Apexis',
-                projectId: act.project_id,
-                userName: act.user ? act.user.name : 'Unknown',
-                timestamp: act.createdAt
-            };
-        });
+            // Check activity access for consultant/vendor
+            let hasAccess = true;
+            if (isRestrictedRole) {
+                const member = userProjects.find((m: any) => m.project_id === act.project_id);
+                if (!member) {
+                    hasAccess = false;
+                } else {
+                    const foldersForMember = memberFolders
+                        .filter((mf: any) => mf.project_member_id === member.id)
+                        .map((mf: any) => Number(mf.folder_id));
+                    hasAccess = await checkActivityAccess(authUser.user_id, member.role, act, foldersForMember, member.id);
+                }
+            }
 
-        res.status(200).json({ activities: formattedFeed });
+            if (hasAccess) {
+                formattedFeed.push({
+                    id: act.id,
+                    type: act.type,
+                    description: desc,
+                    metadata,
+                    projectName: act.project ? act.project.name : 'System',
+                    organizationName: act.project?.organization?.name || 'Apexis',
+                    projectId: act.project_id,
+                    userName: act.user ? act.user.name : 'Unknown',
+                    timestamp: act.createdAt
+                });
+            }
+        }
+
+        const finalFeed = formattedFeed.slice(0, 50);
+        res.status(200).json({ activities: finalFeed });
     } catch (error) {
         console.error('getActivities error:', error);
         res.status(500).json({ error: 'Internal server error' });

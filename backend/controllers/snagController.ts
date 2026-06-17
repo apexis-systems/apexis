@@ -120,6 +120,8 @@ export const getSnags = async (req: Request, res: Response) => {
     if (!project_id)
       return res.status(400).json({ error: "project_id is required" });
 
+    const authUser = (req as any).user;
+
     const data = await snags.findAll({
       where: { project_id: Number(project_id) },
       attributes: [
@@ -139,7 +141,33 @@ export const getSnags = async (req: Request, res: Response) => {
     });
 
     const result = await Promise.all(data.map(withPresignedUrl));
-    res.json({ snags: result });
+
+    let finalResult = result;
+    if (authUser && (authUser.role === 'consultant' || authUser.role === 'vendor')) {
+      const { project_member_folders } = await import("../models/index.ts");
+      const member = await project_members.findOne({
+        where: { user_id: authUser.user_id, project_id: Number(project_id) }
+      });
+      if (!member) {
+        finalResult = [];
+      } else {
+        const allowedFolders = await project_member_folders.findAll({
+          where: { project_member_id: member.id },
+          attributes: ['folder_id']
+        });
+        const allowedFolderIds = allowedFolders.map((af: any) => Number(af.folder_id));
+
+        finalResult = result.filter((item: any) => {
+          if (Number(item.assigned_to) === Number(authUser.user_id) || Number(item.created_by) === Number(authUser.user_id)) {
+            return true;
+          }
+          const linkedFolderIds = Array.isArray(item.folder_ids) ? item.folder_ids.map(Number) : [];
+          return linkedFolderIds.some((fid: number) => allowedFolderIds.includes(fid));
+        });
+      }
+    }
+
+    res.json({ snags: finalResult });
   } catch (err) {
     console.error("getSnags error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -798,6 +826,23 @@ export const getFolderSnags = async (req: Request, res: Response) => {
   try {
     const { folder_id } = req.params;
     if (!folder_id) return res.status(400).json({ error: "folder_id is required" });
+
+    const authUser = (req as any).user;
+    if (authUser && (authUser.role === 'consultant' || authUser.role === 'vendor')) {
+      const folder = await folders.findByPk(Number(folder_id));
+      if (!folder) return res.status(404).json({ error: "Folder not found" });
+
+      const member = await project_members.findOne({
+        where: { user_id: authUser.user_id, project_id: folder.project_id }
+      });
+      if (!member) return res.status(403).json({ error: "Forbidden: No access to this project" });
+
+      const { project_member_folders } = await import("../models/index.ts");
+      const isAllowed = await project_member_folders.findOne({
+        where: { project_member_id: member.id, folder_id: Number(folder_id) }
+      });
+      if (!isAllowed) return res.status(403).json({ error: "Forbidden: You do not have access to this folder" });
+    }
 
     const list = await snags.findAll({
       where: sequelize.literal(`"snags"."folder_ids"::jsonb @> '[${Number(folder_id)}]'`),

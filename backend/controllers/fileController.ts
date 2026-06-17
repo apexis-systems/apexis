@@ -339,6 +339,14 @@ export const uploadFile = async (req: Request | any, res: Response) => {
                 }]
             });
 
+            // Get allowed folders for consultants/vendors in this project
+            const allowedMemberFolders = await project_member_folders.findAll({
+                where: {
+                    folder_id: finalFolderId || -1
+                }
+            });
+            const allowedMemberIds = new Set(allowedMemberFolders.map((amf: any) => amf.project_member_id));
+
             // Fallback for name if missing from token
             let senderName = authUser.name;
             if (!senderName) {
@@ -348,6 +356,11 @@ export const uploadFile = async (req: Request | any, res: Response) => {
 
             const notifiedUserIds = new Set<number>();
             for (const member of members) {
+                if (member.role === 'consultant' || member.role === 'vendor') {
+                    if (!allowedMemberIds.has(member.id)) {
+                        continue; // Skip notification for restricted folders
+                    }
+                }
                 notifiedUserIds.add(member.user_id);
                 if (!shouldSkip) {
                     const isAssignee = assigned_to && String(member.user_id) === String(assigned_to);
@@ -1169,12 +1182,25 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 include: [{ model: UsersModel, attributes: ['id', 'name'] }]
             });
 
+            // Get allowed folders for consultants/vendors in this project
+            const allowedMemberFolders = await project_member_folders.findAll({
+                where: {
+                    folder_id: validFolderId || -1
+                }
+            });
+            const allowedMemberIds = new Set(allowedMemberFolders.map((amf: any) => amf.project_member_id));
+
             const scanType = (is_doc_mode === 'true' || is_doc_mode === true) ? "documents" : "photos";
             const fileCount = createdFiles.length;
             const notificationTitle = (is_doc_mode === 'true' || is_doc_mode === true) ? "New Documents Uploaded" : "New Photos Uploaded";
             const notificationBody = `${senderName} uploaded ${fileCount} ${scanType}`;
 
             for (const member of members) {
+                if (member.role === 'consultant' || member.role === 'vendor') {
+                    if (!allowedMemberIds.has(member.id)) {
+                        continue; // Skip notification for restricted folders
+                    }
+                }
                 if (!shouldSkip) {
                     const isAssignee = assigned_to && String(member.user_id) === String(assigned_to);
                     await sendNotification({
