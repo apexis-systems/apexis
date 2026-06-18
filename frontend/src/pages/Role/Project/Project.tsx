@@ -190,11 +190,12 @@ export default function Project({ id }: ProjectProps) {
 
     const isConsultant = user?.role === 'consultant';
     const isVendor = user?.role === 'vendor';
+    const isContributor = user?.role === 'contributor';
     const isConsultantVendor = isConsultant || isVendor;
     
     let visibleNav = navItems.filter((item) => {
         if (item.adminOnly && isClient) return false;
-        if (item.key === 'rfi' && isConsultantVendor) return true;
+        if (item.key === 'rfi' && (isConsultantVendor || isContributor)) return true;
         if (item.hideForConsultantVendor && isConsultantVendor) return false;
         if (item.adminOnly && !['admin', 'superadmin'].includes(user?.role || '')) return false;
         return true;

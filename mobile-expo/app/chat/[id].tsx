@@ -83,7 +83,8 @@ export default function ChatDetailScreen() {
     const flatListRef = useRef<FlatList>(null);
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-    const [attachment, setAttachment] = useState<any>(null);
+    const [attachments, setAttachments] = useState<any[]>([]);
+    const [editingAttachmentIndex, setEditingAttachmentIndex] = useState<number | null>(null);
     const [annotatingImage, setAnnotatingImage] = useState<any>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
@@ -345,64 +346,89 @@ export default function ChatDetailScreen() {
         }
 
         setIsSending(true);
-        const fileToUpload = overrideFile || attachment;
-        if (!message.trim() && !fileToUpload) {
+        const filesToUpload = overrideFile ? [overrideFile] : attachments;
+        const textToSubmit = message.trim();
+
+        if (filesToUpload.length === 0 && !textToSubmit) {
             setIsSending(false);
             return;
         }
 
-        const textToSubmit = message.trim();
-
         if (!overrideFile) {
             setMessage('');
-            setAttachment(null);
+            setAttachments([]);
             setShowEmojis(false);
         }
 
-
         try {
-            let fileData = null;
-            if (fileToUpload) {
-                setIsUploading(true);
-                const uploadRes = await uploadChatFile(
-                    fileToUpload.uri,
-                    fileToUpload.name,
-                    fileToUpload.mimeType || fileToUpload.type || 'application/octet-stream'
-                );
-                if (uploadRes.success) {
-                    fileData = uploadRes;
+            if (filesToUpload.length === 0) {
+                const payload: any = {
+                    roomId: id as string,
+                    type: 'text',
+                    parent_id: replyTo?.id ? Number(replyTo.id) : null
+                };
+                if (textToSubmit) payload.text = textToSubmit;
+                setReplyTo(null);
+
+                const res = await sendChatMessage(payload);
+                if (res.success && res.message) {
+                    setMessages(prev => {
+                        const exists = prev.some(m => String(m.id) === String(res.message.id));
+                        if (exists) {
+                            return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                        }
+                        return [res.message, ...prev];
+                    });
                 }
-                setIsUploading(false);
-            }
+            } else {
+                for (let i = 0; i < filesToUpload.length; i++) {
+                    const file = filesToUpload[i];
+                    setIsUploading(true);
+                    const uploadRes = await uploadChatFile(
+                        file.uri,
+                        file.name,
+                        file.mimeType || file.type || 'application/octet-stream'
+                    );
 
-            const payload: any = {
-                roomId: id as string,
-                type: fileData ? (
-                    fileData.file_type?.startsWith('image/') ? 'image' :
-                        fileData.file_type?.startsWith('audio/') ? 'audio' : 'file'
-                ) : 'text',
-                file_url: fileData?.file_url,
-                file_name: fileData?.file_name,
-                file_type: fileData?.file_type,
-                file_size: fileData?.file_size,
-                parent_id: replyTo?.id ? Number(replyTo.id) : null
-            };
-            if (textToSubmit) payload.text = textToSubmit;
-
-            console.log("[CHAT] Sending payload:", payload);
-            setReplyTo(null);
-
-            const res = await sendChatMessage(payload);
-            console.log("[CHAT] Response from server:", res);
-
-            if (res.success && res.message) {
-                setMessages(prev => {
-                    const exists = prev.some(m => String(m.id) === String(res.message.id));
-                    if (exists) {
-                        return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                    let fileData = null;
+                    if (uploadRes.success) {
+                        fileData = uploadRes;
                     }
-                    return [res.message, ...prev];
-                });
+                    setIsUploading(false);
+
+                    if (fileData) {
+                        const payload: any = {
+                            roomId: id as string,
+                            type: fileData.file_type?.startsWith('image/') ? 'image' :
+                                fileData.file_type?.startsWith('audio/') ? 'audio' : 'file',
+                            file_url: fileData.file_url,
+                            file_name: fileData.file_name,
+                            file_type: fileData.file_type,
+                            file_size: fileData.file_size,
+                            parent_id: replyTo?.id ? Number(replyTo.id) : null
+                        };
+
+                        // Send the text message with the first file
+                        if (i === 0 && textToSubmit) {
+                            payload.text = textToSubmit;
+                        }
+
+                        if (i === 0) {
+                            setReplyTo(null);
+                        }
+
+                        const res = await sendChatMessage(payload);
+                        if (res.success && res.message) {
+                            setMessages(prev => {
+                                const exists = prev.some(m => String(m.id) === String(res.message.id));
+                                if (exists) {
+                                    return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                                }
+                                return [res.message, ...prev];
+                            });
+                        }
+                    }
+                }
             }
         } catch (error) {
             console.error("handleSend error:", error);
@@ -415,28 +441,49 @@ export default function ChatDetailScreen() {
     const pickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            allowsEditing: false,
+            allowsMultipleSelection: true,
             quality: 0.9,
         });
 
         if (!result.canceled) {
-            const asset = result.assets[0];
-            let uri = asset.uri;
-            try {
-                const manipulated = await ImageManipulator.manipulateAsync(
-                    uri,
-                    [{ resize: { width: 1920 } }],
-                    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-                );
-                uri = manipulated.uri;
-            } catch (e) { }
+            if (result.assets.length === 1) {
+                const asset = result.assets[0];
+                let uri = asset.uri;
+                try {
+                    const manipulated = await ImageManipulator.manipulateAsync(
+                        uri,
+                        [{ resize: { width: 1920 } }],
+                        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                    );
+                    uri = manipulated.uri;
+                } catch (e) { }
 
-            setAnnotatingImage({
-                uri,
-                name: asset.fileName || `image_${Date.now()}.jpg`,
-                type: 'image/jpeg',
-                size: asset.fileSize || 0
-            });
+                setAnnotatingImage({
+                    uri,
+                    name: asset.fileName || `image_${Date.now()}.jpg`,
+                    type: 'image/jpeg',
+                    size: asset.fileSize || 0
+                });
+            } else {
+                const newAttachments = await Promise.all(result.assets.map(async (asset) => {
+                    let uri = asset.uri;
+                    try {
+                        const manipulated = await ImageManipulator.manipulateAsync(
+                            uri,
+                            [{ resize: { width: 1920 } }],
+                            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                        );
+                        uri = manipulated.uri;
+                    } catch (e) { }
+                    return {
+                        uri,
+                        name: asset.fileName || `image_${Date.now()}.jpg`,
+                        type: 'image/jpeg',
+                        size: asset.fileSize || 0
+                    };
+                }));
+                setAttachments(prev => [...prev, ...newAttachments]);
+            }
         }
     };
 
@@ -470,12 +517,12 @@ export default function ChatDetailScreen() {
                 }
             }
 
-            setAttachment({
+            setAttachments(prev => [...prev, {
                 uri,
                 name: asset.name,
                 type: mimeType,
                 size: asset.size || 0
-            });
+            }]);
         }
     };
 
@@ -721,172 +768,183 @@ export default function ChatDetailScreen() {
         };
 
         return (
-            <ReanimatedSwipeable
-                ref={swipeableRef}
-                renderLeftActions={renderLeftActions}
-                onSwipeableWillOpen={() => {
-                    setReplyTo(item);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    focusInput?.();
-                    setTimeout(() => {
-                        swipeableRef.current?.close();
-                    }, 0);
-                }}
-                friction={1.5}
-                enableTrackpadTwoFingerGesture
-                leftThreshold={20}
+
+            <TouchableOpacity
+                activeOpacity={0.9}
+                onLongPress={() => onLongPress?.(item)}
+                delayLongPress={500}
+                style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}
             >
-                <TouchableOpacity
-                    activeOpacity={0.9}
-                    onLongPress={() => onLongPress?.(item)}
-                    delayLongPress={500}
-                    style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginVertical: 4 }}
-                >
-                    <View style={{
-                        maxWidth: '80%',
-                        backgroundColor: isMe ? colors.primary : colors.surface,
-                        borderWidth: isMe ? 0 : 1,
-                        borderColor: colors.border,
-                        paddingVertical: 10,
-                        paddingHorizontal: 14,
-                        marginHorizontal: 8,
-                        borderRadius: 18,
-                        borderBottomRightRadius: isMe ? 4 : 18,
-                        borderBottomLeftRadius: isMe ? 18 : 4,
-                        overflow: 'visible',
-                        elevation: 1,
-                    }}>
-                        {!isMe && (
-                            <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
-                        )}
 
-                        {(item.parent || item.parent_id) && (
-                            <TouchableOpacity
-                                onPress={() => scrollToMessage(item.parent_id || item.parent?.id)}
-                                style={{
-                                    backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)',
-                                    padding: 8,
-                                    borderRadius: 8,
-                                    borderLeftWidth: 4,
-                                    borderLeftColor: colors.primary,
-                                    marginBottom: 8
-                                }}
-                            >
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: isMe ? '#fff' : colors.primary, marginBottom: 2 }}>
-                                    {item.parent?.sender?.name || 'User'}
-                                </Text>
-                                <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : colors.textMuted }}>
-                                    {item.parent ? (
-                                        (item.parent.type === 'audio' || item.parent.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : item.parent.type === 'image' ? '📷 Photo' : item.parent.type === 'file' ? '📄 File' : item.parent.text
-                                    ) : 'Replied to message'}
-                                </Text>
-                            </TouchableOpacity>
-                        )}
+                <View style={{
+                    maxWidth: '80%',
 
-                        {item.type === 'image' && item.downloadUrl && (
-                            <View>
+                }}>
+                    <ReanimatedSwipeable
+                        ref={swipeableRef}
+                        renderLeftActions={renderLeftActions}
+                        onSwipeableWillOpen={() => {
+                            setReplyTo(item);
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            focusInput?.();
+                            setTimeout(() => {
+                                swipeableRef.current?.close();
+                            }, 0);
+                        }}
+                        friction={1.5}
+                        enableTrackpadTwoFingerGesture
+                        leftThreshold={20}
+
+                    >
+                        <View
+                            style={{
+                                backgroundColor: isMe ? colors.primary : colors.surface,
+                                borderWidth: isMe ? 0 : 1,
+                                borderColor: colors.border,
+                                paddingVertical: 10,
+                                paddingHorizontal: 14,
+                                marginHorizontal: 8,
+                                borderRadius: 18,
+                                borderBottomRightRadius: isMe ? 4 : 18,
+                                borderBottomLeftRadius: isMe ? 18 : 4,
+                                overflow: 'visible',
+                                elevation: 1,
+                            }}
+                        >
+                            {!isMe && (
+                                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '600', marginBottom: 2 }}>{item.sender?.name || 'User'}</Text>
+                            )}
+
+                            {(item.parent || item.parent_id) && (
                                 <TouchableOpacity
-                                    onPress={() => setFullScreenImage(item.downloadUrl)}
-                                    style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}
-                                >
-                                    <Image
-                                        source={{ uri: item.downloadUrl }}
-                                        style={{ width: 240, height: 240, borderRadius: 12 }}
-                                        resizeMode="cover"
-                                    />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => handleDownload(item)}
-                                    disabled={isDownloading === String(item.id)}
-                                    style={{ position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 15 }}
-                                >
-                                    {isDownloading === String(item.id) ? (
-                                        <ActivityIndicator size="small" color="#fff" />
-                                    ) : (
-                                        <Feather name="download" size={16} color="#fff" />
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        )}
-
-                        {(item.type === 'audio' || item.file_type?.startsWith('audio/')) && item.downloadUrl && (
-                            <View style={{ minWidth: 220 }}>
-                                <VoiceNotePlayer
-                                    uri={item.downloadUrl}
-                                    isMe={isMe}
-                                    colors={colors}
-                                    playingUri={playingAudioUri}
-                                    onPlay={setPlayingAudioUri}
-                                />
-                            </View>
-                        )}
-
-                        {item.type === 'file' && !item.file_type?.startsWith('audio/') && item.downloadUrl && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                                <TouchableOpacity
-                                    onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
+                                    onPress={() => scrollToMessage(item.parent_id || item.parent?.id)}
                                     style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                                        padding: 12,
-                                        borderRadius: 12,
-                                        gap: 12,
-                                        flex: 1
+                                        backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)',
+                                        padding: 8,
+                                        borderRadius: 8,
+                                        borderLeftWidth: 4,
+                                        borderLeftColor: colors.primary,
+                                        marginBottom: 8
                                     }}
                                 >
-                                    <View style={{ width: 44, height: 40, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name="file-text" size={20} color="#fff" />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: isMe ? '#fff' : colors.text }} numberOfLines={1}>{item.file_name}</Text>
-                                        <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
-                                    </View>
+                                    <Text style={{ fontSize: 11, fontWeight: '800', color: isMe ? '#fff' : colors.primary, marginBottom: 2 }}>
+                                        {item.parent?.sender?.name || 'User'}
+                                    </Text>
+                                    <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.8)' : colors.textMuted }}>
+                                        {item.parent ? (
+                                            (item.parent.type === 'audio' || item.parent.file_type?.startsWith('audio/')) ? '🎤 Voice Note' : item.parent.type === 'image' ? '📷 Photo' : item.parent.type === 'file' ? '📄 File' : item.parent.text
+                                        ) : 'Replied to message'}
+                                    </Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => handleDownload(item)}
-                                    disabled={isDownloading === String(item.id)}
-                                    style={{ padding: 10, borderRadius: 12, backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
-                                >
-                                    {isDownloading === String(item.id) ? (
-                                        <ActivityIndicator size="small" color={isMe ? '#fff' : colors.primary} />
-                                    ) : (
-                                        <Feather name="download" size={20} color={isMe ? '#fff' : colors.primary} />
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        )}
+                            )}
 
-                        {item.text ? (
-                            <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
-                                {item.text}
-                            </Text>
-                        ) : null}
+                            {item.type === 'image' && item.downloadUrl && (
+                                <View>
+                                    <TouchableOpacity
+                                        onPress={() => setFullScreenImage(item.downloadUrl)}
+                                        style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.05)' }}
+                                    >
+                                        <Image
+                                            source={{ uri: item.downloadUrl }}
+                                            style={{ width: 240, height: 240, borderRadius: 12 }}
+                                            resizeMode="cover"
+                                        />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => handleDownload(item)}
+                                        disabled={isDownloading === String(item.id)}
+                                        style={{ position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 15 }}
+                                    >
+                                        {isDownloading === String(item.id) ? (
+                                            <ActivityIndicator size="small" color="#fff" />
+                                        ) : (
+                                            <Feather name="download" size={16} color="#fff" />
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            )}
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 4 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
-                                    {time}
-                                </Text>
-                                {isMe && (
-                                    <Ionicons
-                                        name="checkmark-done"
-                                        size={14}
-                                        color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
+                            {(item.type === 'audio' || item.file_type?.startsWith('audio/')) && item.downloadUrl && (
+                                <View style={{ minWidth: 220 }}>
+                                    <VoiceNotePlayer
+                                        uri={item.downloadUrl}
+                                        isMe={isMe}
+                                        colors={colors}
+                                        playingUri={playingAudioUri}
+                                        onPlay={setPlayingAudioUri}
                                     />
-                                )}
-                                <TouchableOpacity onPress={() => {
-                                    setReplyTo(item);
-                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                    focusInput?.();
-                                }}>
-                                    <Feather name="corner-up-left" size={14} color={isMe ? "rgba(255,255,255,0.7)" : colors.primary} />
-                                </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {item.type === 'file' && !item.file_type?.startsWith('audio/') && item.downloadUrl && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                    <TouchableOpacity
+                                        onPress={() => WebBrowser.openBrowserAsync(item.downloadUrl)}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                                            padding: 12,
+                                            borderRadius: 12,
+                                            gap: 12,
+                                            flex: 1
+                                        }}
+                                    >
+                                        <View style={{ width: 44, height: 40, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                            <Feather name="file-text" size={20} color="#fff" />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '700', color: isMe ? '#fff' : colors.text }} numberOfLines={1}>{item.file_name}</Text>
+                                            <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>{item.file_size || '0 KB'}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => handleDownload(item)}
+                                        disabled={isDownloading === String(item.id)}
+                                        style={{ padding: 10, borderRadius: 12, backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+                                    >
+                                        {isDownloading === String(item.id) ? (
+                                            <ActivityIndicator size="small" color={isMe ? '#fff' : colors.primary} />
+                                        ) : (
+                                            <Feather name="download" size={20} color={isMe ? '#fff' : colors.primary} />
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {item.text ? (
+                                <Text style={{ fontSize: 15, color: isMe ? '#fff' : colors.text, lineHeight: 20 }}>
+                                    {item.text}
+                                </Text>
+                            ) : null}
+
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 4 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                    <Text style={{ fontSize: 11, color: isMe ? 'rgba(255,255,255,0.7)' : colors.textMuted }}>
+                                        {time}
+                                    </Text>
+                                    {isMe && (
+                                        <Ionicons
+                                            name="checkmark-done"
+                                            size={14}
+                                            color={item.seen ? "#25D366" : "rgba(255,255,255,0.7)"}
+                                        />
+                                    )}
+                                    <TouchableOpacity onPress={() => {
+                                        setReplyTo(item);
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                        focusInput?.();
+                                    }}>
+                                        <Feather name="corner-up-left" size={14} color={isMe ? "rgba(255,255,255,0.7)" : colors.primary} />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
-                    </View>
-                </TouchableOpacity>
-            </ReanimatedSwipeable>
+                    </ReanimatedSwipeable>
+                </View>
+
+            </TouchableOpacity>
+
         );
     });
 
@@ -1068,22 +1126,75 @@ export default function ChatDetailScreen() {
                                 </View>
                             )}
 
-                            {attachment && (
-                                <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                    <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                                        {attachment.type?.startsWith('image/') ? (
-                                            <Image source={{ uri: attachment.uri }} style={{ width: 44, height: 44 }} />
-                                        ) : (
-                                            <Feather name="file" size={20} color={colors.textMuted} />
-                                        )}
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }} numberOfLines={1}>{attachment.name}</Text>
-                                        <Text style={{ fontSize: 11, color: colors.textMuted }}>{(attachment.size / 1024).toFixed(1)} KB</Text>
-                                    </View>
-                                    <TouchableOpacity onPress={() => setAttachment(null)} style={{ padding: 4 }}>
-                                        <Ionicons name="close-circle" size={24} color={colors.textMuted} />
-                                    </TouchableOpacity>
+                            {attachments.length > 0 && (
+                                <View style={{ backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8 }}>
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        style={{ overflow: 'visible' }}
+                                        contentContainerStyle={{ gap: 14, paddingRight: 12, paddingVertical: 8 }}
+                                    >
+                                        {attachments.map((item, index) => (
+                                            <View key={index} style={{ width: 68, height: 68, borderRadius: 8, backgroundColor: colors.border, position: 'relative', overflow: 'visible' }}>
+                                                {item.type?.startsWith('image/') ? (
+                                                    <Image source={{ uri: item.uri }} style={{ width: 68, height: 68, borderRadius: 8 }} />
+                                                ) : (
+                                                    <View style={{ width: 68, height: 68, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                                                        <Feather name="file" size={26} color={colors.textMuted} />
+                                                    </View>
+                                                )}
+
+                                                {/* Edit Icon on top-left of image/file */}
+                                                {item.type?.startsWith('image/') && (
+                                                    <TouchableOpacity
+                                                        onPress={() => setEditingAttachmentIndex(index)}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: -6,
+                                                            left: -6,
+                                                            backgroundColor: colors.primary,
+                                                            width: 22,
+                                                            height: 22,
+                                                            borderRadius: 11,
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderWidth: 1.5,
+                                                            borderColor: colors.surface,
+                                                            shadowColor: '#000',
+                                                            shadowOffset: { width: 0, height: 1 },
+                                                            shadowOpacity: 0.2,
+                                                            shadowRadius: 1,
+                                                            elevation: 2
+                                                        }}
+                                                    >
+                                                        <Feather name="edit-2" size={10} color="#fff" />
+                                                    </TouchableOpacity>
+                                                )}
+
+                                                {/* Close/Remove button on top-right */}
+                                                <TouchableOpacity
+                                                    onPress={() => {
+                                                        setAttachments(prev => prev.filter((_, idx) => idx !== index));
+                                                    }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: -6,
+                                                        right: -6,
+                                                        backgroundColor: 'rgba(0,0,0,0.6)',
+                                                        width: 22,
+                                                        height: 22,
+                                                        borderRadius: 11,
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        borderWidth: 1.5,
+                                                        borderColor: colors.surface,
+                                                    }}
+                                                >
+                                                    <Ionicons name="close" size={12} color="#fff" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        ))}
+                                    </ScrollView>
                                 </View>
                             )}
 
@@ -1165,7 +1276,7 @@ export default function ChatDetailScreen() {
                                     </View>
                                 )}
 
-                                {(!message.trim() && !attachment) || isRecordingVoice ? (
+                                {(!message.trim() && attachments.length === 0) || isRecordingVoice ? (
                                     <View style={{ flex: isRecordingVoice ? 1 : 0, height: isRecordingVoice ? 50 : 35 }}>
                                         <VoiceNoteRecorder
                                             colors={colors}
@@ -1234,12 +1345,29 @@ export default function ChatDetailScreen() {
                 <ImageAnnotator
                     uri={annotatingImage.uri}
                     onSave={(newUri: string) => {
-                        setAttachment({ ...annotatingImage, uri: newUri });
+                        setAttachments(prev => [...prev, { ...annotatingImage, uri: newUri }]);
                         setAnnotatingImage(null);
                     }}
                     onCancel={() => {
-                        setAttachment(annotatingImage);
+                        setAttachments(prev => [...prev, annotatingImage]);
                         setAnnotatingImage(null);
+                    }}
+                />
+            )}
+
+            {editingAttachmentIndex !== null && attachments[editingAttachmentIndex] && (
+                <ImageAnnotator
+                    uri={attachments[editingAttachmentIndex].uri}
+                    onSave={(newUri: string) => {
+                        setAttachments(prev => {
+                            const copy = [...prev];
+                            copy[editingAttachmentIndex] = { ...copy[editingAttachmentIndex], uri: newUri };
+                            return copy;
+                        });
+                        setEditingAttachmentIndex(null);
+                    }}
+                    onCancel={() => {
+                        setEditingAttachmentIndex(null);
                     }}
                 />
             )}
