@@ -2096,6 +2096,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 const isSelected = selectedFolders.has(folder.id);
                                 const isArchiveFolder = folder.name.toLowerCase() === 'archive';
                                 const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
+                                const isConfidentialFolder = folder.name.toLowerCase() === 'confidential';
                                 return (
                                     <View
                                         key={folder.id}
@@ -2130,9 +2131,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         />
                                         <View style={{ marginBottom: 8 }}>
                                             <Feather
-                                                name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : "folder"}
-                                                size={isConfirmationFolder ? 32 : 36}
-                                                color={isArchiveFolder ? '#94a3b8' : (isConfirmationFolder ? '#fb923c' : colors.primary)}
+                                                name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : isConfidentialFolder ? "shield" : "folder"}
+                                                size={(isConfirmationFolder || isConfidentialFolder) ? 32 : 36}
+                                                color={isArchiveFolder ? '#94a3b8' : (isConfirmationFolder ? '#fb923c' : (isConfidentialFolder ? '#f43f5e' : colors.primary))}
                                             />
                                         </View>
                                         {isSelected && (
@@ -2140,7 +2141,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : colors.text), textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : (isConfirmationFolder ? "Confirmations" : folder.name)}</Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : (isConfirmationFolder ? "Confirmations" : folder.name)}</Text>
                                         <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                             {subcount > 0
                                                 ? t('projectDocuments.filesFoldersCount', { fileCount: count, folderCount: subcount })
@@ -2149,7 +2150,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         {/* Folder Action Menu - Hidden for Clients */}
                                         {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                                             <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
-                                                {!isConfirmationFolder && !isArchiveFolder && (
+                                                {!isConfirmationFolder && !isArchiveFolder && !isConfidentialFolder && (
                                                     <TouchableOpacity
                                                         onPress={() => {
                                                             setActiveActionFolder(folder);

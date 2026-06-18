@@ -11,7 +11,14 @@ export const createFolder = async (req: Request, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { project_id, name, parent_id, folder_type } = req.body;
+               const { project_id, name, parent_id, folder_type } = req.body;
+
+        // Restriction: Prevent non-admins from creating a folder named "Confidential"
+        if (name && name.toLowerCase() === 'confidential') {
+            if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                return res.status(403).json({ error: "Forbidden: Only Admins can create a confidential folder" });
+            }
+        }
 
         // Restriction: Prevent manual creation of "Archive" folder in documents
         if (folder_type === 'document' && name.toLowerCase() === 'archive') {
@@ -75,6 +82,32 @@ export const getFolders = async (req: Request, res: Response) => {
 
         const authUser = (req as any).user;
 
+        // Auto-create Confidential folders if missing for existing projects
+        const project_id = Number(projectId);
+        const typesToCheck = folder_type ? [folder_type as string] : ['photo', 'document'];
+        for (const type of typesToCheck) {
+            const confidentialExists = await folders.findOne({
+                where: {
+                    project_id,
+                    name: { [Op.iLike]: 'Confidential' },
+                    folder_type: type
+                }
+            });
+            if (!confidentialExists) {
+                try {
+                    await folders.create({
+                        project_id,
+                        name: 'Confidential',
+                        client_visible: false,
+                        created_by: authUser?.user_id,
+                        folder_type: type
+                    });
+                } catch (err) {
+                    console.error(`Error auto-creating Confidential folder:`, err);
+                }
+            }
+        }
+
         const where: any = { project_id: projectId };
         if (folder_type) {
             where[Op.or] = [
@@ -89,6 +122,10 @@ export const getFolders = async (req: Request, res: Response) => {
         });
 
         let result = projectFolders.map((f: any) => f.toJSON());
+        if (authUser && authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+            result = result.filter((folder: any) => folder.name.toLowerCase() !== 'confidential');
+        }
+
         if (authUser && authUser.role === "client") {
             result = result.filter((folder: any) => folder.client_visible !== false);
         } else if (authUser && (authUser.role === "consultant" || authUser.role === "vendor")) {
@@ -174,6 +211,27 @@ export const bulkUpdateFolders = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "No folder IDs provided" });
         }
 
+        // Check if any of the target folders being updated are Confidential
+        const targetFoldersList = await folders.findAll({
+            where: { id: ids }
+        });
+        const hasConfidentialTarget = targetFoldersList.some((f: any) => f.name.toLowerCase() === 'confidential');
+        if (hasConfidentialTarget) {
+            if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                return res.status(403).json({ error: "Forbidden: Only Admins can modify a confidential folder" });
+            }
+        }
+
+        // If parent_id is provided, check if the target parent folder is Confidential
+        if (parent_id !== undefined && parent_id !== null && parent_id !== '' && parent_id !== 'root') {
+            const targetParent = await folders.findByPk(parent_id);
+            if (targetParent && targetParent.name.toLowerCase() === 'confidential') {
+                if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                    return res.status(403).json({ error: "Forbidden: Only Admins can move folders into a confidential folder" });
+                }
+            }
+        }
+
         // Move action permissions: Admins and Contributors
         if (parent_id !== undefined) {
             if (authUser.role !== "admin" && authUser.role !== "contributor") {
@@ -232,6 +290,20 @@ export const updateFolder = async (req: Request, res: Response) => {
         const folder = await folders.findByPk(folderId);
         if (!folder) {
             return res.status(404).json({ error: "Folder not found" });
+        }
+
+        // Restriction: Prevent non-admins from renaming a folder to "Confidential"
+        if (name && name.toLowerCase() === 'confidential') {
+            if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                return res.status(403).json({ error: "Forbidden: Only Admins can rename a folder to 'Confidential'" });
+            }
+        }
+
+        // Restriction: Prevent non-admins from renaming a confidential folder
+        if (folder.name && folder.name.toLowerCase() === 'confidential') {
+            if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                return res.status(403).json({ error: "Forbidden: Only Admins can rename a confidential folder" });
+            }
         }
 
         // Restriction: Prevent renaming to "Archive" in documents
@@ -310,8 +382,7 @@ export const deleteFolder = async (req: Request, res: Response) => {
         // Restriction: Prevent deletion of protected folders
         const folderNameLower = folder.name.toLowerCase();
         if (
-            (folder.folder_type === 'photo' && (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive')) ||
-            (folder.folder_type === 'document' && folderNameLower === 'archive')
+            (folderNameLower === 'confirmation' || folderNameLower === 'confirmations' || folderNameLower === 'archive' || folderNameLower === 'confidential')
         ) {
             await t.rollback();
             return res.status(400).json({ error: `The folder '${folder.name}' is a system folder and cannot be deleted` });

@@ -67,17 +67,18 @@ export const createProject = async (req: Request, res: Response) => {
             "3D images", "Architectural", "Automation",
             "Brick marking", "Carpentry", "Electrical", "Fabrication",
             "Flooring", "HVAC", "Interiors", "Landscape",
-            "Permit", "Plumbing", "Structural"
+            "Permit", "Plumbing", "Structural", "Confidential"
         ];
 
         const folderCreationTasks: any[] = [];
         folderNames.forEach((name) => {
+            const isConfidential = name.toLowerCase() === 'confidential';
             // Create for Photos
             folderCreationTasks.push(folders.create({
                 project_id: newProject.id,
                 name,
                 created_by: authUser.user_id,
-                client_visible: true,
+                client_visible: isConfidential ? false : true,
                 folder_type: "photo",
             }));
             // Create for Docs
@@ -85,7 +86,7 @@ export const createProject = async (req: Request, res: Response) => {
                 project_id: newProject.id,
                 name,
                 created_by: authUser.user_id,
-                client_visible: true,
+                client_visible: isConfidential ? false : true,
                 folder_type: "document",
             }));
         });

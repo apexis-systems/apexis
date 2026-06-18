@@ -32,7 +32,7 @@ const validateRfiAttachmentBatch = (files: any[], imageLimit: number) => {
 };
 
 // Helper: generate presigned URLs for RFI photos
-const withPresignedUrls = async (rfi: any) => {
+const withPresignedUrls = async (rfi: any, role?: string) => {
     const json = rfi.toJSON ? rfi.toJSON() : { ...rfi };
     if (json.photos && Array.isArray(json.photos)) {
         try {
@@ -61,10 +61,15 @@ const withPresignedUrls = async (rfi: any) => {
     }
     if (json.folder_ids && Array.isArray(json.folder_ids) && json.folder_ids.length > 0) {
         try {
-            json.linked_folders = await folders.findAll({
+            const folderList = await folders.findAll({
                 where: { id: json.folder_ids },
                 attributes: ['id', 'name', 'folder_type']
             });
+            if (role !== 'admin' && role !== 'superadmin') {
+                json.linked_folders = folderList.filter((f: any) => f.name.toLowerCase() !== 'confidential');
+            } else {
+                json.linked_folders = folderList;
+            }
         } catch { json.linked_folders = []; }
     } else {
         json.linked_folders = [];
@@ -123,7 +128,7 @@ export const getRFIs = async (req: Request, res: Response) => {
             order: [['createdAt', 'DESC']],
         });
 
-        const result = await Promise.all(data.map(withPresignedUrls));
+        const result = await Promise.all(data.map((r: any) => withPresignedUrls(r, authUser?.role)));
 
         let finalResult = result;
         if (authUser && (authUser.role === 'consultant' || authUser.role === 'vendor')) {
@@ -336,7 +341,7 @@ export const createRFI = async (req: Request | any, res: Response) => {
             ],
         });
 
-        const rfiWithUrls = await withPresignedUrls(full!);
+        const rfiWithUrls = await withPresignedUrls(full!, authUser?.role);
 
         try {
             getIO().to(`project-${project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
@@ -396,7 +401,7 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
             ],
         });
 
-        const rfiWithUrls = await withPresignedUrls(full!);
+        const rfiWithUrls = await withPresignedUrls(full!, authUser?.role);
 
         res.json({ rfi: rfiWithUrls });
 
@@ -468,7 +473,7 @@ export const getRFIById = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Forbidden' });
         }
 
-        res.json({ rfi: await withPresignedUrls(rfi) });
+        res.json({ rfi: await withPresignedUrls(rfi, authUser?.role) });
     } catch (err) {
         console.error('getRFIById error:', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -683,7 +688,7 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
             ],
         });
 
-        const rfiWithUrls = await withPresignedUrls(full!);
+        const rfiWithUrls = await withPresignedUrls(full!, authUser?.role);
 
         try {
             getIO().to(`project-${(rfi as any).project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
@@ -861,7 +866,7 @@ export const updateRFI = async (req: Request | any, res: Response) => {
             ],
         });
 
-        const rfiWithUrls = await withPresignedUrls(full!);
+        const rfiWithUrls = await withPresignedUrls(full!, authUser?.role);
 
         try {
             getIO().to(`project-${rfi.project_id}`).emit('rfi-updated', { rfi: rfiWithUrls });
@@ -886,6 +891,11 @@ export const getFolderRFIs = async (req: Request, res: Response) => {
         if (!folder) return res.status(404).json({ error: 'Folder not found' });
 
         const authUser = (req as any).user;
+        if (folder.name && folder.name.toLowerCase() === 'confidential') {
+            if (!authUser || (authUser.role !== 'admin' && authUser.role !== 'superadmin')) {
+                return res.status(403).json({ error: 'Forbidden: Only Admins can view RFIs in a confidential folder' });
+            }
+        }
         if (authUser && (authUser.role === 'consultant' || authUser.role === 'vendor')) {
             const member = await project_members.findOne({
                 where: { user_id: authUser.user_id, project_id: folder.project_id }
@@ -912,7 +922,7 @@ export const getFolderRFIs = async (req: Request, res: Response) => {
             order: [['createdAt', 'DESC']],
         });
 
-        const result = await Promise.all(data.map(withPresignedUrls));
+        const result = await Promise.all(data.map((r: any) => withPresignedUrls(r, authUser?.role)));
         res.json({ rfis: result });
     } catch (err) {
         console.error('getFolderRFIs error:', err);
@@ -935,6 +945,16 @@ export const linkRfiFile = async (req: Request, res: Response) => {
 
         if (!rfiRecord || !fileRecord) {
             return res.status(404).json({ error: "RFI or File not found" });
+        }
+
+        const authUser = (req as any).user;
+        if (fileRecord.folder_id) {
+            const folder = await folders.findByPk(fileRecord.folder_id);
+            if (folder && folder.name.toLowerCase() === 'confidential') {
+                if (!authUser || (authUser.role !== 'admin' && authUser.role !== 'superadmin')) {
+                    return res.status(403).json({ error: "Forbidden: Cannot link a confidential file to an RFI" });
+                }
+            }
         }
 
         const existing = await file_rfi_links.findOne({
