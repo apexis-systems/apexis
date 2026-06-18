@@ -424,19 +424,19 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             console.log("[ProjectOverview] Skipping fetch: Invalid projectId", projectId);
             return;
         }
-        
+
         // Only show full-screen loader if we have NO data yet (initial load)
         const hasSomeData = docsCount > 0 || photosCount > 0 || dailyReports.length > 0 || weeklyReports.length > 0;
         if (!isRefetch && !hasSomeData) {
             setOverallLoading(true);
         }
-        
+
         setCounting(true);
         setReportsLoading(true);
-        
+
         try {
             console.log("[ProjectOverview] Fetching data for project:", projectId);
-            
+
             // 1. Fetch Files for Counts
             try {
                 const data = await getProjectFiles(projectId);
@@ -478,7 +478,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     useFocusEffect(
         useCallback(() => {
             // Don't show overallLoading spinner when just switching back to the tab
-            fetchData(true); 
+            fetchData(true);
         }, [projectId])
     );
 
@@ -505,179 +505,281 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
 
             ) : (
                 <>
-            <View style={{ gap: 20 }}>
-                {/* Stats Grid — 2×2 */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                    {[
-                        ...(isClient ? [] : [
-                            { icon: 'calendar', label: t('projectOverview.startDate'), value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
-                            { icon: 'calendar', label: t('projectOverview.endDate'), value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
-                        ]),
-                        { icon: 'file-text', label: t('projectOverview.documents'), value: counting ? '…' : String(docsCount), id: 'documents' },
-                        { icon: 'camera', label: t('projectOverview.photos'), value: counting ? '…' : String(photosCount), id: 'photos' },
-                    ].map((item) => {
-
-                        const isClickable = item.id !== 'edit-start' && item.id !== 'edit-end' || canManageMembers;
-                        const Container = TouchableOpacity;
-                        return (
-                            <Container
-                                key={item.label}
-                                onPress={isClickable ? () => onActionPress?.(item.id!) : undefined}
-                                activeOpacity={0.7}
-                                style={{
-                                    flex: 1,
-                                    minWidth: '45%',
-                                    borderRadius: 16,
-                                    backgroundColor: colors.surface,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                    padding: 16,
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 0, height: 2 },
-                                    shadowOpacity: 0.05,
-                                    shadowRadius: 4,
-                                    elevation: 1,
-                                }}
-                            >
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-                                        <Feather name={item.icon as any} size={12} color={item.id ? colors.primary : colors.textMuted} />
-                                    </View>
-                                    <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: '500' }}>{item.label}</Text>
-                                </View>
-                                <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{item.value}</Text>
-                            </Container>
-                        );
-                    })}
-                </View>
-
-                {isClient && (
-                    <View style={{ gap: 12 }}>
-                        <View style={{ backgroundColor: colors.surface, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                {t('projectOverview.clientProjectCode')}
-                            </Text>
-
-                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 }}>
-                                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, flexShrink: 1 }}>
-                                    {(project as any).client_code || '—'}
-                                </Text>
-                                {(project as any).client_code ? (
-                                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                                        <TouchableOpacity onPress={() => handleCopy((project as any).client_code, 'client')} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surface }}>
-                                            <Feather name={copiedId === 'client' ? "check" : "copy"} size={16} color={copiedId === 'client' ? "#22c55e" : colors.textMuted} />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity onPress={() => handleShareLink('client', (project as any).client_code)} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surface }}>
-                                            <Feather name="share-2" size={16} color={colors.primary} />
-                                        </TouchableOpacity>
-                                    </View>
-                                ) : (
-                                    <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic', paddingRight: 4 }}>Restricted</Text>
-                                )}
-                            </View>
-                            <TouchableOpacity
-                                onPress={() => setMemberModalType('client')}
-                                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}
-                            >
-                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
-                                    {(project as any).totalClients || 0} {((project as any).totalClients || 0) === 1 ? t('projectOverview.activeClient') : t('projectOverview.activeClients')}
-                                </Text>
-                                <Feather name="chevron-right" size={12} color={colors.primary} />
-                            </TouchableOpacity>
-
-                        </View>
-                    </View>
-                )}
-
-                {/* Project Members & Codes */}
-                {userRole === 'contributor' && (
-                    <View style={{ flexDirection: 'row', gap: 12 }}>
-                        {[
-                            { label: t('projectOverview.contributorCode'), value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0, type: 'contributor' as const },
-                            { label: t('projectOverview.clientList'), value: null, id: 'client_list', count: (project as any).totalClients || 0, type: 'client' as const },
-                        ].map((item) => (
-
-                            <View
-                                key={item.id}
-                                style={{
-                                    flex: 1,
-                                    borderRadius: 16,
-                                    backgroundColor: colors.surface,
-                                    borderWidth: 1,
-                                    borderColor: colors.border,
-                                    padding: 12,
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 0, height: 2 },
-                                    shadowOpacity: 0.05,
-                                    shadowRadius: 4,
-                                    elevation: 1,
-                                }}
-                            >
-                                <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
-                                    {item.label}
-                                </Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
-                                        {item.value || '—'}
-                                    </Text>
-                                    {item.value ? (
-                                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                                            <TouchableOpacity
-                                                onPress={() => handleCopy(item.value!, item.id)}
-                                                style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
-                                            >
-                                                <Feather
-                                                    name={copiedId === item.id ? "check" : "copy"}
-                                                    size={14}
-                                                    color={copiedId === item.id ? "#22c55e" : colors.textMuted}
-                                                />
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                onPress={() => handleShareLink('contributor', item.value!)}
-                                                style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
-                                            >
-                                                <Feather name="share-2" size={14} color={colors.primary} />
-                                            </TouchableOpacity>
-                                        </View>
-                                    ) : (
-                                        <View style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}>
-                                            <Feather name={item.id === 'client_list' ? "users" : "lock"} size={14} color={colors.textMuted} />
-                                        </View>
-                                    )}
-                                </View>
-                                <TouchableOpacity
-                                    onPress={() => setMemberModalType(item.type)}
-                                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
-                                >
-                                    <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
-                                        {item.count} {item.type === 'contributor' ? (item.count === 1 ? t('projectOverview.activeContributor') : t('projectOverview.activeContributors')) : (item.count === 1 ? t('projectOverview.activeClient') : t('projectOverview.activeClients'))}
-                                    </Text>
-                                    <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
-                                </TouchableOpacity>
-
-                            </View>
-                        ))}
-                    </View>
-                )}
-
-                {/* Project Access Codes — admin only (contributor/client codes are stripped from API response) */}
-                {userRole === 'admin' && (
-                    <View style={{ gap: 12 }}>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ gap: 20 }}>
+                        {/* Stats Grid — 2×2 */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
                             {[
-                                { label: t('projectOverview.contributorCode'), value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0 },
-                                { label: t('projectOverview.clientProjectCode'), value: (project as any).client_code, id: 'client_code', count: (project as any).totalClients || 0 },
-                            ].map((item) => (
+                                ...(isClient ? [] : [
+                                    { icon: 'calendar', label: t('projectOverview.startDate'), value: fmtDate((project as any).start_date || (project as any).startDate), id: 'edit-start' },
+                                    { icon: 'calendar', label: t('projectOverview.endDate'), value: fmtDate((project as any).end_date || (project as any).endDate), id: 'edit-end' },
+                                ]),
+                                { icon: 'file-text', label: t('projectOverview.documents'), value: counting ? '…' : String(docsCount), id: 'documents' },
+                                { icon: 'camera', label: t('projectOverview.photos'), value: counting ? '…' : String(photosCount), id: 'photos' },
+                            ].map((item) => {
 
-                                <View
-                                    key={item.id}
+                                const isClickable = item.id !== 'edit-start' && item.id !== 'edit-end' || canManageMembers;
+                                const Container = TouchableOpacity;
+                                return (
+                                    <Container
+                                        key={item.label}
+                                        onPress={isClickable ? () => onActionPress?.(item.id!) : undefined}
+                                        activeOpacity={0.7}
+                                        style={{
+                                            flex: 1,
+                                            minWidth: '45%',
+                                            borderRadius: 16,
+                                            backgroundColor: colors.surface,
+                                            borderWidth: 1,
+                                            borderColor: colors.border,
+                                            padding: 16,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.05,
+                                            shadowRadius: 4,
+                                            elevation: 1,
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                                                <Feather name={item.icon as any} size={12} color={item.id ? colors.primary : colors.textMuted} />
+                                            </View>
+                                            <Text style={{ fontSize: 12, color: colors.textMuted, fontWeight: '500' }}>{item.label}</Text>
+                                        </View>
+                                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{item.value}</Text>
+                                    </Container>
+                                );
+                            })}
+                        </View>
+
+                        {isClient && (
+                            <View style={{ gap: 12 }}>
+                                <View style={{ backgroundColor: colors.surface, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}>
+                                    <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                        {t('projectOverview.clientProjectCode')}
+                                    </Text>
+
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 }}>
+                                        <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary, letterSpacing: 0.5, flexShrink: 1 }}>
+                                            {(project as any).client_code || '—'}
+                                        </Text>
+                                        {(project as any).client_code ? (
+                                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                <TouchableOpacity onPress={() => handleCopy((project as any).client_code, 'client')} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surface }}>
+                                                    <Feather name={copiedId === 'client' ? "check" : "copy"} size={16} color={copiedId === 'client' ? "#22c55e" : colors.textMuted} />
+                                                </TouchableOpacity>
+                                                <TouchableOpacity onPress={() => handleShareLink('client', (project as any).client_code)} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surface }}>
+                                                    <Feather name="share-2" size={16} color={colors.primary} />
+                                                </TouchableOpacity>
+                                            </View>
+                                        ) : (
+                                            <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic', paddingRight: 4 }}>Restricted</Text>
+                                        )}
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => setMemberModalType('client')}
+                                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}
+                                    >
+                                        <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                                            {(project as any).totalClients || 0} {((project as any).totalClients || 0) === 1 ? t('projectOverview.activeClient') : t('projectOverview.activeClients')}
+                                        </Text>
+                                        <Feather name="chevron-right" size={12} color={colors.primary} />
+                                    </TouchableOpacity>
+
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Project Members & Codes */}
+                        {userRole === 'contributor' && (
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                {[
+                                    { label: t('projectOverview.contributorCode'), value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0, type: 'contributor' as const },
+                                    { label: t('projectOverview.clientList'), value: null, id: 'client_list', count: (project as any).totalClients || 0, type: 'client' as const },
+                                ].map((item) => (
+
+                                    <View
+                                        key={item.id}
+                                        style={{
+                                            flex: 1,
+                                            borderRadius: 16,
+                                            backgroundColor: colors.surface,
+                                            borderWidth: 1,
+                                            borderColor: colors.border,
+                                            padding: 12,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.05,
+                                            shadowRadius: 4,
+                                            elevation: 1,
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
+                                            {item.label}
+                                        </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
+                                                {item.value || '—'}
+                                            </Text>
+                                            {item.value ? (
+                                                <View style={{ flexDirection: 'row', gap: 6 }}>
+                                                    <TouchableOpacity
+                                                        onPress={() => handleCopy(item.value!, item.id)}
+                                                        style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                                    >
+                                                        <Feather
+                                                            name={copiedId === item.id ? "check" : "copy"}
+                                                            size={14}
+                                                            color={copiedId === item.id ? "#22c55e" : colors.textMuted}
+                                                        />
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        onPress={() => handleShareLink('contributor', item.value!)}
+                                                        style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                                    >
+                                                        <Feather name="share-2" size={14} color={colors.primary} />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            ) : (
+                                                <View style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}>
+                                                    <Feather name={item.id === 'client_list' ? "users" : "lock"} size={14} color={colors.textMuted} />
+                                                </View>
+                                            )}
+                                        </View>
+                                        <TouchableOpacity
+                                            onPress={() => setMemberModalType(item.type)}
+                                            style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
+                                        >
+                                            <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                                                {item.count} {item.type === 'contributor' ? (item.count === 1 ? t('projectOverview.activeContributor') : t('projectOverview.activeContributors')) : (item.count === 1 ? t('projectOverview.activeClient') : t('projectOverview.activeClients'))}
+                                            </Text>
+                                            <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
+                                        </TouchableOpacity>
+
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
+                        {/* Project Access Codes — admin only (contributor/client codes are stripped from API response) */}
+                        {userRole === 'admin' && (
+                            <View style={{ gap: 12 }}>
+                                <View style={{ flexDirection: 'row', gap: 12 }}>
+                                    {[
+                                        { label: t('projectOverview.contributorCode'), value: (project as any).contributor_code, id: 'cont_code', count: (project as any).totalContributors || 0 },
+                                        { label: t('projectOverview.clientProjectCode'), value: (project as any).client_code, id: 'client_code', count: (project as any).totalClients || 0 },
+                                    ].map((item) => (
+
+                                        <View
+                                            key={item.id}
+                                            style={{
+                                                flex: 1,
+                                                borderRadius: 16,
+                                                backgroundColor: colors.surface,
+                                                borderWidth: 1,
+                                                borderColor: colors.border,
+                                                padding: 12,
+                                                shadowColor: '#000',
+                                                shadowOffset: { width: 0, height: 2 },
+                                                shadowOpacity: 0.05,
+                                                shadowRadius: 4,
+                                                elevation: 1,
+                                            }}
+                                        >
+                                            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
+                                                {item.label}
+                                            </Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
+                                                    {item.value || '—'}
+                                                </Text>
+                                                {item.value ? (
+                                                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                                                        <TouchableOpacity
+                                                            onPress={() => handleCopy(item.value!, item.id)}
+                                                            style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                                        >
+                                                            <Feather
+                                                                name={copiedId === item.id ? "check" : "copy"}
+                                                                size={14}
+                                                                color={copiedId === item.id ? "#22c55e" : colors.textMuted}
+                                                            />
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity
+                                                            onPress={() => handleShareLink(item.id === 'cont_code' ? 'contributor' : 'client', item.value!)}
+                                                            style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
+                                                        >
+                                                            <Feather name="share-2" size={14} color={colors.primary} />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ) : null}
+                                            </View>
+                                            <TouchableOpacity
+                                                onPress={() => setMemberModalType(item.id === 'cont_code' ? 'contributor' : 'client')}
+                                                style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
+                                            >
+                                                <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
+                                                    {item.count} {item.id === 'cont_code' ? (item.count === 1 ? t('projectOverview.activeContributor') : t('projectOverview.activeContributors')) : (item.count === 1 ? t('projectOverview.activeClient') : t('projectOverview.activeClients'))}
+                                                </Text>
+                                                <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+
+                                <TouchableOpacity
+                                    onPress={() => setIsInviteModalOpen(true)}
+                                    style={{
+                                        width: '100%',
+                                        height: 44,
+                                        borderRadius: 12,
+                                        borderWidth: 1,
+                                        borderColor: colors.primary,
+                                        backgroundColor: colors.surface,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: 8,
+                                    }}
+                                >
+                                    <Feather name="user-plus" size={16} color={colors.primary} />
+                                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
+                                        {t('projectOverview.inviteConsultantVendor')}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {/* Quick Actions */}
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            {(
+                                userRole === 'consultant' || userRole === 'vendor'
+                                    ? [
+                                        { id: 'sops', icon: 'clipboard', label: t('projectOverview.checklists'), color: '#3b82f6', sub: t('projectOverview.viewAll') },
+                                    ]
+                                    : isClient
+                                        ? [
+                                            { id: 'reports', icon: 'file-text', label: t('projectOverview.reports'), color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} ${t('projectOverview.total')}` },
+                                            { id: 'snags', icon: 'alert-triangle', label: t('projectOverview.snags'), color: '#f59e0b', sub: `${snagsCount} ${t('projectOverview.open')}` },
+                                        ]
+                                        : [
+                                            { id: 'reports', icon: 'file-text', label: t('projectOverview.reports'), color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} ${t('projectOverview.total')}` },
+                                            { id: 'snags', icon: 'alert-triangle', label: t('projectOverview.snags'), color: '#f59e0b', sub: `${snagsCount} ${t('projectOverview.open')}` },
+                                            { id: 'sops', icon: 'clipboard', label: t('projectOverview.checklists'), color: '#3b82f6', sub: t('projectOverview.viewAll') },
+                                        ]
+                            ).map((action) => (
+
+                                <TouchableOpacity
+                                    key={action.id}
+                                    onPress={() => onActionPress && onActionPress(action.id)}
                                     style={{
                                         flex: 1,
+                                        alignItems: 'center',
+                                        gap: 10,
+                                        padding: 16,
                                         borderRadius: 16,
                                         backgroundColor: colors.surface,
                                         borderWidth: 1,
                                         borderColor: colors.border,
-                                        padding: 12,
                                         shadowColor: '#000',
                                         shadowOffset: { width: 0, height: 2 },
                                         shadowOpacity: 0.05,
@@ -685,216 +787,114 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                         elevation: 1,
                                     }}
                                 >
-                                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' }}>
-                                        {item.label}
-                                    </Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>
-                                            {item.value || '—'}
-                                        </Text>
-                                        {item.value ? (
-                                            <View style={{ flexDirection: 'row', gap: 6 }}>
-                                                <TouchableOpacity
-                                                    onPress={() => handleCopy(item.value!, item.id)}
-                                                    style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
-                                                >
-                                                    <Feather
-                                                        name={copiedId === item.id ? "check" : "copy"}
-                                                        size={14}
-                                                        color={copiedId === item.id ? "#22c55e" : colors.textMuted}
-                                                    />
-                                                </TouchableOpacity>
-                                                <TouchableOpacity
-                                                    onPress={() => handleShareLink(item.id === 'cont_code' ? 'contributor' : 'client', item.value!)}
-                                                    style={{ padding: 8, borderRadius: 10, backgroundColor: colors.background }}
-                                                >
-                                                    <Feather name="share-2" size={14} color={colors.primary} />
-                                                </TouchableOpacity>
-                                            </View>
-                                        ) : null}
+                                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name={action.icon as any} size={20} color={action.color} />
                                     </View>
-                                    <TouchableOpacity
-                                        onPress={() => setMemberModalType(item.id === 'cont_code' ? 'contributor' : 'client')}
-                                        style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
-                                    >
-                                        <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>
-                                            {item.count} {item.id === 'cont_code' ? (item.count === 1 ? t('projectOverview.activeContributor') : t('projectOverview.activeContributors')) : (item.count === 1 ? t('projectOverview.activeClient') : t('projectOverview.activeClients'))}
-                                        </Text>
-                                        <Feather name="chevron-right" size={12} color={colors.primary} style={{ marginLeft: 2 }} />
-                                    </TouchableOpacity>
-                                </View>
+                                    <View style={{ alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{action.label}</Text>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted }}>{action.sub}</Text>
+                                    </View>
+                                </TouchableOpacity>
                             ))}
                         </View>
-                        
-                        <TouchableOpacity
-                            onPress={() => setIsInviteModalOpen(true)}
-                            style={{
-                                width: '100%',
-                                height: 44,
-                                borderRadius: 12,
-                                borderWidth: 1,
-                                borderColor: colors.primary,
-                                backgroundColor: colors.surface,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 8,
-                            }}
-                        >
-                            <Feather name="user-plus" size={16} color={colors.primary} />
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
-                                Invite Consultant / Vendor
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
 
-                {/* Quick Actions */}
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {(
-                        userRole === 'consultant' || userRole === 'vendor'
-                            ? [
-                                { id: 'sops', icon: 'clipboard', label: t('projectOverview.checklists'), color: '#3b82f6', sub: t('projectOverview.viewAll') },
-                              ]
-                            : isClient
-                                ? [
-                                    { id: 'reports', icon: 'file-text', label: t('projectOverview.reports'), color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} ${t('projectOverview.total')}` },
-                                    { id: 'snags', icon: 'alert-triangle', label: t('projectOverview.snags'), color: '#f59e0b', sub: `${snagsCount} ${t('projectOverview.open')}` },
-                                  ]
-                                : [
-                                    { id: 'reports', icon: 'file-text', label: t('projectOverview.reports'), color: colors.primary, sub: `${dailyReports.length + weeklyReports.length} ${t('projectOverview.total')}` },
-                                    { id: 'snags', icon: 'alert-triangle', label: t('projectOverview.snags'), color: '#f59e0b', sub: `${snagsCount} ${t('projectOverview.open')}` },
-                                    { id: 'sops', icon: 'clipboard', label: t('projectOverview.checklists'), color: '#3b82f6', sub: t('projectOverview.viewAll') },
-                                  ]
-                    ).map((action) => (
 
-                        <TouchableOpacity
-                            key={action.id}
-                            onPress={() => onActionPress && onActionPress(action.id)}
-                            style={{
-                                flex: 1,
-                                alignItems: 'center',
-                                gap: 10,
-                                padding: 16,
+
+                        {/* Handover - admin only */}
+                        {userRole === 'admin' && (
+                            <View style={{
                                 borderRadius: 16,
-                                backgroundColor: colors.surface,
                                 borderWidth: 1,
                                 borderColor: colors.border,
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.05,
-                                shadowRadius: 4,
-                                elevation: 1,
-                            }}
-                        >
-                            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
-                                <Feather name={action.icon as any} size={20} color={action.color} />
-                            </View>
-                            <View style={{ alignItems: 'center' }}>
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>{action.label}</Text>
-                                <Text style={{ fontSize: 10, color: colors.textMuted }}>{action.sub}</Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                                backgroundColor: colors.surface,
+                                padding: 16,
+                                marginBottom: 20,
+                                gap: 16
+                            }}>
+                                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('projectOverview.finalHandoverReport')}</Text>
 
 
-
-                {/* Handover - admin only */}
-                {userRole === 'admin' && (
-                    <View style={{
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.surface,
-                        padding: 16,
-                        marginBottom: 20,
-                        gap: 16
-                    }}>
-                        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('projectOverview.finalHandoverReport')}</Text>
-
-
-                        {isExporting ? (
-                            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 24, gap: 12, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-                                <ActivityIndicator size="large" color={colors.primary} />
-                                <View style={{ alignItems: 'center', gap: 4 }}>
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{exportStatusText || t('projectOverview.exporting')}</Text>
-                                    {isCountingDown && (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}>
-                                            <Feather name="clock" size={12} color={colors.textMuted} />
-                                            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                                                {formatElapsed(exportTimerMs)} {t('projectOverview.left')}
-                                            </Text>
-                                        </View>
-                                    )}
-
-                                </View>
-                            </View>
-                        ) : (
-                            <View style={{ gap: 12 }}>
-                                {latestExport && (
-                                    <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.2)' }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
-                                            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(16, 185, 129, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Feather name="check" size={16} color="#10b981" />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 2 }}>{t('projectOverview.reportReady')}</Text>
-                                                <Text style={{ fontSize: 11, color: colors.textMuted }}>{t('projectOverview.generated')} {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
-                                            </View>
-
-                                        </View>
-
-                                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                                            <TouchableOpacity
-                                                onPress={() => handleShareFile(latestExport.url)}
-                                                style={{ flex: 1, backgroundColor: colors.background, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                                            >
-                                                <Feather name="share" size={14} color={colors.text} />
-                                                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{t('projectOverview.share')}</Text>
-                                            </TouchableOpacity>
-
-
-                                            <TouchableOpacity
-                                                onPress={() => Linking.openURL(latestExport.url)}
-                                                style={{ flex: 1, backgroundColor: '#10b981', paddingVertical: 10, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                                            >
-                                                <Feather name="download" size={14} color="#fff" />
-                                                <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{t('projectOverview.download')}</Text>
-                                            </TouchableOpacity>
+                                {isExporting ? (
+                                    <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 24, gap: 12, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                        <ActivityIndicator size="large" color={colors.primary} />
+                                        <View style={{ alignItems: 'center', gap: 4 }}>
+                                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{exportStatusText || t('projectOverview.exporting')}</Text>
+                                            {isCountingDown && (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surface, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}>
+                                                    <Feather name="clock" size={12} color={colors.textMuted} />
+                                                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                                                        {formatElapsed(exportTimerMs)} {t('projectOverview.left')}
+                                                    </Text>
+                                                </View>
+                                            )}
 
                                         </View>
                                     </View>
-                                )}
-                                <TouchableOpacity
-                                    onPress={handleStartExport}
-                                    style={{
-                                        width: '100%',
-                                        height: 48,
-                                        borderRadius: 12,
-                                        borderWidth: 1,
-                                        borderColor: colors.primary,
-                                        borderStyle: 'dashed',
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: 8,
-                                        backgroundColor: colors.background,
-                                    }}
-                                >
-                                    <Feather name={latestExport ? "refresh-cw" : "play-circle"} size={16} color={colors.text} />
-                                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
-                                        {latestExport ? t('projectOverview.generateNew') : t('projectOverview.exportButton')}
-                                    </Text>
-                                </TouchableOpacity>
+                                ) : (
+                                    <View style={{ gap: 12 }}>
+                                        {latestExport && (
+                                            <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+                                                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(16, 185, 129, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <Feather name="check" size={16} color="#10b981" />
+                                                    </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 2 }}>{t('projectOverview.reportReady')}</Text>
+                                                        <Text style={{ fontSize: 11, color: colors.textMuted }}>{t('projectOverview.generated')} {new Date(latestExport.date).toLocaleString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                                                    </View>
 
+                                                </View>
+
+                                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                    <TouchableOpacity
+                                                        onPress={() => handleShareFile(latestExport.url)}
+                                                        style={{ flex: 1, backgroundColor: colors.background, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                                    >
+                                                        <Feather name="share" size={14} color={colors.text} />
+                                                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{t('projectOverview.share')}</Text>
+                                                    </TouchableOpacity>
+
+
+                                                    <TouchableOpacity
+                                                        onPress={() => Linking.openURL(latestExport.url)}
+                                                        style={{ flex: 1, backgroundColor: '#10b981', paddingVertical: 10, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                                    >
+                                                        <Feather name="download" size={14} color="#fff" />
+                                                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#fff' }}>{t('projectOverview.download')}</Text>
+                                                    </TouchableOpacity>
+
+                                                </View>
+                                            </View>
+                                        )}
+                                        <TouchableOpacity
+                                            onPress={handleStartExport}
+                                            style={{
+                                                width: '100%',
+                                                height: 48,
+                                                borderRadius: 12,
+                                                borderWidth: 1,
+                                                borderColor: colors.primary,
+                                                borderStyle: 'dashed',
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: 8,
+                                                backgroundColor: colors.background,
+                                            }}
+                                        >
+                                            <Feather name={latestExport ? "refresh-cw" : "play-circle"} size={16} color={colors.text} />
+                                            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
+                                                {latestExport ? t('projectOverview.generateNew') : t('projectOverview.exportButton')}
+                                            </Text>
+                                        </TouchableOpacity>
+
+                                    </View>
+                                )}
                             </View>
                         )}
-                    </View>
-                )}
 
-                {/* EditProjectModal moved to [id].tsx */}
-            </View>
+                        {/* EditProjectModal moved to [id].tsx */}
+                    </View>
                 </>
             )}
 
@@ -915,10 +915,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                         ) : members.length === 0 ? (
                             <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: 40 }}>{t('projectOverview.noMembersFound', { role: memberModalType })}</Text>
                         ) : (
-                                members.map((m, idx) => (
-                                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-                                        {m.secure_pic ? (
-                                            <Image source={{ uri: m.secure_pic }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background }} />
+                            members.map((m, idx) => (
+                                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                    {m.secure_pic ? (
+                                        <Image source={{ uri: m.secure_pic }} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background }} />
                                     ) : (
                                         <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
                                             <Text style={{ fontSize: 18, fontWeight: '700', color: colors.primary }}>{m.user.name?.charAt(0).toUpperCase()}</Text>
@@ -957,34 +957,34 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                                     <Text style={{ fontSize: 12, color: colors.textMuted }}>{m.user.phone_number}</Text>
                                                 </View>
                                             )}
-                                            </View>
                                         </View>
-                                        {canManageMembers && (
-                                            <TouchableOpacity
-                                                onPress={() => handleRemoveMember(m)}
-                                                disabled={removingMemberId === m.user.id}
-                                                style={{
-                                                    width: 40,
-                                                    height: 40,
-                                                    borderRadius: 20,
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                                                    borderWidth: 1,
-                                                    borderColor: 'rgba(239, 68, 68, 0.18)',
-                                                    opacity: removingMemberId === m.user.id ? 0.5 : 1,
-                                                }}
-                                            >
-                                                {removingMemberId === m.user.id ? (
-                                                    <ActivityIndicator size="small" color="#ef4444" />
-                                                ) : (
-                                                    <Feather name="trash-2" size={16} color="#ef4444" />
-                                                )}
-                                            </TouchableOpacity>
-                                        )}
                                     </View>
-                                ))
-                            )}
+                                    {canManageMembers && (
+                                        <TouchableOpacity
+                                            onPress={() => handleRemoveMember(m)}
+                                            disabled={removingMemberId === m.user.id}
+                                            style={{
+                                                width: 40,
+                                                height: 40,
+                                                borderRadius: 20,
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                                                borderWidth: 1,
+                                                borderColor: 'rgba(239, 68, 68, 0.18)',
+                                                opacity: removingMemberId === m.user.id ? 0.5 : 1,
+                                            }}
+                                        >
+                                            {removingMemberId === m.user.id ? (
+                                                <ActivityIndicator size="small" color="#ef4444" />
+                                            ) : (
+                                                <Feather name="trash-2" size={16} color="#ef4444" />
+                                            )}
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            ))
+                        )}
                     </ScrollView>
                 </SafeAreaView>
             </Modal>
@@ -993,7 +993,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             <Modal visible={isInviteModalOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsInviteModalOpen(false)}>
                 <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>Invite Contributor</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{t('projectOverview.inviteContributor')}</Text>
                         <TouchableOpacity onPress={() => setIsInviteModalOpen(false)} style={{ padding: 8, backgroundColor: colors.surface, borderRadius: 20 }}>
                             <Feather name="x" size={20} color={colors.text} />
                         </TouchableOpacity>
@@ -1004,9 +1004,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                             <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(16, 185, 129, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
                                 <Feather name="check" size={36} color="#10b981" />
                             </View>
-                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' }}>Invitation Link Generated!</Text>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' }}>{t('projectOverview.invitationLinkGenerated')}</Text>
                             <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingHorizontal: 10 }}>
-                                Share this secure link with the consultant/vendor so they can access the project.
+                                {t('projectOverview.shareInviteSub')}
                             </Text>
 
                             <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginTop: 10 }}>
@@ -1043,22 +1043,22 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 onPress={() => setIsInviteModalOpen(false)}
                                 style={{ width: '100%', height: 48, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 20 }}
                             >
-                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Close</Text>
+                                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{t('projectOverview.close')}</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
                         <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }} keyboardShouldPersistTaps="handled">
                             <View style={{ gap: 8 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>Email or Phone Number</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>{t('projectOverview.emailOrPhone')}</Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     {(inviteEmail.trim().length > 0 && /^\d/.test(inviteEmail.trim())) && (
-                                        <CountryCodePicker 
-                                            selectedCountry={selectedCountry} 
-                                            onSelect={setSelectedCountry} 
+                                        <CountryCodePicker
+                                            selectedCountry={selectedCountry}
+                                            onSelect={setSelectedCountry}
                                         />
                                     )}
                                     <TextInput
-                                        placeholder="Email or Phone Number"
+                                        placeholder={t('projectOverview.emailOrPhone') as string}
                                         placeholderTextColor={colors.textMuted}
                                         keyboardType={inviteEmail.includes('@') ? "email-address" : "default"}
                                         autoCapitalize="none"
@@ -1080,11 +1080,11 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                             </View>
 
                             <View style={{ gap: 8 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>Role Type</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>{t('projectOverview.roleType')}</Text>
                                 <View style={{ flexDirection: 'row', gap: 12 }}>
                                     {[
-                                        { id: 'consultant' as const, title: 'Consultant', desc: 'Specialist access' },
-                                        { id: 'vendor' as const, title: 'Vendor', desc: 'Supplier access' }
+                                        { id: 'consultant' as const, title: t('projectOverview.consultant'), desc: t('projectOverview.specialistAccess') },
+                                        { id: 'vendor' as const, title: t('projectOverview.vendor'), desc: t('projectOverview.supplierAccess') }
                                     ].map((role) => {
                                         const isSelected = inviteRole === role.id;
                                         return (
@@ -1128,9 +1128,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 >
                                     <Feather name="folder" size={18} color={colors.primary} />
                                     <Text style={{ fontSize: 14, color: colors.text, flex: 1, fontWeight: '600' }}>
-                                        {selectedFolders.length > 0 
-                                            ? `Manage Folder Permissions (${selectedFolders.length})` 
-                                            : 'Select Folders'}
+                                        {selectedFolders.length > 0
+                                            ? t('projectOverview.manageFolderPermissionsCount', { count: selectedFolders.length })
+                                            : t('projectOverview.selectFolders')}
                                     </Text>
                                     <Feather name="chevron-right" size={16} color={colors.textMuted} />
                                 </TouchableOpacity>
@@ -1152,26 +1152,27 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 }}
                             >
                                 {inviting && <ActivityIndicator size="small" color="#fff" />}
-                                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>Send Invitation</Text>
+                                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>{t('projectOverview.sendInvitation')}</Text>
                             </TouchableOpacity>
                         </ScrollView>
                     )}
                 </SafeAreaView>
+                <MobileFolderPickerDialog
+                    visible={showFolderPicker}
+                    onClose={() => setShowFolderPicker(false)}
+                    project={project}
+                    selectedFolderIds={selectedFolders}
+                    onlyTopLevel={true}
+                    hideCreate={true}
+                    title={t('projectOverview.folderPermissions') as string}
+                    onConfirm={(ids) => {
+                        setSelectedFolders(ids);
+                        setShowFolderPicker(false);
+                    }}
+                />
             </Modal>
 
-            <MobileFolderPickerDialog
-                visible={showFolderPicker}
-                onClose={() => setShowFolderPicker(false)}
-                project={project}
-                selectedFolderIds={selectedFolders}
-                onlyTopLevel={true}
-                hideCreate={true}
-                title="Folder Permissions"
-                onConfirm={(ids) => {
-                    setSelectedFolders(ids);
-                    setShowFolderPicker(false);
-                }}
-            />
+
         </ScrollView>
     );
 };

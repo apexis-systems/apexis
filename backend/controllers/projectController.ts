@@ -682,9 +682,9 @@ export const removeProjectMember = async (req: Request, res: Response) => {
         }
 
         const memberRole = (membership as any).role;
-        if (memberRole !== 'contributor' && memberRole !== 'client') {
+        if (memberRole !== 'contributor' && memberRole !== 'client' && memberRole !== 'vendor' && memberRole !== 'consultant') {
             await t.rollback();
-            return res.status(400).json({ error: "Only contributors and clients can be removed" });
+            return res.status(400).json({ error: "Only contributors, clients, vendors, and consultants can be removed" });
         }
 
         await project_members.destroy({

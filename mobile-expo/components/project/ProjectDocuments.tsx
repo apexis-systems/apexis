@@ -104,6 +104,54 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [pdfLoading, setPdfLoading] = useState(false);
     const [sharing, setSharing] = useState(false);
 
+    // View state helpers for nested modals on iOS
+    const restoreViewerUrlRef = useRef<string | null>(null);
+
+    const openSubModalFromViewer = (openSubModalFn: () => void) => {
+        if (pdfViewerUrl) {
+            restoreViewerUrlRef.current = pdfViewerUrl;
+            setPdfViewerUrl(null);
+            if (Platform.OS === 'ios') {
+                setTimeout(() => {
+                    openSubModalFn();
+                }, 350);
+            } else {
+                openSubModalFn();
+            }
+        } else {
+            openSubModalFn();
+        }
+    };
+
+    const checkAndRestoreViewer = () => {
+        if (restoreViewerUrlRef.current) {
+            const url = restoreViewerUrlRef.current;
+            restoreViewerUrlRef.current = null;
+            if (Platform.OS === 'ios') {
+                setTimeout(() => {
+                    setPdfViewerUrl(url);
+                }, 350);
+            } else {
+                setPdfViewerUrl(url);
+            }
+        }
+    };
+
+    const closeCreateSnagModal = () => {
+        setShowCreateSnagModal(false);
+        checkAndRestoreViewer();
+    };
+
+    const closeCreateRfiModal = () => {
+        setShowCreateRfiModal(false);
+        checkAndRestoreViewer();
+    };
+
+    const closeRenameFileModal = () => {
+        setShowRenameFile(false);
+        checkAndRestoreViewer();
+    };
+
     const [refreshing, setRefreshing] = useState(false);
 
     // Action Menu state
@@ -150,7 +198,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         setSnagTitle('');
         setSnagDesc('');
         setSnagAssignedToId(null);
-        setShowCreateSnagModal(true);
+        openSubModalFromViewer(() => setShowCreateSnagModal(true));
     };
 
     const handleStartCreateRfi = (file: any) => {
@@ -159,7 +207,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         setRfiDesc('');
         setRfiAssignedToId(null);
         setRfiExpiryDate(null);
-        setShowCreateRfiModal(true);
+        openSubModalFromViewer(() => setShowCreateRfiModal(true));
     };
 
     const handleCreateSnagFromDoc = async () => {
@@ -187,7 +235,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             await createSnag(formData);
             Alert.alert("Success", "Snag created successfully");
-            setShowCreateSnagModal(false);
+            closeCreateSnagModal();
         } catch (error: any) {
             console.error("Create Snag from doc error", error);
             const errMsg = error.response?.data?.error || "Failed to create snag";
@@ -225,7 +273,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             await createRFI(formData);
             Alert.alert("Success", "RFI created successfully");
-            setShowCreateRfiModal(false);
+            closeCreateRfiModal();
         } catch (error: any) {
             console.error("Create RFI from doc error", error);
             const errMsg = error.response?.data?.error || "Failed to create RFI";
@@ -343,6 +391,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         try {
             await linkFiles(currentDoc.id, targetId);
             setShowLinkModal(false);
+            checkAndRestoreViewer();
             fetchLinkedItems();
             Alert.alert(t('projectDocuments.success'), 'File linked successfully.');
         } catch (e: any) {
@@ -362,6 +411,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleLinkItemClick = async (item: any) => {
         setShowLinkModal(false);
+        checkAndRestoreViewer();
 
         const itemType = item.type || item.target_type;
         const itemId = item.target_id || item.id;
@@ -1230,7 +1280,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const handleRenameFileAction = async (file: any) => {
         setRenamingFileId(file.id);
         setRenamingFileName(file.file_name);
-        setShowRenameFile(true);
+        openSubModalFromViewer(() => setShowRenameFile(true));
     };
 
     const handleArchiveFileAction = async (file: any) => {
@@ -1274,6 +1324,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             await updateFile(renamingFileId, { file_name: renamingFileName.trim() });
             await fetchFolders(true);
             setShowRenameFile(false);
+            checkAndRestoreViewer();
             setRenamingFileId(null);
             setRenamingFileName('');
         } catch (e) {
@@ -2298,10 +2349,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             {pdfViewerName}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
-                            <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                            <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowInfoModal(true))} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
                                 <Feather name="info" size={18} color="#fff" />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                            <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowLinkModal(true))} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
                                 <Feather name="link" size={18} color="#fff" />
                             </TouchableOpacity>
                             <TouchableOpacity
@@ -2325,6 +2376,17 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             >
                                 <Feather name="share-2" size={18} color="#fff" />
                             </TouchableOpacity>
+                            {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setActiveActionFile(currentDoc);
+                                        setActionMenuVisible(true);
+                                    }}
+                                    style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
+                                >
+                                    <Feather name="more-vertical" size={18} color="#fff" />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
 
@@ -2625,26 +2687,53 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         </View>
                     )}
 
-                    {showLinkModal && currentDoc?.id && (
-                        <LinkFileModal
-                            visible={showLinkModal}
-                            onClose={() => setShowLinkModal(false)}
-                            onLink={handleLinkFile}
-                            projectId={project.id}
-                            currentFileId={currentDoc.id}
-                            handleLinkItemClick={handleLinkItemClick}
-                        />
-                    )}
-
-                    <FileInformationModal
-                        visible={showInfoModal}
-                        onClose={() => setShowInfoModal(false)}
-                        file={currentDoc}
-                        folders={folders}
-                        projectName={project?.name || ''}
+                    <FileActionMenu
+                        isVisible={actionMenuVisible && !!pdfViewerUrl}
+                        onClose={() => setActionMenuVisible(false)}
+                        onHideUnhide={() => handleToggleVisibility(activeActionFile)}
+                        onDoNotFollow={() => handleToggleDoNotFollow(activeActionFile)}
+                        onOnlyForReference={() => handleToggleOnlyForReference(activeActionFile)}
+                        onDelete={() => handleDeleteFile(activeActionFile)}
+                        onArchive={() => handleArchiveFileAction(activeActionFile)}
+                        onUnarchive={() => handleUnarchiveFile(activeActionFile)}
+                        onShare={() => handleShareDoc(activeActionFile)}
+                        onRename={() => handleRenameFileAction(activeActionFile)}
+                        onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
+                        clientVisible={activeActionFile?.client_visible !== false}
+                        doNotFollow={activeActionFile?.do_not_follow === true}
+                        onlyForReference={activeActionFile?.only_for_reference === true}
+                        canDelete={false}
+                        showArchive={!currentFolder?.name.toLowerCase().includes('archive')}
+                        isArchived={folders.find(f => f.id === activeActionFile?.folder_id)?.name.toLowerCase() === 'archive'}
+                        canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('archive')}
+                        isAdmin={user.role === 'admin' || user.role === 'superadmin'}
+                        isContributor={user.role === 'contributor'}
+                        isUploader={activeActionFile && String(activeActionFile.created_by) === String(user.id)}
+                        fileName={activeActionFile?.file_name || ''}
+                        processingAction={processing}
+                        useView={Platform.OS === 'ios'}
                     />
                 </View>
             </Modal>
+
+            {showLinkModal && currentDoc?.id && (
+                <LinkFileModal
+                    visible={showLinkModal}
+                    onClose={() => { setShowLinkModal(false); checkAndRestoreViewer(); }}
+                    onLink={handleLinkFile}
+                    projectId={project.id}
+                    currentFileId={currentDoc.id}
+                    handleLinkItemClick={handleLinkItemClick}
+                />
+            )}
+
+            <FileInformationModal
+                visible={showInfoModal}
+                onClose={() => { setShowInfoModal(false); checkAndRestoreViewer(); }}
+                file={currentDoc}
+                folders={folders}
+                projectName={project?.name || ''}
+            />
 
             {/* Sharing Overlay (For cases where viewer isn't open) */}
             {sharing && !pdfViewerUrl && (
@@ -2962,7 +3051,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity onPress={() => setShowRenameFile(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                            <TouchableOpacity onPress={closeRenameFileModal} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
                                 <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectDocuments.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleUpdateFile} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
@@ -2975,7 +3064,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
 
             <FileActionMenu
-                isVisible={actionMenuVisible}
+                isVisible={actionMenuVisible && !pdfViewerUrl}
                 onClose={() => setActionMenuVisible(false)}
                 onHideUnhide={() => handleToggleVisibility(activeActionFile)}
                 onDoNotFollow={() => handleToggleDoNotFollow(activeActionFile)}
@@ -3013,13 +3102,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             />
 
             {/* Create RFI Modal */}
-            <Modal visible={showCreateRfiModal} transparent animationType="slide" onRequestClose={() => setShowCreateRfiModal(false)}>
+            <Modal visible={showCreateRfiModal} transparent animationType="slide" onRequestClose={closeCreateRfiModal}>
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
                     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
                         <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                                 <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create RFI from Document</Text>
-                                <TouchableOpacity onPress={() => setShowCreateRfiModal(false)}>
+                                <TouchableOpacity onPress={closeCreateRfiModal}>
                                     <Feather name="x" size={20} color={colors.textMuted} />
                                 </TouchableOpacity>
                             </View>
@@ -3111,7 +3200,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
                             <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
                                 <TouchableOpacity
-                                    onPress={() => setShowCreateRfiModal(false)}
+                                    onPress={closeCreateRfiModal}
                                     style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
                                 >
                                     <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>
@@ -3169,13 +3258,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             </Modal>
 
             {/* Create Snag Modal */}
-            <Modal visible={showCreateSnagModal} transparent animationType="slide" onRequestClose={() => setShowCreateSnagModal(false)}>
+            <Modal visible={showCreateSnagModal} transparent animationType="slide" onRequestClose={closeCreateSnagModal}>
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
                     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
                         <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                                 <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create Snag from Document</Text>
-                                <TouchableOpacity onPress={() => setShowCreateSnagModal(false)}>
+                                <TouchableOpacity onPress={closeCreateSnagModal}>
                                     <Feather name="x" size={20} color={colors.textMuted} />
                                 </TouchableOpacity>
                             </View>
@@ -3231,7 +3320,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
                             <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
                                 <TouchableOpacity
-                                    onPress={() => setShowCreateSnagModal(false)}
+                                    onPress={closeCreateSnagModal}
                                     style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
                                 >
                                     <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>

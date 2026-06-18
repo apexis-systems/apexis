@@ -109,6 +109,42 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [showInfoModal, setShowInfoModal] = useState(false);
     const [linkedItems, setLinkedItems] = useState<any[]>([]);
 
+    const restoreViewerIndexRef = useRef<number | null>(null);
+
+    const openSubModalFromViewer = (openModalFn: () => void) => {
+        restoreViewerIndexRef.current = viewerIndex;
+        setViewerOpen(false);
+        setTimeout(() => {
+            openModalFn();
+        }, Platform.OS === 'ios' ? 350 : 0);
+    };
+
+    const checkAndRestoreViewer = () => {
+        if (restoreViewerIndexRef.current !== null) {
+            const indexToRestore = restoreViewerIndexRef.current;
+            restoreViewerIndexRef.current = null;
+            setTimeout(() => {
+                setViewerOpen(true);
+                setViewerIndex(indexToRestore);
+            }, Platform.OS === 'ios' ? 350 : 0);
+        }
+    };
+
+    const closeCreateSnagModal = () => {
+        setShowCreateSnagModal(false);
+        checkAndRestoreViewer();
+    };
+
+    const closeCreateRfiModal = () => {
+        setShowCreateRfiModal(false);
+        checkAndRestoreViewer();
+    };
+
+    const closeRenameFileModal = () => {
+        setShowRenameFile(false);
+        checkAndRestoreViewer();
+    };
+
     // Comment state
     const commentInputRef = useRef<any>(null);
     const [photoComments, setPhotoComments] = useState<CommentThread[]>([]);
@@ -186,7 +222,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setSnagTitle('');
         setSnagDesc('');
         setSnagAssignedToId(null);
-        setShowCreateSnagModal(true);
+        if (viewerOpen) {
+            openSubModalFromViewer(() => setShowCreateSnagModal(true));
+        } else {
+            setShowCreateSnagModal(true);
+        }
     };
 
     const handleStartCreateRfi = (photo: any) => {
@@ -195,7 +235,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         setRfiDesc('');
         setRfiAssignedToId(null);
         setRfiExpiryDate(null);
-        setShowCreateRfiModal(true);
+        if (viewerOpen) {
+            openSubModalFromViewer(() => setShowCreateRfiModal(true));
+        } else {
+            setShowCreateRfiModal(true);
+        }
     };
 
     const handleCreateSnagFromPhoto = async () => {
@@ -224,6 +268,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             await createSnag(formData);
             Alert.alert("Success", "Snag created successfully");
             setShowCreateSnagModal(false);
+            checkAndRestoreViewer();
         } catch (error: any) {
             console.error("Create Snag from photo error", error);
             const errMsg = error.response?.data?.error || "Failed to create snag";
@@ -262,6 +307,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             await createRFI(formData);
             Alert.alert("Success", "RFI created successfully");
             setShowCreateRfiModal(false);
+            checkAndRestoreViewer();
         } catch (error: any) {
             console.error("Create RFI from photo error", error);
             const errMsg = error.response?.data?.error || "Failed to create RFI";
@@ -576,6 +622,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         try {
             await linkFiles(sortedPhotos[viewerIndex].id, targetId);
             setShowLinkModal(false);
+            checkAndRestoreViewer();
             fetchLinkedItems();
             Alert.alert(t('projectPhotos.success'), 'File linked successfully.');
         } catch (e: any) {
@@ -1022,6 +1069,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             await deleteFile(file.id);
                             await loadFiles(true);
                             setActionMenuVisible(false);
+                            if (viewerOpen) closeViewer();
                         } catch (e) {
                             Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToDeletePhoto'));
                         } finally {
@@ -1076,7 +1124,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const handleRenameFileAction = (file: any) => {
         setRenamingFileId(file.id);
         setRenamingFileName(file.file_name);
-        setShowRenameFile(true);
+        if (viewerOpen) {
+            openSubModalFromViewer(() => setShowRenameFile(true));
+        } else {
+            setShowRenameFile(true);
+        }
     };
 
     const handleUpdateFile = async () => {
@@ -1089,6 +1141,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             setShowRenameFile(false);
             setRenamingFileId(null);
             setRenamingFileName('');
+            checkAndRestoreViewer();
         } catch (e) {
             Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToUpdateFile'));
         } finally {
@@ -2413,10 +2466,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     {viewerIndex + 1} / {sortedPhotos.length}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 4 }}>
-                                    <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8 }}>
+                                    <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowInfoModal(true))} style={{ padding: 8 }}>
                                         <Feather name="info" size={20} color="#fff" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => setShowLinkModal(true)} style={{ padding: 8 }}>
+                                    <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowLinkModal(true))} style={{ padding: 8 }}>
                                         <Feather name="link" size={20} color="#fff" />
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={() => handleSharePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }} disabled={sharing || downloading}>
@@ -2447,6 +2500,17 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 </TouchableOpacity>
                                             )}
                                         </>
+                                    )}
+                                    {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setActiveActionFile(sortedPhotos[viewerIndex]);
+                                                setActionMenuVisible(true);
+                                            }}
+                                            style={{ padding: 8 }}
+                                        >
+                                            <Feather name="more-vertical" size={20} color="#fff" />
+                                        </TouchableOpacity>
                                     )}
                                 </View>
                             </View>
@@ -2646,26 +2710,57 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         )}
                     </View>
                 </GestureHandlerRootView>
-                {showLinkModal && sortedPhotos[viewerIndex]?.id && (
-                    <LinkFileModal
-                        visible={showLinkModal}
-                        onClose={() => setShowLinkModal(false)}
-                        onLink={handleLinkFile}
-                        projectId={project?.id}
-                        currentFileId={sortedPhotos[viewerIndex]?.id}
-                        handleLinkItemClick={handleLinkItemClick}
-                    />
-                )}
-                <FileInformationModal
-                    visible={showInfoModal}
-                    onClose={() => setShowInfoModal(false)}
-                    file={sortedPhotos[viewerIndex]}
-                    folders={folders}
-                    projectName={project?.name || ''}
+                {/* File Action Menu for Viewer */}
+                <FileActionMenu
+                    isVisible={actionMenuVisible}
+                    onClose={() => setActionMenuVisible(false)}
+                    onHideUnhide={() => handleToggleVisibility(activeActionFile)}
+                    onDoNotFollow={() => { }}
+                    onDelete={() => handleDeleteFile(activeActionFile)}
+                    onShare={() => handleSharePhoto(activeActionFile)}
+                    showDoNotFollow={false}
+                    isAdmin={user.role === 'admin' || user.role === 'superadmin'}
+                    isContributor={user.role === 'contributor'}
+                    isUploader={activeActionFile && String(activeActionFile.created_by) === String(user.id)}
+                    clientVisible={activeActionFile?.client_visible !== false}
+                    doNotFollow={false}
+                    canDelete={activeActionFile && String(activeActionFile.created_by) === String(user.id) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
+                    canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
+                    onRename={() => handleRenameFileAction(activeActionFile)}
+                    onArchive={() => handleArchiveFile(activeActionFile)}
+                    onUnarchive={() => handleUnarchivePhoto(activeActionFile)}
+                    onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
+                    onCreateSnag={() => handleStartCreateSnag(activeActionFile)}
+                    showArchive={currentFolder?.name.toLowerCase().includes('confirmation')}
+                    isArchived={currentFolder?.name.toLowerCase().includes('archive')}
+                    fileName={activeActionFile?.file_name || ''}
+                    useView={Platform.OS === 'ios'}
                 />
-
-
             </Modal>
+
+            {showLinkModal && sortedPhotos[viewerIndex]?.id && (
+                <LinkFileModal
+                    visible={showLinkModal}
+                    onClose={() => {
+                        setShowLinkModal(false);
+                        checkAndRestoreViewer();
+                    }}
+                    onLink={handleLinkFile}
+                    projectId={project?.id}
+                    currentFileId={sortedPhotos[viewerIndex]?.id}
+                    handleLinkItemClick={handleLinkItemClick}
+                />
+            )}
+            <FileInformationModal
+                visible={showInfoModal}
+                onClose={() => {
+                    setShowInfoModal(false);
+                    checkAndRestoreViewer();
+                }}
+                file={sortedPhotos[viewerIndex]}
+                folders={folders}
+                projectName={project?.name || ''}
+            />
 
             {/* Rename Folder Modal */}
             <Modal visible={showEditFolder} transparent animationType="fade">
@@ -2719,7 +2814,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             />
 
             {/* Rename File Modal */}
-            <Modal visible={showRenameFile} transparent animationType="fade">
+            <Modal visible={showRenameFile} transparent animationType="fade" onRequestClose={closeRenameFileModal}>
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
                     <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 20 }}>
                         <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 14 }}>{t('projectPhotos.renamePhoto')}</Text>
@@ -2731,7 +2826,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             style={{ height: 40, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, color: colors.text, fontSize: 13, marginBottom: 16 }}
                         />
                         <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity onPress={() => setShowRenameFile(false)} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                            <TouchableOpacity onPress={closeRenameFileModal} style={{ flex: 1, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
                                 <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('projectPhotos.cancel')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleUpdateFile} disabled={submitting} style={{ flex: 1, height: 40, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
@@ -2755,13 +2850,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             />
 
             {/* Create Snag Modal */}
-            <Modal visible={showCreateSnagModal} transparent animationType="slide" onRequestClose={() => setShowCreateSnagModal(false)}>
+            <Modal visible={showCreateSnagModal} transparent animationType="slide" onRequestClose={closeCreateSnagModal}>
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
                     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
                         <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                                 <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create Snag from Photo</Text>
-                                <TouchableOpacity onPress={() => setShowCreateSnagModal(false)}>
+                                <TouchableOpacity onPress={closeCreateSnagModal}>
                                     <Feather name="x" size={20} color={colors.textMuted} />
                                 </TouchableOpacity>
                             </View>
@@ -2817,7 +2912,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                             <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
                                 <TouchableOpacity
-                                    onPress={() => setShowCreateSnagModal(false)}
+                                    onPress={closeCreateSnagModal}
                                     style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
                                 >
                                     <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>
@@ -2875,13 +2970,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             </Modal>
 
             {/* Create RFI Modal */}
-            <Modal visible={showCreateRfiModal} transparent animationType="slide" onRequestClose={() => setShowCreateRfiModal(false)}>
+            <Modal visible={showCreateRfiModal} transparent animationType="slide" onRequestClose={closeCreateRfiModal}>
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
                     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 }}>
                         <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                                 <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Create RFI from Photo</Text>
-                                <TouchableOpacity onPress={() => setShowCreateRfiModal(false)}>
+                                <TouchableOpacity onPress={closeCreateRfiModal}>
                                     <Feather name="x" size={20} color={colors.textMuted} />
                                 </TouchableOpacity>
                             </View>
@@ -2973,7 +3068,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
                             <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
                                 <TouchableOpacity
-                                    onPress={() => setShowCreateRfiModal(false)}
+                                    onPress={closeCreateRfiModal}
                                     style={{ flex: 1, height: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
                                 >
                                     <Text style={{ fontSize: 14, color: colors.textMuted, fontWeight: '600' }}>Cancel</Text>
