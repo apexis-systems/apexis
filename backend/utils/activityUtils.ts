@@ -1,7 +1,69 @@
-import { activities, project_members, users, projects } from '../models/index.ts';
+import { activities, project_members, users, projects, project_member_folders } from '../models/index.ts';
 import { getIO } from '../socket.ts';
 import { Op } from 'sequelize';
 import { sendNotification } from '../utils/notificationUtils.ts';
+
+export const checkActivityAccess = async (
+    userId: number,
+    role: string,
+    activity: any,
+    allowedFolderIds: number[],
+    memberId: number
+): Promise<boolean> => {
+    if (role === 'superadmin' || role === 'admin' || role === 'contributor') {
+        return true;
+    }
+
+    if (role !== 'consultant' && role !== 'vendor') {
+        return true;
+    }
+
+    const metadata = activity.metadata;
+    const folderId = metadata?.folderId ? Number(metadata.folderId) : null;
+    const type = activity.type;
+
+    // 1. File/Folder actions
+    const isFolderAction = folderId !== null || 
+        ['upload', 'delete', 'upload_photo', 'uploaded'].includes(type);
+
+    if (isFolderAction) {
+        return folderId !== null && allowedFolderIds.includes(folderId);
+    }
+
+    // 2. RFI actions
+    if (metadata?.rfiId) {
+        const { rfis } = await import('../models/index.ts');
+        const rfi = await rfis.findByPk(Number(metadata.rfiId));
+        if (!rfi) return false;
+        if (Number(rfi.assigned_to) === userId || Number(rfi.created_by) === userId) {
+            return true;
+        }
+        const linkedFolderIds = Array.isArray(rfi.folder_ids) ? rfi.folder_ids.map(Number) : [];
+        return linkedFolderIds.some((fid: number) => allowedFolderIds.includes(fid));
+    }
+
+    // 3. Snag actions
+    if (metadata?.snagId) {
+        const { snags } = await import('../models/index.ts');
+        const snag = await snags.findByPk(Number(metadata.snagId));
+        if (!snag) return false;
+        if (Number(snag.assigned_to) === userId || Number(snag.created_by) === userId) {
+            return true;
+        }
+        const linkedFolderIds = Array.isArray(snag.folder_ids) ? snag.folder_ids.map(Number) : [];
+        return linkedFolderIds.some((fid: number) => allowedFolderIds.includes(fid));
+    }
+
+    // 4. Comment / Photo Comment actions
+    if ((type === 'comment' || type === 'photo_comment') && metadata?.fileId) {
+        const { files } = await import('../models/index.ts');
+        const file = await files.findByPk(Number(metadata.fileId));
+        if (!file || !file.folder_id) return false;
+        return allowedFolderIds.includes(Number(file.folder_id));
+    }
+
+    return false;
+};
 
 export const logActivity = async ({
     projectId,
@@ -63,8 +125,30 @@ export const logActivity = async ({
         // Members of the project
         const members = await project_members.findAll({
             where: { project_id: projectId },
-            attributes: ['user_id']
+            attributes: ['id', 'user_id', 'role']
         });
+
+        const restrictedMembers = members.filter((m: any) => m.role === 'consultant' || m.role === 'vendor');
+        const restrictedMemberIds = restrictedMembers.map((m: any) => m.id);
+
+        const memberFolders = restrictedMemberIds.length > 0 ? await project_member_folders.findAll({
+            where: { project_member_id: { [Op.in]: restrictedMemberIds } }
+        }) : [];
+
+        const recipientIds = new Set<number>();
+
+        for (const member of members) {
+            let hasAccess = true;
+            if (member.role === 'consultant' || member.role === 'vendor') {
+                const allowedFolders = memberFolders
+                    .filter((mf: any) => mf.project_member_id === member.id)
+                    .map((mf: any) => Number(mf.folder_id));
+                hasAccess = await checkActivityAccess(member.user_id, member.role, newActivity, allowedFolders, member.id);
+            }
+            if (hasAccess) {
+                recipientIds.add(member.user_id);
+            }
+        }
 
         // Admins of the organization
         const admins = await users.findAll({
@@ -74,9 +158,6 @@ export const logActivity = async ({
             },
             attributes: ['id']
         });
-
-        const recipientIds = new Set<number>();
-        members.forEach((m: any) => recipientIds.add(m.user_id));
         admins.forEach((a: any) => recipientIds.add(a.id));
 
         // 4. Emit via Socket & Push Notifications

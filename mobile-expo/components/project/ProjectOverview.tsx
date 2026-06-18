@@ -247,7 +247,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             } else {
                 await Share.share({
                     title: 'Final Handover Report',
-                    message: `Final Handover Report\n${url}`,
+                    message: Platform.OS === 'android' ? `Final Handover Report\n${url}` : 'Final Handover Report',
                     url: url,
                 });
             }
@@ -263,7 +263,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             const shareUrl = role === 'contributor' ? data.contributorLink : data.clientLink;
             await Share.share({
                 title: `Join Project as ${role === 'contributor' ? 'Contributor' : 'Client'}`,
-                message: `You've been invited to access the project "${project.name}" on Apexis as a "${role}".\n\nClick the link below to securely login to your project:\n${shareUrl}`,
+                message: Platform.OS === 'android'
+                    ? `You've been invited to access the project "${project.name}" on Apexis as a "${role}".\n\nClick the link below to securely login to your project:\n${shareUrl}`
+                    : `You've been invited to access the project "${project.name}" on Apexis as a "${role}".\n\nClick the link below to securely login to your project:`,
                 url: shareUrl,
             });
         } catch (e) {
@@ -1021,10 +1023,12 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                     onPress={async () => {
                                         try {
                                             await Share.share({
-                                                title: t('projectOverview.shareInviteTitle', { role: inviteRole === 'consultant' ? t('projectOverview.consultant') : t('projectOverview.vendor') }) as string,
-                                                message: t('projectOverview.shareInviteMessage', { projectName: project.name, role: inviteRole === 'consultant' ? t('projectOverview.consultant') : t('projectOverview.vendor'), url: generatedInviteUrl }) as string,
+                                                title: `Join Project as ${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'}`,
+                                                message: Platform.OS === 'android'
+                                                    ? `You've been invited to access the project "${project.name}" on Apexis as a "${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'}".\n\nClick the link below to securely login to your project:\n${generatedInviteUrl}`
+                                                    : `You've been invited to access the project "${project.name}" on Apexis as a "${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'}".\n\nClick the link below to securely login to your project:`,
                                                 url: generatedInviteUrl,
-                                            });
+                                             });
                                         } catch (e) {
                                             console.error('Share error:', e);
                                         }

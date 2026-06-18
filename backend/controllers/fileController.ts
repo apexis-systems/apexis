@@ -242,6 +242,15 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const validFolderId = (folder_id !== undefined && folder_id !== null && folder_id !== 'undefined' && folder_id !== '') ? parseInt(folder_id, 10) : null;
         let finalFolderId = validFolderId;
 
+        if (finalFolderId) {
+            const targetFolder = await folders.findByPk(finalFolderId);
+            if (targetFolder && targetFolder.name.toLowerCase() === 'confidential') {
+                if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                    return res.status(403).json({ error: "Forbidden: You do not have access to this folder" });
+                }
+            }
+        }
+
         // Restriction: Consultant/Vendor can only upload to allowed folders, not root
         if (authUser.role === "consultant" || authUser.role === "vendor") {
             if (!finalFolderId) {
@@ -339,6 +348,14 @@ export const uploadFile = async (req: Request | any, res: Response) => {
                 }]
             });
 
+            // Get allowed folders for consultants/vendors in this project
+            const allowedMemberFolders = await project_member_folders.findAll({
+                where: {
+                    folder_id: finalFolderId || -1
+                }
+            });
+            const allowedMemberIds = new Set(allowedMemberFolders.map((amf: any) => amf.project_member_id));
+
             // Fallback for name if missing from token
             let senderName = authUser.name;
             if (!senderName) {
@@ -348,6 +365,11 @@ export const uploadFile = async (req: Request | any, res: Response) => {
 
             const notifiedUserIds = new Set<number>();
             for (const member of members) {
+                if (member.role === 'consultant' || member.role === 'vendor') {
+                    if (!allowedMemberIds.has(member.id)) {
+                        continue; // Skip notification for restricted folders
+                    }
+                }
                 notifiedUserIds.add(member.user_id);
                 if (!shouldSkip) {
                     const isAssignee = assigned_to && String(member.user_id) === String(assigned_to);
@@ -424,6 +446,32 @@ export const listFiles = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Forbidden: No access to this project" });
         }
 
+        // Auto-create Confidential folders if missing for existing projects
+        const project_id = Number(projectId);
+        const typesToCheck = folder_type ? [folder_type as string] : ['photo', 'document'];
+        for (const type of typesToCheck) {
+            const confidentialExists = await folders.findOne({
+                where: {
+                    project_id,
+                    name: { [Op.iLike]: 'Confidential' },
+                    folder_type: type
+                }
+            });
+            if (!confidentialExists) {
+                try {
+                    await folders.create({
+                        project_id,
+                        name: 'Confidential',
+                        client_visible: false,
+                        created_by: authUser?.user_id,
+                        folder_type: type
+                    });
+                } catch (err) {
+                    console.error(`Error auto-creating Confidential folder:`, err);
+                }
+            }
+        }
+
         // Get all folders for this project
         const folderWhere: any = { project_id: projectId };
         if (folder_type) {
@@ -449,6 +497,10 @@ export const listFiles = async (req: Request, res: Response) => {
             });
             const allowedFolderIds = allowedFolders.map((af: any) => af.folder_id);
             filteredFolders = filteredFolders.filter((folder: any) => allowedFolderIds.includes(folder.id));
+        }
+
+        if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+            filteredFolders = filteredFolders.filter((folder: any) => folder.name.toLowerCase() !== 'confidential');
         }
 
         const allowedFolderIdsForFiles = filteredFolders.map((f: any) => f.id);
@@ -484,6 +536,11 @@ export const listFiles = async (req: Request, res: Response) => {
         });
 
         let filteredFiles = fileData.map((f: any) => f.toJSON());
+
+        if (authUser.role !== "admin" && authUser.role !== "superadmin") {
+            const confidentialFolderIds = folderData.filter((f: any) => f.name.toLowerCase() === 'confidential').map((f: any) => f.id);
+            filteredFiles = filteredFiles.filter((file: any) => !confidentialFolderIds.includes(file.folder_id));
+        }
 
         if (authUser.role === "client") {
             // Remove hidden files
@@ -530,6 +587,12 @@ export const deleteFile = async (req: Request, res: Response) => {
                 ) {
                     await t.rollback();
                     return res.status(403).json({ error: "Forbidden: Files in system folders cannot be deleted" });
+                }
+                if (folderNameLower === 'confidential') {
+                    if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                        await t.rollback();
+                        return res.status(403).json({ error: "Forbidden: Only Admins can delete files in a confidential folder" });
+                    }
                 }
             }
         }
@@ -616,6 +679,12 @@ export const bulkDeleteFiles = async (req: Request, res: Response) => {
                         await t.rollback();
                         return res.status(403).json({ error: `Forbidden: File "${file.file_name}" is in a system folder and cannot be deleted` });
                     }
+                    if (folderNameLower === 'confidential') {
+                        if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                            await t.rollback();
+                            return res.status(403).json({ error: `Forbidden: Only Admins can delete files in a confidential folder` });
+                        }
+                    }
                 }
             }
 
@@ -675,6 +744,17 @@ export const viewFile = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "No file key provided" });
         }
 
+        const authUser = (req as any).user;
+        const fileRecord = await files.findOne({ where: { file_url: fileKey } });
+        if (fileRecord && fileRecord.folder_id) {
+            const folder = await folders.findByPk(fileRecord.folder_id);
+            if (folder && folder.name.toLowerCase() === 'confidential') {
+                if (!authUser || (authUser.role !== 'admin' && authUser.role !== 'superadmin')) {
+                    return res.status(403).json({ error: "Forbidden: You do not have access to this confidential file" });
+                }
+            }
+        }
+
         // console.log(`[DEBUG] Attempting to view file: ${fileKey} in bucket: ${BUCKET_NAME}`);
 
         const command = new GetObjectCommand({
@@ -727,6 +807,16 @@ export const downloadFile = async (req: Request, res: Response) => {
 
         if (!file) {
             return res.status(404).json({ error: "File not found" });
+        }
+
+        const authUser = (req as any).user;
+        if (file.folder_id) {
+            const folder = await folders.findByPk(file.folder_id);
+            if (folder && folder.name.toLowerCase() === 'confidential') {
+                if (!authUser || (authUser.role !== 'admin' && authUser.role !== 'superadmin')) {
+                    return res.status(403).json({ error: "Forbidden: You do not have access to this confidential file" });
+                }
+            }
         }
 
         const command = new GetObjectCommand({
@@ -847,6 +937,27 @@ export const updateFile = async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Forbidden: Only Admins and Contributors can update files" });
         }
 
+        // Restriction: Only Admins/Superadmins can update or move files that are in a confidential folder
+        if (file.folder_id) {
+            const currentFolder = await folders.findByPk(file.folder_id);
+            if (currentFolder && currentFolder.name.toLowerCase() === 'confidential') {
+                if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                    return res.status(403).json({ error: "Forbidden: Only Admins can modify files in a confidential folder" });
+                }
+            }
+        }
+
+        // Restriction: Only Admins/Superadmins can move files into a confidential folder
+        const targetFolderId = (folder_id === '' || folder_id === 'root') ? null : folder_id;
+        if (targetFolderId) {
+            const targetFolder = await folders.findByPk(targetFolderId);
+            if (targetFolder && targetFolder.name.toLowerCase() === 'confidential') {
+                if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                    return res.status(403).json({ error: "Forbidden: Only Admins can move files into a confidential folder" });
+                }
+            }
+        }
+
         const previousVisibility = file.client_visible;
         const updateData: any = {};
         if (file_name !== undefined) updateData.file_name = file_name;
@@ -946,6 +1057,14 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         }
 
         const validFolderId = (folder_id !== undefined && folder_id !== null && folder_id !== 'undefined' && folder_id !== '') ? parseInt(folder_id, 10) : null;
+        if (validFolderId) {
+            const targetFolder = await folders.findByPk(validFolderId);
+            if (targetFolder && targetFolder.name.toLowerCase() === 'confidential') {
+                if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+                    return res.status(403).json({ error: "Forbidden: You do not have access to this folder" });
+                }
+            }
+        }
         const folderPath = validFolderId ? validFolderId.toString() : 'root';
         const isSeparate = mode === 'separate';
         const shouldSkip = req.body.skipActivity === 'true' || req.body.skipActivity === true;
@@ -1169,12 +1288,25 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                 include: [{ model: UsersModel, attributes: ['id', 'name'] }]
             });
 
+            // Get allowed folders for consultants/vendors in this project
+            const allowedMemberFolders = await project_member_folders.findAll({
+                where: {
+                    folder_id: validFolderId || -1
+                }
+            });
+            const allowedMemberIds = new Set(allowedMemberFolders.map((amf: any) => amf.project_member_id));
+
             const scanType = (is_doc_mode === 'true' || is_doc_mode === true) ? "documents" : "photos";
             const fileCount = createdFiles.length;
             const notificationTitle = (is_doc_mode === 'true' || is_doc_mode === true) ? "New Documents Uploaded" : "New Photos Uploaded";
             const notificationBody = `${senderName} uploaded ${fileCount} ${scanType}`;
 
             for (const member of members) {
+                if (member.role === 'consultant' || member.role === 'vendor') {
+                    if (!allowedMemberIds.has(member.id)) {
+                        continue; // Skip notification for restricted folders
+                    }
+                }
                 if (!shouldSkip) {
                     const isAssignee = assigned_to && String(member.user_id) === String(assigned_to);
                     await sendNotification({
