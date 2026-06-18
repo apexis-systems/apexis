@@ -1252,24 +1252,25 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
   };
 
-  const sendConversationMessage = async () => {
+  const sendConversationMessage = async (audioUri?: string) => {
     if (!selectedRFI) return;
-    if (!messageText.trim() && !messageAttachment) return;
+    const attachment = typeof audioUri === 'string' ? audioUri : messageAttachment;
+    if (!messageText.trim() && !attachment) return;
 
     setUpdatingResponse(true);
     try {
       const formData = new FormData();
       if (messageText.trim()) formData.append('text', messageText.trim());
 
-      if (messageAttachment) {
-        let filename = messageAttachment.split('/').pop() || `message_${Date.now()}.jpg`;
-        if (isAudio(messageAttachment) && !filename.includes('.')) filename += '.m4a';
+      if (attachment) {
+        let filename = attachment.split('/').pop() || `message_${Date.now()}.jpg`;
+        if (isAudio(attachment) && !filename.includes('.')) filename += '.m4a';
         const match = /\.(\w+)$/.exec(filename);
         let type = isAudio(filename) ? 'audio/m4a' : 'image/jpeg';
         if (match) {
           type = isAudio(filename) ? `audio/${match[1]}` : `image/${match[1]}`;
         }
-        formData.append('file', { uri: messageAttachment, name: filename, type } as any);
+        formData.append('file', { uri: attachment, name: filename, type } as any);
       }
 
       const message = await sendRFIMessage(selectedRFI.id, formData);
@@ -1945,7 +1946,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                         borderColor: colors.border,
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        backgroundColor: colors.background
+                                  backgroundColor: colors.background
                                       }}
                                     >
                                       <Feather name="camera" size={20} color={colors.textMuted} />
@@ -1956,7 +1957,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                       <VoiceNoteRecorder
                                         colors={colors}
                                         onRecordingStateChange={setIsVoiceRecording}
-                                        onSend={(uri) => setMessageAttachment(uri)}
+                                        onSend={(uri) => sendConversationMessage(uri)}
                                         embedded
                                       />
                                     </View>
@@ -1964,7 +1965,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                 </View>
                                 {!isVoiceRecording && (
                                   <TouchableOpacity
-                                    onPress={sendConversationMessage}
+                                    onPress={() => sendConversationMessage()}
                                     disabled={updatingResponse || (!messageText.trim() && !messageAttachment)}
                                     style={{
                                       backgroundColor: colors.primary,
