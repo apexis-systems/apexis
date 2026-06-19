@@ -28,6 +28,7 @@
         "NSPhotoLibraryAddUsageDescription": "APEXISpro needs permission to save downloaded photos to your library.",
         "NSCameraUsageDescription": "APEXISpro needs camera access to capture site photos.",
         "NSMicrophoneUsageDescription": "APEXISpro needs microphone access for video capture.",
+        "NSContactsUsageDescription": "APEXISpro needs permission to access contacts to select phone numbers and emails for invitations.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -77,7 +78,8 @@
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.ACCESS_MEDIA_LOCATION",
         "android.permission.READ_MEDIA_AUDIO",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.READ_CONTACTS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
@@ -150,7 +152,13 @@
           }
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "APEXISpro needs permission to access contacts to select phone numbers and emails for invitations."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

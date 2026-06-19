@@ -342,7 +342,8 @@
             "manageFolderPermissionsCount": "Manage Folder Permissions ({{count}})",
             "selectFolders": "Select Folders",
             "sendInvitation": "Send Invitation",
-            "inviteConsultantVendor": "Invite Consultant / Vendor"
+            "inviteConsultantVendor": "Invite Consultant / Vendor",
+            "selectFromContacts": "Select from contacts"
         },
         "projectSnags": {
             "successTitle": "Success",
