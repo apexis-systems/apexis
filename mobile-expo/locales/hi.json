@@ -342,7 +342,8 @@
             "manageFolderPermissionsCount": "फोल्डर अनुमतियां प्रबंधित करें ({{count}})",
             "selectFolders": "फोल्डर चुनें",
             "sendInvitation": "निमंत्रण भेजें",
-            "inviteConsultantVendor": "कंसल्टेंट/वेंडर को आमंत्रित करें"
+            "inviteConsultantVendor": "कंसल्टेंट/वेंडर को आमंत्रित करें",
+            "selectFromContacts": "संपर्क सूची से चुनें"
         },
         "projectSnags": {
             "successTitle": "सफलता",

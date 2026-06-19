@@ -5,6 +5,8 @@ import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { useRouter } from 'next/navigation';
+import { handleNotificationNavigation } from '@/helpers/notificationNavigation';
 
 interface SocketContextType {
     socket: Socket | null;
@@ -28,6 +30,7 @@ export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { isLoggedIn, user } = useAuth();
+    const router = useRouter();
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -116,6 +119,33 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 playAlertSound();
                 toast.success(notif.title, {
                     description: notif.body,
+                    action: {
+                        label: 'View',
+                        onClick: () => {
+                            // Mark notification as read in database
+                            const token = localStorage.getItem('token');
+                            if (token && notif.id) {
+                                axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/${notif.id}/read`, {}, {
+                                    headers: { Authorization: `Bearer ${token}` }
+                                }).catch(err => console.error("Failed to mark notification read from toast click:", err));
+                            }
+                            // Decrement the count
+                            setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+                            
+                            // Parse data if it is stringified JSON
+                            let parsedData = notif.data;
+                            if (typeof parsedData === 'string') {
+                                try {
+                                    parsedData = JSON.parse(parsedData);
+                                } catch (e) {
+                                    console.error("Failed to parse notification data JSON:", e);
+                                }
+                            }
+                            
+                            // Navigate to resource
+                            handleNotificationNavigation(notif.type, parsedData, user?.role || 'admin', router);
+                        }
+                    }
                 });
                 setUnreadNotificationCount(prev => prev + 1);
             });
