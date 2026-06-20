@@ -316,6 +316,8 @@
             "removeAccessDesc": "{{name}} को इस {{role}} सूची से हटाएं? उनका खाता संगठन में रहेगा।",
             "remove": "हटाएं",
             "cancel": "रद्द करें",
+            "justRemove": "केवल हटाएं",
+            "blockAndRemove": "ब्लॉक करें और हटाएं",
             "accessRemoved": "प्रोजेक्ट एक्सेस हटा दिया गया।",
             "exportStarted": "निर्यात प्रक्रिया शुरू हो रही है...",
             "exportCompleted": "{{time}}s में निर्यात पूरा हुआ!",

@@ -316,6 +316,8 @@
             "removeAccessDesc": "Remove {{name}} from this {{role}} list? Their account will stay in the organization.",
             "remove": "Remove",
             "cancel": "Cancel",
+            "justRemove": "Just Remove",
+            "blockAndRemove": "Block & Remove",
             "accessRemoved": "Project access removed.",
             "exportStarted": "Starting export process...",
             "exportCompleted": "Export completed in {{time}}s!",

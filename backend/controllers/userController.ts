@@ -9,6 +9,7 @@ import {
     rfis,
     organizations,
     project_member_folders,
+    blocked_users,
     sequelize
 } from "../models/index.ts";
 import jwt from "jsonwebtoken";
@@ -18,6 +19,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import sharp from 'sharp';
 import { Op, Sequelize } from "sequelize";
 import { getIO } from "../socket.ts";
+import { normalizePhone } from "../utils/sms.ts";
 
 export const inviteUser = async (req: Request, res: Response) => {
     try {
@@ -35,6 +37,25 @@ export const inviteUser = async (req: Request, res: Response) => {
 
         if (!email && !phone_number) {
             return res.status(400).json({ error: "Either Email or Phone Number is required to invite a user" });
+        }
+
+        // Check if user is blocked in the organization
+        if (email || phone_number) {
+            const normalizedEmail = email ? email.toLowerCase() : null;
+            const normalizedPhone = phone_number ? normalizePhone(phone_number) : null;
+            
+            const isBlocked = await blocked_users.findOne({
+                where: {
+                    organization_id: authUser.organization_id,
+                    [Op.or]: [
+                        normalizedEmail ? { email: normalizedEmail } : null,
+                        normalizedPhone ? { phone_number: normalizedPhone } : null
+                    ].filter(Boolean) as any[]
+                }
+            });
+            if (isBlocked) {
+                return res.status(400).json({ error: "This user is blocked in this organization. Please unblock them first." });
+            }
         }
 
         const isProjectRole = ["contributor", "client", "consultant", "vendor"].includes(role);
@@ -423,6 +444,30 @@ export const deleteUser = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "User not found" });
         }
 
+        if (req.query.block === 'true') {
+            if (userToDelete.email || userToDelete.phone_number) {
+                const whereClause: any = { organization_id: authUser.organization_id };
+                if (userToDelete.email && userToDelete.phone_number) {
+                    whereClause[Op.or] = [
+                        { email: userToDelete.email },
+                        { phone_number: userToDelete.phone_number }
+                    ];
+                } else if (userToDelete.email) {
+                    whereClause.email = userToDelete.email;
+                } else {
+                    whereClause.phone_number = userToDelete.phone_number;
+                }
+                const existingBlocked = await blocked_users.findOne({ where: whereClause, transaction: t });
+                if (!existingBlocked) {
+                    await blocked_users.create({
+                        organization_id: authUser.organization_id,
+                        email: userToDelete.email || null,
+                        phone_number: userToDelete.phone_number || null
+                    }, { transaction: t });
+                }
+            }
+        }
+
         if (userToDelete.is_primary && userToDelete.organization_id === authUser.organization_id) {
             await t.rollback();
             return res.status(400).json({ error: "Cannot delete the primary organization administrator" });
@@ -655,5 +700,48 @@ export const getOnboardingLinks = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Get Onboarding Links Error:", error);
         res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getBlockedUsers = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Forbidden: Only admins can view blocked users" });
+        }
+        
+        const blocked = await blocked_users.findAll({
+            where: { organization_id: authUser.organization_id },
+            order: [['createdAt', 'DESC']]
+        });
+        
+        return res.status(200).json({ blockedUsers: blocked });
+    } catch (error) {
+        console.error("Get Blocked Users Error:", error);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const unblockUser = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const authUser = (req as any).user;
+        if (!authUser || authUser.role !== "admin") {
+            return res.status(403).json({ error: "Forbidden: Only admins can unblock users" });
+        }
+        
+        const blockedRecord = await blocked_users.findOne({
+            where: { id, organization_id: authUser.organization_id }
+        });
+        
+        if (!blockedRecord) {
+            return res.status(404).json({ error: "Blocked user record not found" });
+        }
+        
+        await blockedRecord.destroy();
+        return res.status(200).json({ message: "User unblocked successfully" });
+    } catch (error) {
+        console.error("Unblock User Error:", error);
+        return res.status(500).json({ error: "Internal server error" });
     }
 };

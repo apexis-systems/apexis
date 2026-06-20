@@ -3,7 +3,7 @@ import https from "https";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import admin from "../config/firebase.ts";
-import { users, organizations, project_members, projects } from "../models/index.ts";
+import { users, organizations, project_members, projects, blocked_users } from "../models/index.ts";
 import { Op } from "sequelize";
 import redis from "../config/redis.ts";
 import { sendEmail } from "../utils/email.ts";
@@ -192,6 +192,22 @@ export const projectLogin = async (req: Request, res: Response) => {
 
         const normalizedPhone = phone ? normalizePhone(phone) : null;
         const normalizedEmail = email ? email.toLowerCase() : null;
+
+        // Check if the user's email or phone is blocked in this organization
+        if (normalizedEmail || normalizedPhone) {
+            const isBlocked = await blocked_users.findOne({
+                where: {
+                    organization_id: project.organization_id,
+                    [Op.or]: [
+                        normalizedEmail ? { email: normalizedEmail } : null,
+                        normalizedPhone ? { phone_number: normalizedPhone } : null
+                    ].filter(Boolean) as any[]
+                }
+            });
+            if (isBlocked) {
+                return res.status(403).json({ error: "Access denied: This account is blocked from joining projects in this organization." });
+            }
+        }
 
         // Reuse the existing user record so members can join multiple projects across organizations.
         let user = await users.findOne({
@@ -506,6 +522,22 @@ export const completePublicSignup = async (req: Request, res: Response) => {
 
         const normalizedEmail = email?.toLowerCase() || null;
         const normalizedPhone = phone ? normalizePhone(phone) : null;
+
+        // Check if the user's email or phone is blocked in this organization
+        if (normalizedEmail || normalizedPhone) {
+            const isBlocked = await blocked_users.findOne({
+                where: {
+                    organization_id: decoded.organization_id,
+                    [Op.or]: [
+                        normalizedEmail ? { email: normalizedEmail } : null,
+                        normalizedPhone ? { phone_number: normalizedPhone } : null
+                    ].filter(Boolean) as any[]
+                }
+            });
+            if (isBlocked) {
+                return res.status(403).json({ error: "Access denied: This account is blocked from joining projects in this organization." });
+            }
+        }
 
         // Reuse the existing user record so members can join multiple projects across organizations.
         let user = await users.findOne({

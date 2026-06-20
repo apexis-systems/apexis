@@ -49,6 +49,10 @@ db.plans.hasMany(db.organizations, { foreignKey: 'plan_id' });
 db.users.belongsTo(db.organizations, { foreignKey: 'organization_id' });
 db.organizations.hasMany(db.users, { foreignKey: 'organization_id' });
 
+// Organization <-> BlockedUser
+db.blocked_users.belongsTo(db.organizations, { foreignKey: 'organization_id' });
+db.organizations.hasMany(db.blocked_users, { foreignKey: 'organization_id' });
+
 // Organization <-> Project
 db.projects.belongsTo(db.organizations, { foreignKey: 'organization_id' });
 db.organizations.hasMany(db.projects, { foreignKey: 'organization_id' });
@@ -238,6 +242,7 @@ export const file_links = db.file_links;
 export const file_rfi_links = db.file_rfi_links;
 export const file_snag_links = db.file_snag_links;
 export const project_member_folders = db.project_member_folders;
+export const blocked_users = db.blocked_users;
 
 export { sequelize, Sequelize };
 export default db;
