@@ -468,12 +468,14 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
 
         socket.emit('join-project', projectId);
 
-        const onSnagSeen = (data: { snagId: number, seen_at: string }) => {
+        const onSnagSeen = (data: { snagId: number, seen_at: string, project_id?: number }) => {
+            if (data.project_id && Number(data.project_id) !== Number(projectId)) return;
             setSnags(prev => prev.map(s => s.id === data.snagId ? { ...s, seen_at: data.seen_at } : s));
             setSelectedSnag(prev => (prev && prev.id === data.snagId) ? { ...prev, seen_at: data.seen_at } : prev);
         };
 
         const onSnagUpdated = (data: { snag: Snag }) => {
+            if (data.snag && Number(data.snag.project_id) !== Number(projectId)) return;
             setSnags(prev => {
                 const idx = prev.findIndex(s => s.id === data.snag.id);
                 if (idx !== -1) {
@@ -486,7 +488,8 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
             setSelectedSnag(prev => (prev && prev.id === data.snag.id) ? data.snag : prev);
         };
 
-        const onSnagDeleted = (data: { snagId: number }) => {
+        const onSnagDeleted = (data: { snagId: number, project_id?: number }) => {
+            if (data.project_id && Number(data.project_id) !== Number(projectId)) return;
             setSnags(prev => prev.filter(s => s.id !== data.snagId));
             setSelectedSnag(prev => (prev && prev.id === data.snagId) ? null : prev);
         };
@@ -495,7 +498,9 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         socket.on('snag-updated', onSnagUpdated);
         socket.on('snag-deleted', onSnagDeleted);
         socket.on('snag-conversation-message', ({ itemType, itemId, message }: { itemType: 'rfi' | 'snag'; itemId: number; message: ConversationMessage }) => {
-            if (itemType !== 'snag' || !selectedSnag || selectedSnag.id !== itemId) return;
+            if (itemType !== 'snag') return;
+            if (message && message.project_id && Number(message.project_id) !== Number(projectId)) return;
+            if (!selectedSnag || selectedSnag.id !== itemId) return;
             setConversationMessages(prev => mergeUniqueMessages([...prev, message]));
         });
 
@@ -525,6 +530,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
         }
 
         setLoadingMessages(true);
+        setConversationMessages([]);
         getSnagMessages(selectedSnag.id)
             .then((messages) => setConversationMessages(mergeUniqueMessages(messages)))
             .catch(err => console.error("getSnagMessages error", err))
@@ -1494,91 +1500,89 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                 </View>
                                             )}
 
-                                            {isConversationParticipant && (
-                                                <View style={{ gap: 10 }}>
-                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, textTransform: 'uppercase' }}>{t('projectSnags.responseLabel')}</Text>
-                                                    {loadingMessages ? (
-                                                        <ActivityIndicator color={colors.primary} />
-                                                    ) : (conversationMessages.length === 0 && !selectedSnag?.response && (!selectedSnag?.responsePhotoUrls || selectedSnag.responsePhotoUrls.length === 0)) ? (
-                                                        <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.noMessagesYet')}</Text>
-                                                    ) : (
-                                                        <View style={{ gap: 10 }}>
-                                                            {/* Legacy Response Block */}
-                                                            {(selectedSnag?.response || (selectedSnag?.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
-                                                                <View style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+                                            <View style={{ gap: 10 }}>
+                                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.primary, textTransform: 'uppercase' }}>{t('projectSnags.responseLabel')}</Text>
+                                                {loadingMessages ? (
+                                                    <ActivityIndicator color={colors.primary} />
+                                                ) : (conversationMessages.length === 0 && !selectedSnag?.response && (!selectedSnag?.responsePhotoUrls || selectedSnag.responsePhotoUrls.length === 0)) ? (
+                                                    <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectSnags.noMessagesYet')}</Text>
+                                                ) : (
+                                                    <View style={{ gap: 10 }}>
+                                                        {/* Legacy Response Block */}
+                                                        {(selectedSnag?.response || (selectedSnag?.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
+                                                            <View style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+                                                                <View style={{
+                                                                    maxWidth: '86%',
+                                                                    padding: 12,
+                                                                    borderRadius: 16,
+                                                                    backgroundColor: colors.surface,
+                                                                    borderWidth: 1,
+                                                                    borderColor: colors.border,
+                                                                }}>
+                                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>
+                                                                        Response
+                                                                    </Text>
+                                                                    {selectedSnag.response ? (
+                                                                        <Text style={{ fontSize: 13, color: colors.text }}>{selectedSnag.response}</Text>
+                                                                    ) : null}
+                                                                    {selectedSnag.responsePhotoUrls?.map((url, idx) => {
+                                                                        const isAudioFile = isAudio(url);
+                                                                        if (isAudioFile) {
+                                                                            return (
+                                                                                <View key={idx} style={{ marginTop: 8 }}>
+                                                                                    <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                                                </View>
+                                                                            );
+                                                                        } else {
+                                                                            return (
+                                                                                <TouchableOpacity key={idx} onPress={() => setViewPhoto(url)}>
+                                                                                    <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
+                                                                                </TouchableOpacity>
+                                                                            );
+                                                                        }
+                                                                    })}
+                                                                </View>
+                                                            </View>
+                                                        )}
+                                                        {conversationMessages.map((message) => {
+                                                            const isMine = String(message.sender_id) === String(user?.id);
+                                                            return (
+                                                                <View key={message.id} style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
                                                                     <View style={{
                                                                         maxWidth: '86%',
                                                                         padding: 12,
                                                                         borderRadius: 16,
-                                                                        backgroundColor: colors.surface,
+                                                                        backgroundColor: isMine ? colors.primary : colors.surface,
                                                                         borderWidth: 1,
-                                                                        borderColor: colors.border,
+                                                                        borderColor: isMine ? colors.primary : colors.border
                                                                     }}>
-                                                                        <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>
-                                                                            Response
+                                                                        <Text style={{ fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : colors.textMuted, marginBottom: 4 }}>
+                                                                            {message.sender?.name || (isMine ? 'You' : 'User')}
                                                                         </Text>
-                                                                        {selectedSnag.response ? (
-                                                                            <Text style={{ fontSize: 13, color: colors.text }}>{selectedSnag.response}</Text>
+                                                                        {message.text ? <Text style={{ fontSize: 13, color: isMine ? '#fff' : colors.text }}>{message.text}</Text> : null}
+                                                                        {message.attachment_type === 'image' && message.downloadUrl ? (
+                                                                            <TouchableOpacity onPress={() => setViewPhoto(message.downloadUrl!)}>
+                                                                                <Image source={{ uri: message.downloadUrl }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
+                                                                            </TouchableOpacity>
                                                                         ) : null}
-                                                                        {selectedSnag.responsePhotoUrls?.map((url, idx) => {
-                                                                            const isAudioFile = isAudio(url);
-                                                                            if (isAudioFile) {
-                                                                                return (
-                                                                                    <View key={idx} style={{ marginTop: 8 }}>
-                                                                                        <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                                                                    </View>
-                                                                                );
-                                                                            } else {
-                                                                                return (
-                                                                                    <TouchableOpacity key={idx} onPress={() => setViewPhoto(url)}>
-                                                                                        <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
-                                                                                    </TouchableOpacity>
-                                                                                );
-                                                                            }
-                                                                        })}
+                                                                        {message.attachment_type === 'audio' && message.downloadUrl ? (
+                                                                            <View style={{ marginTop: 8 }}>
+                                                                                <VoiceNotePlayer uri={message.downloadUrl} isMe={isMine} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                                                            </View>
+                                                                        ) : null}
+                                                                        <Text style={{ fontSize: 10, color: isMine ? 'rgba(255,255,255,0.8)' : colors.textMuted, marginTop: 6 }}>
+                                                                            {new Date(message.createdAt).toLocaleString()}
+                                                                        </Text>
                                                                     </View>
                                                                 </View>
-                                                            )}
-                                                            {conversationMessages.map((message) => {
-                                                                const isMine = String(message.sender_id) === String(user?.id);
-                                                                return (
-                                                                    <View key={message.id} style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
-                                                                        <View style={{
-                                                                            maxWidth: '86%',
-                                                                            padding: 12,
-                                                                            borderRadius: 16,
-                                                                            backgroundColor: isMine ? colors.primary : colors.surface,
-                                                                            borderWidth: 1,
-                                                                            borderColor: isMine ? colors.primary : colors.border
-                                                                        }}>
-                                                                            <Text style={{ fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : colors.textMuted, marginBottom: 4 }}>
-                                                                                {message.sender?.name || (isMine ? 'You' : 'User')}
-                                                                            </Text>
-                                                                            {message.text ? <Text style={{ fontSize: 13, color: isMine ? '#fff' : colors.text }}>{message.text}</Text> : null}
-                                                                            {message.attachment_type === 'image' && message.downloadUrl ? (
-                                                                                <TouchableOpacity onPress={() => setViewPhoto(message.downloadUrl!)}>
-                                                                                    <Image source={{ uri: message.downloadUrl }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
-                                                                                </TouchableOpacity>
-                                                                            ) : null}
-                                                                            {message.attachment_type === 'audio' && message.downloadUrl ? (
-                                                                                <View style={{ marginTop: 8 }}>
-                                                                                    <VoiceNotePlayer uri={message.downloadUrl} isMe={isMine} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                                                                </View>
-                                                                            ) : null}
-                                                                            <Text style={{ fontSize: 10, color: isMine ? 'rgba(255,255,255,0.8)' : colors.textMuted, marginTop: 6 }}>
-                                                                                {new Date(message.createdAt).toLocaleString()}
-                                                                            </Text>
-                                                                        </View>
-                                                                    </View>
-                                                                );
-                                                            })}
-                                                        </View>
-                                                    )}
-                                                </View>
-                                            )}
+                                                            );
+                                                        })}
+                                                    </View>
+                                                )}
+                                            </View>
 
                                             {/* Linked Attachments Pill */}
-                                            {isConversationParticipant && (selectedSnag.file_snag_links && selectedSnag.file_snag_links.length > 0) ? (
+                                            {(selectedSnag.file_snag_links && selectedSnag.file_snag_links.length > 0) ? (
                                                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, marginBottom: 4 }}>
                                                     <TouchableOpacity
                                                         onPress={() => setShowFilePicker(true)}

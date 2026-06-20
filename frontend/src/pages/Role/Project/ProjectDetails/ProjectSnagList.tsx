@@ -254,6 +254,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
     }
 
     setLoadingMessages(true);
+    setConversationMessages([]);
     getSnagMessages(selectedSnag.id)
       .then(messages => setConversationMessages(mergeUniqueMessages(messages)))
       .catch(() => toast.error(t('failed_update_status')))
@@ -279,12 +280,14 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
     socket.emit('join-project', project.id);
 
-    const onSnagSeen = (data: { snagId: number, seen_at: string }) => {
+    const onSnagSeen = (data: { snagId: number, seen_at: string, project_id?: number }) => {
+      if (data.project_id && Number(data.project_id) !== Number(project.id)) return;
       setSnags(prev => prev.map(s => s.id === data.snagId ? { ...s, seen_at: data.seen_at } : s));
       setSelectedSnag(prev => (prev && prev.id === data.snagId) ? { ...prev, seen_at: data.seen_at } : prev);
     };
 
     const onSnagUpdated = (data: { snag: Snag }) => {
+      if (data.snag && Number(data.snag.project_id) !== Number(project.id)) return;
       setSnags(prev => {
         const idx = prev.findIndex(s => s.id === data.snag.id);
         if (idx !== -1) {
@@ -299,13 +302,15 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
 
     const onConversationMessage = (data: { itemType: 'rfi' | 'snag', itemId: number, message: ConversationMessage }) => {
       if (data.itemType !== 'snag') return;
+      if (data.message && Number(data.message.project_id) !== Number(project.id)) return;
       setConversationMessages(prev => {
         if (!selectedSnag || selectedSnag.id !== data.itemId) return prev;
         return mergeUniqueMessages([...prev, data.message]);
       });
     };
 
-    const onSnagDeleted = (data: { snagId: number }) => {
+    const onSnagDeleted = (data: { snagId: number, project_id?: number }) => {
+      if (data.project_id && Number(data.project_id) !== Number(project.id)) return;
       setSnags(prev => prev.filter(s => s.id !== data.snagId));
       setSelectedSnag(prev => (prev && prev.id === data.snagId) ? null : prev);
     };
@@ -995,96 +1000,94 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   </div>
                 )}
 
-                {isConversationParticipant && (
-                  <div className="pt-4 border-t border-border space-y-3">
-                    <style>{`
-                      .no-scrollbar::-webkit-scrollbar {
-                        display: none;
-                      }
-                    `}</style>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('response_title')}</p>
-                    <div
-                      ref={chatContainerRef}
-                      className="space-y-3 max-h-[320px] overflow-y-auto pr-1 no-scrollbar"
-                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                    >
-                      {loadingMessages ? (
-                        <div className="flex items-center text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2" /> {t('loading')}</div>
-                      ) : (conversationMessages.length === 0 && !selectedSnag?.response && (!selectedSnag?.responsePhotoUrls || selectedSnag.responsePhotoUrls.length === 0)) ? (
-                        <p className="text-xs text-muted-foreground">No messages yet.</p>
-                      ) : (
-                        <>
-                          {/* Legacy Response Block */}
-                          {(selectedSnag?.response || (selectedSnag?.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
-                            <div className="flex justify-start mb-3">
-                              <div className="max-w-[80%] rounded-2xl border border-border bg-card px-3 py-2 shadow-sm">
-                                <p className="text-[10px] font-bold mb-1 text-muted-foreground">
-                                  Response
+                <div className="pt-4 border-t border-border space-y-3">
+                  <style>{`
+                    .no-scrollbar::-webkit-scrollbar {
+                      display: none;
+                    }
+                  `}</style>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('response_title')}</p>
+                  <div
+                    ref={chatContainerRef}
+                    className="space-y-3 max-h-[320px] overflow-y-auto pr-1 no-scrollbar"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  >
+                    {loadingMessages ? (
+                      <div className="flex items-center text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin mr-2" /> {t('loading')}</div>
+                    ) : (conversationMessages.length === 0 && !selectedSnag?.response && (!selectedSnag?.responsePhotoUrls || selectedSnag.responsePhotoUrls.length === 0)) ? (
+                      <p className="text-xs text-muted-foreground">No messages yet.</p>
+                    ) : (
+                      <>
+                        {/* Legacy Response Block */}
+                        {(selectedSnag?.response || (selectedSnag?.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0)) && (
+                          <div className="flex justify-start mb-3">
+                            <div className="max-w-[80%] rounded-2xl border border-border bg-card px-3 py-2 shadow-sm">
+                              <p className="text-[10px] font-bold mb-1 text-muted-foreground">
+                                Response
+                              </p>
+                              {selectedSnag.response && (
+                                <p className="text-sm text-foreground whitespace-pre-wrap break-words">{selectedSnag.response}</p>
+                              )}
+                              {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {selectedSnag.responsePhotoUrls.map((url, idx) => {
+                                    const isAudioFile = isAudio(url);
+                                    if (isAudioFile) {
+                                      return (
+                                        <div key={idx} className="w-full max-w-sm mt-1">
+                                          <VoiceNotePlayer url={url} isMe={false} />
+                                        </div>
+                                      );
+                                    } else {
+                                      return (
+                                        <img
+                                          key={idx}
+                                          src={url}
+                                          alt="Response image"
+                                          className="max-h-36 rounded-lg border border-black/5 cursor-pointer"
+                                          onClick={() => setViewPhoto(url)}
+                                        />
+                                      );
+                                    }
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Chat Messages */}
+                        {conversationMessages.map((message) => {
+                          const isMine = String(message.sender_id) === String(user?.id);
+                          return (
+                            <div key={message.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
+                              <div className={cn("max-w-[80%] rounded-2xl border px-3 py-2 shadow-sm", isMine ? "bg-accent text-accent-foreground border-accent/40" : "bg-card border-border")}>
+                                <p className={cn("text-[10px] font-bold mb-1", isMine ? "text-accent-foreground/80" : "text-muted-foreground")}>
+                                  {message.sender?.name || (isMine ? 'You' : 'User')}
                                 </p>
-                                {selectedSnag.response && (
-                                  <p className="text-sm text-foreground whitespace-pre-wrap break-words">{selectedSnag.response}</p>
+                                {message.text && <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>}
+                                {message.attachment_type === 'image' && message.downloadUrl && (
+                                  <img src={message.downloadUrl} alt={message.file_name || 'Attachment'} className="mt-2 max-h-56 rounded-lg border border-black/5 cursor-pointer" onClick={() => setViewPhoto(message.downloadUrl!)} />
                                 )}
-                                {selectedSnag.responsePhotoUrls && selectedSnag.responsePhotoUrls.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {selectedSnag.responsePhotoUrls.map((url, idx) => {
-                                      const isAudioFile = isAudio(url);
-                                      if (isAudioFile) {
-                                        return (
-                                          <div key={idx} className="w-full max-w-sm mt-1">
-                                            <VoiceNotePlayer url={url} isMe={false} />
-                                          </div>
-                                        );
-                                      } else {
-                                        return (
-                                          <img
-                                            key={idx}
-                                            src={url}
-                                            alt="Response image"
-                                            className="max-h-36 rounded-lg border border-black/5 cursor-pointer"
-                                            onClick={() => setViewPhoto(url)}
-                                          />
-                                        );
-                                      }
-                                    })}
+                                {message.attachment_type === 'audio' && message.downloadUrl && (
+                                  <div className="mt-2">
+                                    <VoiceNotePlayer url={message.downloadUrl} isMe={isMine} />
                                   </div>
                                 )}
+                                <p className={cn("mt-2 text-[10px]", isMine ? "text-accent-foreground/70" : "text-muted-foreground")}>
+                                  {new Date(message.createdAt).toLocaleString()}
+                                </p>
                               </div>
                             </div>
-                          )}
-
-                          {/* Chat Messages */}
-                          {conversationMessages.map((message) => {
-                            const isMine = String(message.sender_id) === String(user?.id);
-                            return (
-                              <div key={message.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
-                                <div className={cn("max-w-[80%] rounded-2xl border px-3 py-2 shadow-sm", isMine ? "bg-accent text-accent-foreground border-accent/40" : "bg-card border-border")}>
-                                  <p className={cn("text-[10px] font-bold mb-1", isMine ? "text-accent-foreground/80" : "text-muted-foreground")}>
-                                    {message.sender?.name || (isMine ? 'You' : 'User')}
-                                  </p>
-                                  {message.text && <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>}
-                                  {message.attachment_type === 'image' && message.downloadUrl && (
-                                    <img src={message.downloadUrl} alt={message.file_name || 'Attachment'} className="mt-2 max-h-56 rounded-lg border border-black/5 cursor-pointer" onClick={() => setViewPhoto(message.downloadUrl!)} />
-                                  )}
-                                  {message.attachment_type === 'audio' && message.downloadUrl && (
-                                    <div className="mt-2">
-                                      <VoiceNotePlayer url={message.downloadUrl} isMe={isMine} />
-                                    </div>
-                                  )}
-                                  <p className={cn("mt-2 text-[10px]", isMine ? "text-accent-foreground/70" : "text-muted-foreground")}>
-                                    {new Date(message.createdAt).toLocaleString()}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </>
-                      )}
-                    </div>
+                          );
+                        })}
+                      </>
+                    )}
                   </div>
-                )}
+                </div>
 
                 {/* Linked Attachments Pill */}
-                {isConversationParticipant && (selectedSnag.file_snag_links && selectedSnag.file_snag_links.length > 0) ? (
+                {(selectedSnag.file_snag_links && selectedSnag.file_snag_links.length > 0) ? (
                   <div className="flex justify-end mt-3 mb-1">
                     <button
                       onClick={() => setShowFilePicker(true)}
