@@ -4,7 +4,7 @@ import { startExportProcess, activeExports } from "../services/exportService.ts"
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-import { projects, users, folders, files, organizations, project_members, room_members, rooms, notifications, manuals, snags, rfis, comments, activities, reports, chat_messages, sequelize, Sequelize } from "../models/index.ts";
+import { projects, users, folders, files, organizations, project_members, room_members, rooms, notifications, manuals, snags, rfis, comments, activities, reports, chat_messages, blocked_users, sequelize, Sequelize } from "../models/index.ts";
 import { Op, fn, col, literal } from "sequelize";
 
 import { checkProjectLimit } from "../utils/subscriptionAccess.ts";
@@ -687,34 +687,133 @@ export const removeProjectMember = async (req: Request, res: Response) => {
             return res.status(400).json({ error: "Only contributors, clients, vendors, and consultants can be removed" });
         }
 
-        await project_members.destroy({
-            where: { project_id: projectId, user_id: userId },
-            transaction: t as any,
-        });
+        const userToBlock = await users.findByPk(userId, { transaction: t as any });
 
-        const projectRooms = await rooms.findAll({
-            where: { project_id: projectId },
-            attributes: ['id'],
-            transaction: t as any,
-        });
+        if (req.query.block === 'true' && userToBlock) {
+            // 1. Add to blocked list
+            if (userToBlock.email || userToBlock.phone_number) {
+                const whereClause: any = { organization_id: authUser.organization_id };
+                if (userToBlock.email && userToBlock.phone_number) {
+                    whereClause[Op.or] = [
+                        { email: userToBlock.email },
+                        { phone_number: userToBlock.phone_number }
+                    ];
+                } else if (userToBlock.email) {
+                    whereClause.email = userToBlock.email;
+                } else {
+                    whereClause.phone_number = userToBlock.phone_number;
+                }
+                const existingBlocked = await blocked_users.findOne({ where: whereClause, transaction: t as any });
+                if (!existingBlocked) {
+                    await blocked_users.create({
+                        organization_id: authUser.organization_id,
+                        email: userToBlock.email || null,
+                        phone_number: userToBlock.phone_number || null
+                    }, { transaction: t as any });
+                }
+            }
 
-        const roomIds = projectRooms.map((room: any) => room.id);
-        if (roomIds.length > 0) {
-            await room_members.destroy({
-                where: { user_id: userId, room_id: { [Op.in]: roomIds } },
+            // 2. Identify projects owned by the Admin's organization
+            const ownedProjects = await projects.findAll({
+                where: { organization_id: authUser.organization_id },
+                attributes: ['id'],
+                transaction: t as any
+            });
+            const ownedProjectIds = ownedProjects.map((p: any) => p.id);
+
+            // 3. Find memberships for this user in THESE projects
+            const memberships = await project_members.findAll({
+                where: { 
+                    user_id: userId,
+                    project_id: { [Op.in]: ownedProjectIds }
+                },
+                attributes: ['project_id'],
                 transaction: t as any,
             });
-        }
+            const affectedProjectIds = memberships.map((m: any) => m.project_id);
 
-        await notifications.destroy({
-            where: { user_id: userId, project_id: projectId },
-            transaction: t as any,
-        });
+            // 4. Remove memberships and associated data ONLY for these projects
+            await project_members.destroy({ 
+                where: { 
+                    user_id: userId, 
+                    project_id: { [Op.in]: ownedProjectIds }
+                }, 
+                transaction: t as any 
+            });
+            
+            if (ownedProjectIds.length > 0) {
+                await room_members.destroy({ 
+                    where: { 
+                        user_id: userId,
+                        room_id: {
+                            [Op.in]: Sequelize.literal(`(SELECT id FROM rooms WHERE project_id IN (${ownedProjectIds.join(',')}))`)
+                        }
+                    }, 
+                    transaction: t as any 
+                });
 
-        try {
-            getIO().to(`project-${projectId}`).emit('project-stats-updated', { projectId: String(projectId) });
-        } catch (ioErr) {
-            console.error('Socket emit error (non-fatal):', ioErr);
+                // Nullify assignees for tasks in these projects
+                await snags.update({ assigned_to: null }, { 
+                    where: { 
+                        assigned_to: userId,
+                        project_id: { [Op.in]: ownedProjectIds }
+                    }, 
+                    transaction: t as any 
+                });
+                
+                await rfis.update({ assigned_to: null }, { 
+                    where: { 
+                        assigned_to: userId,
+                        project_id: { [Op.in]: ownedProjectIds }
+                    }, 
+                    transaction: t as any 
+                });
+            }
+
+            // 5. Remove from organization (un-link)
+            if (userToBlock.organization_id === authUser.organization_id) {
+                await userToBlock.update({ organization_id: null }, { transaction: t as any });
+            }
+
+            // 6. Notify affected projects
+            for (const pId of affectedProjectIds) {
+                try {
+                    getIO().to(`project-${pId}`).emit('project-stats-updated', { projectId: String(pId) });
+                } catch (ioErr) {
+                    console.error('Socket emit error (non-fatal):', ioErr);
+                }
+            }
+        } else {
+            // Normal remove project member logic
+            await project_members.destroy({
+                where: { project_id: projectId, user_id: userId },
+                transaction: t as any,
+            });
+
+            const projectRooms = await rooms.findAll({
+                where: { project_id: projectId },
+                attributes: ['id'],
+                transaction: t as any,
+            });
+
+            const roomIds = projectRooms.map((room: any) => room.id);
+            if (roomIds.length > 0) {
+                await room_members.destroy({
+                    where: { user_id: userId, room_id: { [Op.in]: roomIds } },
+                    transaction: t as any,
+                });
+            }
+
+            await notifications.destroy({
+                where: { user_id: userId, project_id: projectId },
+                transaction: t as any,
+            });
+
+            try {
+                getIO().to(`project-${projectId}`).emit('project-stats-updated', { projectId: String(projectId) });
+            } catch (ioErr) {
+                console.error('Socket emit error (non-fatal):', ioErr);
+            }
         }
 
         await t.commit();

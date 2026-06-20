@@ -133,12 +133,28 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             [
                 { text: t('projectOverview.cancel') as string, style: 'cancel' },
                 {
-                    text: t('projectOverview.remove') as string,
+                    text: t('projectOverview.justRemove') as string,
+                    onPress: async () => {
+                        try {
+                            setRemovingMemberId(member.user.id);
+                            await removeProjectMember(projectId, member.user.id, false);
+                            await refreshMembers();
+                            Alert.alert(t('projectOverview.success') as string, t('projectOverview.accessRemoved') as string);
+                        } catch (e) {
+                            const { message } = parseApiError(e, t('projectOverview.failedRemoveAccess') as string);
+                            Alert.alert(t('projectOverview.error') as string, message);
+                        } finally {
+                            setRemovingMemberId(null);
+                        }
+                    }
+                },
+                {
+                    text: t('projectOverview.blockAndRemove') as string,
                     style: 'destructive',
                     onPress: async () => {
                         try {
                             setRemovingMemberId(member.user.id);
-                            await removeProjectMember(projectId, member.user.id);
+                            await removeProjectMember(projectId, member.user.id, true);
                             await refreshMembers();
                             Alert.alert(t('projectOverview.success') as string, t('projectOverview.accessRemoved') as string);
                         } catch (e) {

@@ -33,12 +33,32 @@ export const inviteUser = async (data: { email?: string, phone_number?: string, 
     }
 };
 
-export const deleteUser = async (id: string | number) => {
+export const deleteUser = async (id: string | number, block?: boolean) => {
     try {
-        const response = await PrivateAxios.delete(`/users/${id}`);
+        const response = await PrivateAxios.delete(`/users/${id}${block ? '?block=true' : ''}`);
         return response.data;
     } catch (error) {
         console.error("deleteUser Error", error);
+        throw error;
+    }
+};
+
+export const getBlockedUsers = async () => {
+    try {
+        const response = await PrivateAxios.get('/users/blocked');
+        return response.data.blockedUsers;
+    } catch (error) {
+        console.error("getBlockedUsers Error", error);
+        throw error;
+    }
+};
+
+export const unblockUser = async (id: string | number) => {
+    try {
+        const response = await PrivateAxios.delete(`/users/blocked/${id}`);
+        return response.data;
+    } catch (error) {
+        console.error("unblockUser Error", error);
         throw error;
     }
 };
