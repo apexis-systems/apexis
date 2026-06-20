@@ -829,7 +829,16 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     />
                     <Feather name="file-text" size={32} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
                     <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'center', paddingHorizontal: 2 }}>{doc.file_name}</Text>
-                    {doc.assignee && (
+                    {doc.assignees && doc.assignees.length > 0 ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2, maxWidth: '100%' }}>
+                            <Text numberOfLines={1} style={{ fontSize: 7, color: colors.textMuted }}>
+                                {doc.assignees.map((a: any) => a.name).join(', ')}
+                            </Text>
+                            {doc.seen_at && (
+                                <Feather name="check-circle" size={8} color="#f97316" />
+                            )}
+                        </View>
+                    ) : doc.assignee && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
                             <Text numberOfLines={1} style={{ fontSize: 7, color: colors.textMuted }}>{doc.assignee.name}</Text>
                             {doc.seen_at && (
@@ -957,7 +966,17 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                             <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
-                            {doc.assignee && (
+                            {doc.assignees && doc.assignees.length > 0 ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
+                                    <Feather name="user" size={8} color={colors.textMuted} />
+                                    <Text numberOfLines={1} style={{ fontSize: 8, color: colors.textMuted, maxWidth: 100 }}>
+                                        {doc.assignees.map((a: any) => a.name).join(', ')}
+                                    </Text>
+                                    {doc.seen_at && (
+                                        <Feather name="check-circle" size={10} color="#f97316" />
+                                    )}
+                                </View>
+                            ) : doc.assignee && (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
                                     <Feather name="user" size={8} color={colors.textMuted} />
                                     <Text style={{ fontSize: 8, color: colors.textMuted }}>{doc.assignee.name}</Text>
@@ -1427,7 +1446,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         }
 
         // Mark as seen if assigned to current user
-        if (doc.assigned_to && String(doc.assigned_to) === String(user?.id) && !doc.seen_at) {
+        const isAssignedToMe = Array.isArray(doc.assigned_to)
+            ? doc.assigned_to.map(String).includes(String(user?.id))
+            : doc.assigned_to && String(doc.assigned_to) === String(user?.id);
+        if (isAssignedToMe && !doc.seen_at) {
             markFileSeen(doc.id).catch(console.error);
         }
     };

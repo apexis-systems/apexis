@@ -24,6 +24,29 @@ interface MulterFile {
     size: number;
 }
 
+const parseAssignedTo = (assigned_to: any): number[] => {
+    let assignedToArray: number[] = [];
+    if (assigned_to) {
+        if (Array.isArray(assigned_to)) {
+            assignedToArray = assigned_to.map((id: any) => parseInt(id, 10)).filter(id => !isNaN(id));
+        } else if (typeof assigned_to === 'string') {
+            const trimmed = assigned_to.trim();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                try {
+                    assignedToArray = JSON.parse(trimmed).map((id: any) => parseInt(id, 10)).filter((id: any) => !isNaN(id));
+                } catch (e) {
+                    assignedToArray = trimmed.split(',').map((id: any) => parseInt(id.trim(), 10)).filter((id: any) => !isNaN(id));
+                }
+            } else if (trimmed) {
+                assignedToArray = trimmed.split(',').map((id: any) => parseInt(id.trim(), 10)).filter((id: any) => !isNaN(id));
+            }
+        } else if (typeof assigned_to === 'number') {
+            assignedToArray = [assigned_to];
+        }
+    }
+    return assignedToArray;
+};
+
 // Helper to check access
 const checkProjectAccess = async (userId: number, projectId: number, role: string, orgId?: number | null) => {
     // 1. Check explicit project membership
@@ -160,7 +183,7 @@ export const confirmScreenshot = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
             location: location || null,
             tags: tags || null,
-            assigned_to: assigned_to ? parseInt(assigned_to, 10) : null,
+            assigned_to: assigned_to ? parseAssignedTo(assigned_to) : null,
         });
 
         // Log Activity
@@ -302,6 +325,8 @@ export const uploadFile = async (req: Request | any, res: Response) => {
 
         await s3Client.send(command);
 
+        const assignedToArray = assigned_to ? parseAssignedTo(assigned_to) : [];
+
         const newFile = await files.create({
             folder_id: finalFolderId,
             project_id: parseInt(project_id, 10),
@@ -313,7 +338,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             created_by: authUser.user_id,
             location: location || null,
             tags: tags || null,
-            assigned_to: assigned_to ? parseInt(assigned_to, 10) : null,
+            assigned_to: assignedToArray.length > 0 ? assignedToArray : null,
         });
 
         const isImage = file_type.startsWith('image/');
@@ -372,7 +397,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
                 }
                 notifiedUserIds.add(member.user_id);
                 if (!shouldSkip) {
-                    const isAssignee = assigned_to && String(member.user_id) === String(assigned_to);
+                    const isAssignee = assignedToArray.includes(member.user_id);
                     await sendNotification({
                         userId: member.user_id,
                         title: isAssignee ? 'New File Assigned to You' : (isImage ? 'New Photo Uploaded' : 'New File Uploaded'),
@@ -526,16 +551,33 @@ export const listFiles = async (req: Request, res: Response) => {
                     model: UsersModel,
                     as: 'creator',
                     attributes: ['id', 'name', 'email']
-                },
-                {
-                    model: UsersModel,
-                    as: 'assignee',
-                    attributes: ['id', 'name', 'email']
                 }
             ]
         });
 
         let filteredFiles = fileData.map((f: any) => f.toJSON());
+
+        // Retrieve and populate assignees array and backwards-compatible assignee object
+        const allAssigneeIds = Array.from(
+            new Set(
+                filteredFiles.flatMap((f: any) => f.assigned_to || [])
+            )
+        );
+        const allAssignees = allAssigneeIds.length > 0
+            ? await UsersModel.findAll({
+                where: { id: { [Op.in]: allAssigneeIds } },
+                attributes: ['id', 'name', 'email']
+            })
+            : [];
+        const assigneeMap = new Map(allAssignees.map((u: any) => [u.id, u.toJSON()]));
+
+        for (const file of filteredFiles) {
+            const fileAssignees = (file.assigned_to || [])
+                .map((id: number) => assigneeMap.get(id))
+                .filter(Boolean);
+            file.assignees = fileAssignees;
+            file.assignee = fileAssignees[0] || null;
+        }
 
         if (authUser.role !== "admin" && authUser.role !== "superadmin") {
             const confidentialFolderIds = folderData.filter((f: any) => f.name.toLowerCase() === 'confidential').map((f: any) => f.id);
@@ -1545,7 +1587,11 @@ export const markFileSeen = async (req: Request, res: Response) => {
         }
 
         // Only mark seen if current user is the assignee
-        if (file.assigned_to && String(file.assigned_to) === String(authUser.user_id)) {
+        const isAssignee = Array.isArray(file.assigned_to)
+            ? file.assigned_to.map(String).includes(String(authUser.user_id))
+            : file.assigned_to && String(file.assigned_to) === String(authUser.user_id);
+
+        if (isAssignee) {
             if (!file.seen_at) {
                 file.seen_at = new Date();
                 await file.save();

@@ -99,7 +99,7 @@ db.projects.hasMany(db.files, { foreignKey: 'project_id' });
 
 // User <-> File (Creator)
 db.files.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
-db.files.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
+// db.files.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
 db.users.hasMany(db.files, { foreignKey: 'created_by' });
 
 // File <-> FileLink
