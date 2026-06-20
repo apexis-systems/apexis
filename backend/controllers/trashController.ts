@@ -35,7 +35,7 @@ export const getTrash = async (req: Request, res: Response) => {
 export const restoreTrash = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        const { type, id } = req.params;
+        const { type, id } = req.params as any;
         const record = await findTrashRecord(type, Number(id));
 
         if (!record) {
@@ -57,7 +57,7 @@ export const restoreTrash = async (req: Request, res: Response) => {
 export const deleteTrashPermanently = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
-        const { type, id } = req.params;
+        const { type, id } = req.params as any;
         const record = await findTrashRecord(type, Number(id));
 
         if (!record) {

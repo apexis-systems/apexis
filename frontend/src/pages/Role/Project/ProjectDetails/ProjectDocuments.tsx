@@ -726,6 +726,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               const isSelected = selectedFolders.has(folder.id);
               const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
               const isArchiveFolder = folder.name.toLowerCase() === 'archive';
+              const isConfidentialFolder = folder.name.toLowerCase() === 'confidential';
               return (
                 <button
                   key={folder.id}
@@ -735,7 +736,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   }}
                   className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-all group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
                 >
-                  {!isSelectionMode && !isArchiveFolder && !isConfirmationFolder && (
+                  {!isSelectionMode && !isArchiveFolder && !isConfirmationFolder && !isConfidentialFolder && (
                     <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
                       {(user.role === 'admin' || user.role === 'superadmin') && (
                         <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded-full p-1 hover:bg-secondary transition-colors">
@@ -770,10 +771,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                     <Archive className="h-8 w-8 text-slate-400" />
                   ) : isConfirmationFolder ? (
                     <CheckCircle2 className="h-8 w-8 text-orange-400" />
+                  ) : isConfidentialFolder ? (
+                    <ShieldAlert className="h-8 w-8 text-rose-500" />
                   ) : (
                     <FolderIcon className="h-8 w-8 text-accent" />
                   )}
-                  <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-slate-600' : isConfirmationFolder ? 'text-orange-600' : 'text-foreground'}`}>
+                  <span className={`text-[10px] font-medium text-center leading-tight line-clamp-2 mt-1 ${isArchiveFolder ? 'text-slate-600' : isConfirmationFolder ? 'text-orange-600' : isConfidentialFolder ? 'text-rose-600' : 'text-foreground'}`}>
                     {isConfirmationFolder ? "Confirmations" : folder.name}
                   </span>
                   <div className="flex items-center gap-1 mt-0.5">

@@ -168,7 +168,11 @@ export default function ProjectManuals({ project }: Props) {
                                     onPress={async () => {
                                         if (!item.downloadUrl) return;
                                         try {
-                                            await Share.share({ title: item.file_name, message: `${item.file_name}\n${item.downloadUrl}`, url: item.downloadUrl });
+                                            await Share.share({
+                                                title: item.file_name,
+                                                message: Platform.OS === 'android' ? `${item.file_name}\n${item.downloadUrl}` : item.file_name,
+                                                url: item.downloadUrl,
+                                            });
                                         } catch { }
                                     }}
                                     style={{ padding: 6 }}

@@ -28,6 +28,7 @@ const CommentThread = ({ targetId, targetType, projectId }: CommentThreadProps) 
   const [mentionIndex, setMentionIndex] = useState(-1);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -41,6 +42,9 @@ const CommentThread = ({ targetId, targetType, projectId }: CommentThreadProps) 
 
   useEffect(() => {
     if (!targetId) return;
+    setNewText('');
+    setReplyTo(null);
+    setShowMentions(false);
     setLoading(true);
     getComments(targetId, targetType)
       .then(setComments)
@@ -139,7 +143,12 @@ const CommentThread = ({ targetId, targetType, projectId }: CommentThreadProps) 
       setNewText('');
       setReplyTo(null);
     } catch (e) { console.error('addComment', e); }
-    finally { setSending(false); }
+    finally {
+      setSending(false);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+    }
   };
 
   const topLevel = comments.filter(c => !c.parent_id);
@@ -198,6 +207,7 @@ const CommentThread = ({ targetId, targetType, projectId }: CommentThreadProps) 
             )}
             <div className="relative">
               <Input
+                ref={inputRef}
                 value={newText}
                 onChange={e => handleTextChange(e.target.value)}
                 onKeyDown={handleKeyDown}

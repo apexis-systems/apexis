@@ -381,7 +381,7 @@ export const getTrashItemsForUser = async (authUser: any, queryOrgId?: string | 
         raw: true,
     });
 
-    const activeProjectsById = new Map(activeProjectIds.map((project: any) => [Number(project.id), project]));
+    const activeProjectsById = new Map<number, any>(activeProjectIds.map((project: any) => [Number(project.id), project]));
     const activeProjectIdList = activeProjectIds.map((project: any) => Number(project.id));
 
     const [deletedFolders, deletedFiles, deletedManuals, deletedRFIs, deletedSnags] = await Promise.all([

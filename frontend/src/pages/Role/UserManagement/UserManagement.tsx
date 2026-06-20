@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { getOrgUsers, inviteUser, getOnboardingLinks, deleteUser, getProjectsUsers } from '@/services/userService';
+import { getOrgUsers, inviteUser, getOnboardingLinks, deleteUser, getProjectsUsers, getBlockedUsers, unblockUser } from '@/services/userService';
 import { getProjects } from '@/services/projectService';
 import { getApiErrorMessage } from '@/helpers/apiError';
 
@@ -34,9 +34,26 @@ const UserManagement = () => {
     const [deleteUserObj, setDeleteUserObj] = useState<any>(null);
     const [deleting, setDeleting] = useState(false);
 
+    // Blocked users state
+    const [activeTab, setActiveTab] = useState<'active' | 'blocked'>('active');
+    const [blockedUsers, setBlockedUsers] = useState<any[]>([]);
+    const [loadingBlocked, setLoadingBlocked] = useState(false);
+
     // Filters
     const [filterProject, setFilterProject] = useState<string>('all');
     const [filterRole, setFilterRole] = useState<string>('all');
+
+    const fetchBlockedUsers = async () => {
+        setLoadingBlocked(true);
+        try {
+            const data = await getBlockedUsers();
+            setBlockedUsers(data || []);
+        } catch (error) {
+            console.error("fetchBlockedUsers error", error);
+        } finally {
+            setLoadingBlocked(false);
+        }
+    };
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -75,6 +92,12 @@ const UserManagement = () => {
         fetchUsers();
         fetchProjects();
     }, []);
+
+    useEffect(() => {
+        if (activeTab === 'blocked') {
+            fetchBlockedUsers();
+        }
+    }, [activeTab]);
 
     if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
         return (
@@ -120,18 +143,32 @@ const UserManagement = () => {
 
 
 
-    const handleDelete = async () => {
+    const handleDelete = async (block: boolean = false) => {
         if (!deleteUserObj) return;
         setDeleting(true);
         try {
-            await deleteUser(deleteUserObj.id);
+            await deleteUser(deleteUserObj.id, block);
             toast.success(t('remove_access_success'));
             setDeleteUserObj(null);
             fetchUsers();
+            if (activeTab === 'blocked') {
+                fetchBlockedUsers();
+            }
         } catch (error: any) {
             toast.error(getApiErrorMessage(error, t('remove_access_error')));
         } finally {
             setDeleting(false);
+        }
+    };
+
+    const handleUnblock = async (id: string | number) => {
+        try {
+            await unblockUser(id);
+            toast.success(t('unblock_success'));
+            fetchBlockedUsers();
+            fetchUsers();
+        } catch (error: any) {
+            toast.error(getApiErrorMessage(error, t('unblock_error')));
         }
     };
 
@@ -245,200 +282,287 @@ const UserManagement = () => {
                 </div>
             )}
 
-            {/* Removed Redundant Access Links Section */}
+            {/* Tab Switcher */}
+            <div className="flex border-b border-border mb-6">
+                <button
+                    onClick={() => setActiveTab('active')}
+                    className={cn(
+                        "px-4 py-2 text-sm font-semibold border-b-2 transition-all",
+                        activeTab === 'active' 
+                            ? "border-accent text-accent" 
+                            : "border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                >
+                    {t('active_members')}
+                </button>
+                <button
+                    onClick={() => setActiveTab('blocked')}
+                    className={cn(
+                        "px-4 py-2 text-sm font-semibold border-b-2 transition-all",
+                        activeTab === 'blocked' 
+                            ? "border-accent text-accent" 
+                            : "border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                >
+                    {t('blocked_users')}
+                </button>
+            </div>
 
-            {loading ? (
-                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
-            ) : (
-                <>
-                    {/* Unified Team Management Hub */}
-                    <div className="flex flex-col gap-4 mb-8 p-6 rounded-2xl border-2 border-accent/10 bg-card shadow-sm">
-                        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-accent/10 rounded-xl">
-                                    <Shield className="h-5 w-5 text-accent" />
+            {activeTab === 'active' ? (
+                loading ? (
+                    <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
+                ) : (
+                    <>
+                        {/* Unified Team Management Hub */}
+                        <div className="flex flex-col gap-4 mb-8 p-6 rounded-2xl border-2 border-accent/10 bg-card shadow-sm">
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-accent/10 rounded-xl">
+                                        <Shield className="h-5 w-5 text-accent" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-base font-bold text-foreground">{t('team_mgmt_hub')}</h2>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{t('filter_access_control')}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h2 className="text-base font-bold text-foreground">{t('team_mgmt_hub')}</h2>
-                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">{t('filter_access_control')}</p>
+                                
+                                <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                                    <div className="w-full md:w-56">
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">{t('project_access')}</label>
+                                        <Select value={filterProject} onValueChange={setFilterProject}>
+                                            <SelectTrigger className="h-10 rounded-xl bg-background border-border hover:border-accent/50 transition-colors">
+                                                <SelectValue placeholder={t('all_projects')} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">{t('all_projects')}</SelectItem>
+                                                {projects.map(p => (
+                                                    <SelectItem key={`filter-proj-${p.id}`} value={String(p.id)}>{p.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="w-full md:w-44">
+                                        <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">{t('team_role')}</label>
+                                        <Select value={filterRole} onValueChange={setFilterRole}>
+                                            <SelectTrigger className="h-10 rounded-xl bg-background border-border hover:border-accent/50 transition-colors">
+                                                <SelectValue placeholder={t('all_roles')} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">{t('all_roles')}</SelectItem>
+                                                <SelectItem value="admin">{t('admin')}</SelectItem>
+                                                <SelectItem value="contributor">{t('contributor')}</SelectItem>
+                                                <SelectItem value="client">{t('client')}</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {(filterProject !== 'all' || filterRole !== 'all') && (
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            onClick={() => { setFilterProject('all'); setFilterRole('all'); }}
+                                            className="h-10 mt-5 text-xs text-muted-foreground hover:text-foreground font-bold"
+                                        >
+                                            {t('reset')}
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
-                            
-                            <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
-                                <div className="w-full md:w-56">
-                                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">{t('project_access')}</label>
-                                    <Select value={filterProject} onValueChange={setFilterProject}>
-                                        <SelectTrigger className="h-10 rounded-xl bg-background border-border hover:border-accent/50 transition-colors">
-                                            <SelectValue placeholder={t('all_projects')} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">{t('all_projects')}</SelectItem>
-                                            {projects.map(p => (
-                                                <SelectItem key={`filter-proj-${p.id}`} value={String(p.id)}>{p.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+
+                            {/* Integrated Access Links */}
+                            {filterProject !== 'all' && projects.find(p => String(p.id) === filterProject) && (
+                                <div className="pt-4 mt-2 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <div className="flex items-center gap-2">
+                                        <Link className="h-3.5 w-3.5 text-accent" />
+                                        <span className="text-xs font-bold text-foreground">{t('project_access_links')}:</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 w-full md:w-auto">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 flex-1 md:flex-initial rounded-xl text-[11px] font-bold border-accent/20 hover:bg-accent/5"
+                                            onClick={() => {
+                                                const p = projects.find(it => String(it.id) === filterProject);
+                                                const deepUrl = `${window.location.origin}/auth/login-redirect?role=contributor&code=${p.contributor_code}`;
+                                                copyToClipboard(deepUrl, 'Contributor');
+                                            }}
+                                        >
+                                            {copied === 'Contributor' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5 text-accent" />}
+                                            {copied === 'Contributor' ? t('copied') : t('copy_contributor_link')}
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 flex-1 md:flex-initial rounded-xl text-[11px] font-bold border-accent/20 hover:bg-accent/5"
+                                            onClick={() => {
+                                                const p = projects.find(it => String(it.id) === filterProject);
+                                                const deepUrl = `${window.location.origin}/auth/login-redirect?role=client&code=${p.client_code}`;
+                                                copyToClipboard(deepUrl, 'Client');
+                                            }}
+                                        >
+                                            {copied === 'Client' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5 text-accent" />}
+                                            {copied === 'Client' ? t('copied') : t('copy_client_link')}
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="w-full md:w-44">
-                                    <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block px-1">{t('team_role')}</label>
-                                    <Select value={filterRole} onValueChange={setFilterRole}>
-                                        <SelectTrigger className="h-10 rounded-xl bg-background border-border hover:border-accent/50 transition-colors">
-                                            <SelectValue placeholder={t('all_roles')} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">{t('all_roles')}</SelectItem>
-                                            <SelectItem value="admin">{t('admin')}</SelectItem>
-                                            <SelectItem value="contributor">{t('contributor')}</SelectItem>
-                                            <SelectItem value="client">{t('client')}</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                {(filterProject !== 'all' || filterRole !== 'all') && (
-                                    <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        onClick={() => { setFilterProject('all'); setFilterRole('all'); }}
-                                        className="h-10 mt-5 text-xs text-muted-foreground hover:text-foreground font-bold"
-                                    >
-                                        {t('reset')}
-                                    </Button>
-                                )}
-                            </div>
+                            )}
                         </div>
 
-                        {/* Integrated Access Links */}
-                        {filterProject !== 'all' && projects.find(p => String(p.id) === filterProject) && (
-                            <div className="pt-4 mt-2 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                <div className="flex items-center gap-2">
-                                    <Link className="h-3.5 w-3.5 text-accent" />
-                                    <span className="text-xs font-bold text-foreground">{t('project_access_links')}:</span>
+                        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="border-b border-border bg-secondary/30">
+                                        <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('member')}</th>
+                                        <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('role')}</th>
+                                        <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('status')}</th>
+                                        <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('joined')}</th>
+                                        <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('actions')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {filteredUsers.map(u => (
+                                        <tr key={u.id} className="hover:bg-secondary/20 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold text-foreground">{u.name || t('invited_user')}</span>
+                                                    <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                        {u.email ? (
+                                                            <><Mail className="h-3 w-3" /> {u.email}</>
+                                                        ) : u.phone_number ? (
+                                                            <><Phone className="h-3 w-3" /> {u.phone_number}</>
+                                                        ) : (
+                                                            <span className="italic opacity-50">{t('no_contact_info')}</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col gap-1.5">
+                                                    {u.role === 'admin' || u.role === 'superadmin' ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[9px] font-bold uppercase text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10 flex items-center gap-1">
+                                                                <Shield className="h-2.5 w-2.5" />
+                                                                {t(u.role)}
+                                                            </span>
+                                                            <span className="text-[10px] font-bold text-muted-foreground">
+                                                                {t('all_projects_label')}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {u.project_members && u.project_members.length > 0 ? (
+                                                                u.project_members.map((pm: any, idx: number) => (
+                                                                    <div key={idx} className="flex items-center gap-2">
+                                                                        <span className="text-[9px] font-bold uppercase text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10">
+                                                                            {t(pm.role)}
+                                                                        </span>
+                                                                        <span className="text-[10px] font-bold text-muted-foreground">
+                                                                            {pm.project?.name || 'Project'}
+                                                                        </span>
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <span className="text-[10px] font-bold uppercase text-muted-foreground italic">{t('no_projects_assigned')}</span>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {(u.email_verified || u.phone_verified) ? (
+                                                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-600 text-[10px] font-bold uppercase w-fit">
+                                                        <CheckCircle2 className="h-3 w-3" /> {t('verified')}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-bold uppercase w-fit">
+                                                        <Clock className="h-3 w-3" /> {t('pending')}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-xs text-muted-foreground font-medium">
+                                                {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {!u.is_primary && u.id !== user.id && u.role !== 'admin' && u.role !== 'superadmin' && (
+                                                    <button onClick={() => setDeleteUserObj(u)} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors">
+                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {filteredUsers.length === 0 && (
+                                <div className="p-12 text-center text-muted-foreground">
+                                    <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                                    {t('no_users_filter')}
                                 </div>
-                                <div className="flex items-center gap-2 w-full md:w-auto">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-9 flex-1 md:flex-initial rounded-xl text-[11px] font-bold border-accent/20 hover:bg-accent/5"
-                                        onClick={() => {
-                                            const p = projects.find(it => String(it.id) === filterProject);
-                                            const deepUrl = `${window.location.origin}/auth/login-redirect?role=contributor&code=${p.contributor_code}`;
-                                            copyToClipboard(deepUrl, 'Contributor');
-                                        }}
-                                    >
-                                        {copied === 'Contributor' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5 text-accent" />}
-                                        {copied === 'Contributor' ? t('copied') : t('copy_contributor_link')}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-9 flex-1 md:flex-initial rounded-xl text-[11px] font-bold border-accent/20 hover:bg-accent/5"
-                                        onClick={() => {
-                                            const p = projects.find(it => String(it.id) === filterProject);
-                                            const deepUrl = `${window.location.origin}/auth/login-redirect?role=client&code=${p.client_code}`;
-                                            copyToClipboard(deepUrl, 'Client');
-                                        }}
-                                    >
-                                        {copied === 'Client' ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-500" /> : <Copy className="h-3.5 w-3.5 mr-1.5 text-accent" />}
-                                        {copied === 'Client' ? t('copied') : t('copy_client_link')}
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
+                            )}
+                        </div>
+                    </>
+                )
+            ) : (
+                loadingBlocked ? (
+                    <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
+                ) : (
                     <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
                         <table className="w-full text-left">
                             <thead>
                                 <tr className="border-b border-border bg-secondary/30">
                                     <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('member')}</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('role')}</th>
                                     <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('status')}</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('joined')}</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Blocked Date</th>
                                     <th className="px-6 py-4 text-right text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('actions')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {filteredUsers.map(u => (
+                                {blockedUsers.map(u => (
                                     <tr key={u.id} className="hover:bg-secondary/20 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-bold text-foreground">{u.name || t('invited_user')}</span>
-                                            <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                                {u.email ? (
-                                                    <><Mail className="h-3 w-3" /> {u.email}</>
-                                                ) : u.phone_number ? (
-                                                    <><Phone className="h-3 w-3" /> {u.phone_number}</>
-                                                ) : (
-                                                    <span className="italic opacity-50">{t('no_contact_info')}</span>
-                                                )}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col gap-1.5">
-                                            {u.role === 'admin' || u.role === 'superadmin' ? (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[9px] font-bold uppercase text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10 flex items-center gap-1">
-                                                        <Shield className="h-2.5 w-2.5" />
-                                                        {t(u.role)}
-                                                    </span>
-                                                    <span className="text-[10px] font-bold text-muted-foreground">
-                                                        {t('all_projects_label')}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    {u.project_members && u.project_members.length > 0 ? (
-                                                        u.project_members.map((pm: any, idx: number) => (
-                                                            <div key={idx} className="flex items-center gap-2">
-                                                                <span className="text-[9px] font-bold uppercase text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/10">
-                                                                    {t(pm.role)}
-                                                                </span>
-                                                                <span className="text-[10px] font-bold text-muted-foreground">
-                                                                    {pm.project?.name || 'Project'}
-                                                                </span>
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-[10px] font-bold uppercase text-muted-foreground italic">{t('no_projects_assigned')}</span>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        {(u.email_verified || u.phone_verified) ? (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-600 text-[10px] font-bold uppercase w-fit">
-                                                <CheckCircle2 className="h-3 w-3" /> {t('verified')}
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-foreground">
+                                                    {u.email || u.phone_number || 'Blocked User'}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                    {u.email ? (
+                                                        <><Mail className="h-3 w-3" /> {u.email}</>
+                                                    ) : u.phone_number ? (
+                                                        <><Phone className="h-3 w-3" /> {u.phone_number}</>
+                                                    ) : null}
+                                                </span>
                                             </div>
-                                        ) : (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-bold uppercase w-fit">
-                                                <Clock className="h-3 w-3" /> {t('pending')}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold uppercase w-fit">
+                                                Blocked
                                             </div>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4 text-xs text-muted-foreground font-medium">
-                                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        {!u.is_primary && u.id !== user.id && u.role !== 'admin' && u.role !== 'superadmin' && (
-                                            <button onClick={() => setDeleteUserObj(u)} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors">
-                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {filteredUsers.length === 0 && (
-                        <div className="p-12 text-center text-muted-foreground">
-                            <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                            {t('no_users_filter')}
-                        </div>
-                    )}
-                </div>
-            </>
-        )}
+                                        </td>
+                                        <td className="px-6 py-4 text-xs text-muted-foreground font-medium">
+                                            {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-8 rounded-lg border-accent/20 hover:bg-accent/5 font-semibold text-xs text-accent"
+                                                onClick={() => handleUnblock(u.id)}
+                                            >
+                                                {t('unblock')}
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {blockedUsers.length === 0 && (
+                            <div className="p-12 text-center text-muted-foreground">
+                                <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                                No blocked users found.
+                            </div>
+                        )}
+                    </div>
+                )
+            )}
 
             {/* Delete Confirmation */}
             <Dialog open={!!deleteUserObj} onOpenChange={(open) => !open && setDeleteUserObj(null)}>
@@ -449,15 +573,23 @@ const UserManagement = () => {
                             {t('remove_access_confirm').replace('{name}', deleteUserObj?.name || deleteUserObj?.email || deleteUserObj?.phone_number || '')}
                         </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter className="gap-2 sm:gap-0">
+                    <DialogFooter className="gap-2 flex flex-col sm:flex-row sm:justify-end">
                         <Button variant="ghost" onClick={() => setDeleteUserObj(null)} disabled={deleting}>{t('cancel')}</Button>
                         <Button
-                            variant="destructive"
-                            onClick={handleDelete}
+                            variant="outline"
+                            onClick={() => handleDelete(false)}
                             disabled={deleting}
-                            className="rounded-xl px-6"
+                            className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
                         >
-                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('remove_access_button')}
+                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('just_delete')}
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => handleDelete(true)}
+                            disabled={deleting}
+                            className="rounded-xl px-6 bg-red-600 hover:bg-red-700"
+                        >
+                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('block_and_delete')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

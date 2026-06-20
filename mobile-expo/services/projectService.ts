@@ -98,9 +98,9 @@ export const getMemberForTag = async (id: string | number) =>{
     }
 }
 
-export const removeProjectMember = async (projectId: string | number, userId: string | number) => {
+export const removeProjectMember = async (projectId: string | number, userId: string | number, block?: boolean) => {
     try {
-        const response = await PrivateAxios.delete(`/projects/${projectId}/members/${userId}`);
+        const response = await PrivateAxios.delete(`/projects/${projectId}/members/${userId}${block ? '?block=true' : ''}`);
         return response.data;
     } catch (error) {
         console.error("removeProjectMember Error", error);
