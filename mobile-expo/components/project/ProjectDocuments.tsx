@@ -22,7 +22,7 @@ import { WebView } from 'react-native-webview';
 import { getFolderRFIs, getRFIAssignees, createRFI } from '@/services/rfiService';
 import { getFolderSnags, getAssignees as getSnagAssignees, createSnag } from '@/services/snagService';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { getComments, addComment as addCommentApi, type CommentThread } from '@/services/commentService';
+import { getComments, addComment as addCommentApi, deleteComment as deleteCommentApi, updateComment as updateCommentApi, type CommentThread } from '@/services/commentService';
 import { getMemberForTag } from '@/services/projectService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSocket } from '@/contexts/SocketContext';
@@ -306,6 +306,98 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [replyTo, setReplyTo] = useState<number | null>(null);
     const [commentLoading, setCommentLoading] = useState(false);
     const [addingComment, setAddingComment] = useState(false);
+    const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+    const [editingCommentText, setEditingCommentText] = useState('');
+    const [editSending, setEditSending] = useState(false);
+    const [commentTick, setCommentTick] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => setCommentTick(t => t + 1), 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const canEditOrDeleteComment = (c: CommentThread) => {
+        if (!user || String(c.user_id) !== String(user.id)) return false;
+        if (c.is_deleted) return false;
+        const baseTime = c.edited_at ? new Date(c.edited_at) : new Date(c.createdAt);
+        const diffMs = Date.now() - baseTime.getTime();
+        return diffMs <= 5 * 60 * 1000;
+    };
+
+    const handleEditCommentSave = async (id: number) => {
+        if (!editingCommentText.trim()) return;
+        setEditSending(true);
+        try {
+            const updated = await updateCommentApi(id, editingCommentText.trim());
+            const updateInList = (list: CommentThread[]): CommentThread[] => {
+                return list.map(item => {
+                    if (item.id === id) {
+                        return { ...item, ...updated };
+                    }
+                    if (item.replies && item.replies.length > 0) {
+                        return { ...item, replies: updateInList(item.replies) };
+                    }
+                    return item;
+                });
+            };
+            setDocComments(prev => updateInList(prev));
+            setEditingCommentId(null);
+            setEditingCommentText('');
+        } catch (e: any) {
+            console.error('Failed to update comment:', e);
+            Alert.alert("Error", e.response?.data?.error || "Failed to update comment");
+        } finally {
+            setEditSending(false);
+        }
+    };
+
+    const handleCommentDelete = async (id: number) => {
+        Alert.alert(
+            "Delete Comment",
+            "Are you sure you want to delete this comment?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const updated = await deleteCommentApi(id);
+                            const updateInList = (list: CommentThread[]): CommentThread[] => {
+                                return list.map(item => {
+                                    if (item.id === id) {
+                                        return { ...item, ...updated };
+                                    }
+                                    if (item.replies && item.replies.length > 0) {
+                                        return { ...item, replies: updateInList(item.replies) };
+                                    }
+                                    return item;
+                                });
+                            };
+                            setDocComments(prev => updateInList(prev));
+                        } catch (e: any) {
+                            console.error('Failed to delete comment:', e);
+                            Alert.alert("Error", e.response?.data?.error || "Failed to delete comment");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const formatCommentTime = (dateStr: string) => {
+        try {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch (e) {
+            return dateStr;
+        }
+    };
     const [projectMembers, setProjectMembers] = useState<any[]>([]);
     const [mentionQuery, setMentionQuery] = useState('');
     const [mentionStartIndex, setMentionStartIndex] = useState(-1);
@@ -670,6 +762,99 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             }
         }
         return result;
+    };
+
+    const renderCommentBubble = (c: CommentThread, isReply = false) => {
+        const isEditing = editingCommentId === c.id;
+        const editable = canEditOrDeleteComment(c);
+
+        return (
+            <View key={c.id} style={{ backgroundColor: isReply ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.08)', borderRadius: 8, padding: 8, marginLeft: isReply ? 12 : 0, marginTop: isReply ? 4 : 0, marginBottom: isReply ? 0 : 8 }}>
+                {/* Name, time and actions row */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>{c.user?.name || t('projectDocuments.user')}</Text>
+                        <Text style={{ color: '#888', fontSize: 8 }}>{formatCommentTime(c.createdAt)}</Text>
+                        {c.is_edited && <Text style={{ color: colors.primary, fontSize: 8, opacity: 0.7 }}>({t('projectDocuments.edited', 'Edited')})</Text>}
+                    </View>
+                    
+                    {/* Buttons / Actions */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        {!isReply && !c.is_deleted && (
+                            <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                                <Text style={{ color: '#888', fontSize: 9 }}>↩ {t('projectDocuments.reply')}</Text>
+                            </TouchableOpacity>
+                        )}
+                        {editable && (
+                            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                                <TouchableOpacity style={{ padding: 4 }} onPress={() => { setEditingCommentId(c.id); setEditingCommentText(c.text); }}>
+                                    <Feather name="edit-2" size={14} color="#aaa" />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={{ padding: 4 }} onPress={() => handleCommentDelete(c.id)}>
+                                    <Feather name="trash-2" size={14} color="#ff6b6b" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+                </View>
+
+                {/* Body / Edit input */}
+                {isEditing ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <TextInput
+                            value={editingCommentText}
+                            onChangeText={setEditingCommentText}
+                            style={{ flex: 1, height: 32, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, color: '#fff', fontSize: 12 }}
+                            autoFocus
+                        />
+                        <TouchableOpacity style={{ padding: 6 }} onPress={() => handleEditCommentSave(c.id)} disabled={editSending}>
+                            <Feather name="check" size={18} color="#4caf50" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={{ padding: 6 }} onPress={() => { setEditingCommentId(null); setEditingCommentText(''); }}>
+                            <Feather name="x" size={18} color="#f44336" />
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <View style={{ marginTop: 2 }}>
+                        {c.is_deleted ? (
+                            <View>
+                                <Text style={{ textDecorationLine: 'line-through', fontStyle: 'italic', color: '#666', fontSize: 11 }}>
+                                    {renderCommentText(c.text)}
+                                </Text>
+                                <View style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(244,67,54,0.15)', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, marginTop: 4 }}>
+                                    <Text style={{ fontSize: 8, color: '#ff6b6b', fontWeight: 'bold' }}>
+                                        Deleted • {formatCommentTime(c.deleted_at || c.createdAt)}
+                                    </Text>
+                                </View>
+                            </View>
+                        ) : c.is_edited && c.edit_history && c.edit_history.length > 0 ? (
+                            <View style={{ borderLeftWidth: 1.5, borderLeftColor: 'rgba(255,165,0,0.3)', paddingLeft: 6, marginTop: 2 }}>
+                                {c.edit_history.map((hist, idx) => (
+                                    <View key={idx} style={{ marginBottom: 4 }}>
+                                        <Text style={{ fontSize: 10, color: '#888' }}>
+                                            Prev: {renderCommentText(hist.text)}
+                                        </Text>
+                                        <Text style={{ fontSize: 7, color: '#555', fontStyle: 'italic' }}>
+                                            Edited at {formatCommentTime(hist.editedAt)}
+                                        </Text>
+                                    </View>
+                                ))}
+                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '500', marginTop: 2 }}>
+                                    Current: {renderCommentText(c.text)}
+                                </Text>
+                                <Text style={{ fontSize: 7, color: '#777', fontStyle: 'italic', marginTop: 2 }}>
+                                    Last updated at {formatCommentTime(c.edited_at || c.createdAt)}
+                                </Text>
+                            </View>
+                        ) : (
+                            <Text style={{ color: '#ddd', fontSize: 11 }}>
+                                {renderCommentText(c.text)}
+                            </Text>
+                        )}
+                    </View>
+                )}
+            </View>
+        );
     };
 
     const handleAddComment = async () => {
@@ -2575,25 +2760,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         )}
                                         {docComments.map((c: any) => (
                                             <View key={c.id} style={{ marginBottom: 12 }}>
-                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
-                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>{c.user?.name || t('projectDocuments.user')}</Text>
-                                                        <TouchableOpacity onPress={() => setReplyTo(c.id)}>
-                                                            <Text style={{ color: '#888', fontSize: 10 }}>↩ {t('projectDocuments.reply')}</Text>
-                                                        </TouchableOpacity>
-                                                    </View>
-                                                    <Text style={{ color: '#eee', fontSize: 12, lineHeight: 18 }}>
-                                                        {renderCommentText(c.text)}
-                                                    </Text>
-                                                </View>
-                                                {c.replies?.map((r: any) => (
-                                                    <View key={r.id} style={{ marginLeft: 16, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 8, borderLeftWidth: 2, borderLeftColor: colors.primary }}>
-                                                        <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700', marginBottom: 2 }}>{r.user?.name || t('projectDocuments.user')}</Text>
-                                                        <Text style={{ color: '#ccc', fontSize: 11, lineHeight: 16 }}>
-                                                            {renderCommentText(r.text)}
-                                                        </Text>
-                                                    </View>
-                                                ))}
+                                                {renderCommentBubble(c, false)}
+                                                {c.replies?.map((r: any) => renderCommentBubble(r, true))}
                                             </View>
                                         ))}
                                     </ScrollView>

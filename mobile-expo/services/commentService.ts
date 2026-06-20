@@ -11,7 +11,13 @@ export const addComment = async (fileId: string | number, text: string, parentId
 };
 
 export const deleteComment = async (id: string | number) => {
-    await PrivateAxios.delete(`/comments/${id}`);
+    const res = await PrivateAxios.delete(`/comments/${id}`);
+    return res.data.comment;
+};
+
+export const updateComment = async (id: string | number, text: string) => {
+    const res = await PrivateAxios.put(`/comments/${id}`, { text });
+    return res.data.comment;
 };
 
 export interface CommentThread {
@@ -23,4 +29,9 @@ export interface CommentThread {
     createdAt: string;
     user: { id: number; name: string; email: string };
     replies: CommentThread[];
+    is_deleted?: boolean;
+    deleted_at?: string;
+    is_edited?: boolean;
+    edited_at?: string;
+    edit_history?: { text: string; editedAt: string }[];
 }
