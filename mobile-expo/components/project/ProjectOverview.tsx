@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Text, TextInput } from '@/components/ui/AppText';
 import * as Clipboard from 'expo-clipboard';
+import * as Contacts from 'expo-contacts';
 import { Feather } from '@expo/vector-icons';
 import { Project, UserRole } from '@/types';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -76,6 +77,46 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
     const [showFolderPicker, setShowFolderPicker] = useState(false);
     const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]);
+
+    const handleSelectContact = async () => {
+        try {
+            const { status } = await Contacts.requestPermissionsAsync();
+            if (status === 'granted') {
+                const contact = await Contacts.presentContactPickerAsync();
+                if (contact) {
+                    const phoneNumbers = contact.phoneNumbers || [];
+                    const emails = contact.emails || [];
+                    
+                    if (phoneNumbers.length > 0) {
+                        const number = phoneNumbers[0].number || '';
+                        const cleaned = number.replace(/[^\d+]/g, '');
+                        
+                        if (cleaned.startsWith('+')) {
+                            const sortedCountries = [...countries].sort((a, b) => b.code.length - a.code.length);
+                            const foundCountry = sortedCountries.find(c => cleaned.startsWith(c.code));
+                            if (foundCountry) {
+                                setSelectedCountry(foundCountry);
+                                setInviteEmail(cleaned.slice(foundCountry.code.length));
+                            } else {
+                                setInviteEmail(cleaned);
+                            }
+                        } else {
+                            setInviteEmail(cleaned);
+                        }
+                    } else if (emails.length > 0) {
+                        setInviteEmail(emails[0].email || '');
+                    } else {
+                        Alert.alert('No Contact Info', 'This contact has no phone number or email.');
+                    }
+                }
+            } else {
+                Alert.alert('Permission Denied', 'Permission to access contacts was denied. Please allow contact permissions in system settings.');
+            }
+        } catch (error) {
+            console.error('Error selecting contact:', error);
+            Alert.alert('Error', 'Could not select contact.');
+        }
+    };
 
     useEffect(() => {
         if (!memberModalType || !projectId) return;
@@ -1092,6 +1133,23 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                             fontSize: 14,
                                         }}
                                     />
+                                    <TouchableOpacity
+                                        onPress={handleSelectContact}
+                                        style={{
+                                            height: 48,
+                                            width: 48,
+                                            backgroundColor: colors.surface,
+                                            borderWidth: 1,
+                                            borderColor: colors.border,
+                                            borderRadius: 12,
+                                            marginLeft: 8,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Feather name="users" size={20} color={colors.primary} />
+                                    </TouchableOpacity>
                                 </View>
                             </View>
 

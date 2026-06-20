@@ -345,7 +345,8 @@
             "selectFolders": "फोल्डर चुनें",
             "sendInvitation": "निमंत्रण भेजें",
             "inviteConsultantVendor": "वेंडर को आमंत्रित करें",
-            "inviteVendor": "वेंडर को आमंत्रित करें"
+            "inviteVendor": "वेंडर को आमंत्रित करें",
+            "selectFromContacts": "संपर्क सूची से चुनें"
         },
         "projectSnags": {
             "successTitle": "सफलता",

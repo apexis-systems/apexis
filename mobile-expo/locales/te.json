@@ -345,7 +345,8 @@
             "selectFolders": "ఫోల్డర్‌లను ఎంచుకోండి",
             "sendInvitation": "ఆహ్వానాన్ని పంపండి",
             "inviteConsultantVendor": "వెండర్‌ను ఆహ్వానించండి",
-            "inviteVendor": "వెండర్‌ను ఆహ్వానించండి"
+            "inviteVendor": "వెండర్‌ను ఆహ్వానించండి",
+            "selectFromContacts": "పరిచయాల నుండి ఎంచుకోండి"
         },
         "projectSnags": {
             "successTitle": "విజయం",
