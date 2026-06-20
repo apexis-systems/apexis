@@ -10,6 +10,11 @@ export interface Comment {
     user?: { id: number; name: string };
     replies?: Comment[];
     createdAt: string;
+    is_deleted?: boolean;
+    deleted_at?: string;
+    is_edited?: boolean;
+    edited_at?: string;
+    edit_history?: { text: string; editedAt: string }[];
 }
 
 export const getComments = async (
@@ -35,3 +40,19 @@ export const addComment = async (data: {
     });
     return res.data.comment;
 };
+
+export const updateComment = async (
+    id: number | string,
+    text: string
+): Promise<Comment> => {
+    const res = await PrivateAxios.put(`/comments/${id}`, { text });
+    return res.data.comment;
+};
+
+export const deleteComment = async (
+    id: number | string
+): Promise<Comment> => {
+    const res = await PrivateAxios.delete(`/comments/${id}`);
+    return res.data.comment;
+};
+

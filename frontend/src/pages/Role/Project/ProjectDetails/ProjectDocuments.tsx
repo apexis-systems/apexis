@@ -835,7 +835,19 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       {formatFileSize(doc.file_size_mb)}
                     </span>
 
-                    {doc.assignee && (
+                    {doc.assignees && doc.assignees.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 mt-1 max-w-[90%]">
+                        {doc.assignees.map((assignee: any) => (
+                          <div key={assignee.id} className="flex items-center gap-0.5 bg-secondary/50 px-1 py-0.5 rounded-full border border-border/50">
+                            <UserIcon className="h-2 w-2 text-muted-foreground" />
+                            <span className="text-[8px] font-medium truncate text-muted-foreground max-w-[50px]">{assignee.name}</span>
+                            {doc.seen_at && (
+                              <CheckCheck className="h-2 w-2 text-orange-500 ml-0.5" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : doc.assignee && (
                       <div className="flex items-center gap-1 mt-1 bg-secondary/50 px-1.5 py-0.5 rounded-full border border-border/50 max-w-[90%]">
                         <UserIcon className="h-2 w-2 text-muted-foreground" />
                         <span className="text-[8px] font-medium truncate text-muted-foreground">{doc.assignee.name}</span>
@@ -943,7 +955,19 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           {formatFileSize(doc.file_size_mb)}
                         </p>
                       </button>
-                      {doc.assignee && (
+                      {doc.assignees && doc.assignees.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
+                          {doc.assignees.map((assignee: any) => (
+                            <div key={assignee.id} className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
+                              <UserIcon className="h-2.5 w-2.5 text-muted-foreground" />
+                              <span className="text-[9px] font-medium text-muted-foreground">{assignee.name}</span>
+                              {doc.seen_at && (
+                                <CheckCheck className="h-3 w-3 text-orange-500 ml-0.5" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : doc.assignee && (
                         <div className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
                           <UserIcon className="h-2.5 w-2.5 text-muted-foreground" />
                           <span className="text-[9px] font-medium text-muted-foreground">{doc.assignee.name}</span>

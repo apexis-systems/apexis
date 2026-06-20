@@ -158,10 +158,75 @@ export const deleteComment = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'Forbidden' });
         }
 
-        await comment.destroy();
-        res.json({ message: 'Comment deleted' });
+        const baseTime = c.edited_at ? new Date(c.edited_at) : new Date(c.createdAt);
+        const diffMs = Date.now() - baseTime.getTime();
+        if (diffMs > 5 * 60 * 1000) {
+            return res.status(400).json({ error: 'Comments can only be deleted within 5 minutes of posting or latest update' });
+        }
+
+        c.is_deleted = true;
+        c.deleted_at = new Date();
+        await c.save();
+
+        const withUser = await comments.findByPk(c.id, {
+            include: [{ model: users, as: 'user', attributes: ['id', 'name', 'email'] }],
+        });
+
+        res.json({ message: 'Comment deleted', comment: withUser });
     } catch (error) {
         console.error('deleteComment error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+export const updateComment = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        const { id } = req.params;
+        const { text } = req.body;
+
+        if (!text || !text.trim()) {
+            return res.status(400).json({ error: 'Comment text is required' });
+        }
+
+        const comment = await comments.findByPk(id);
+        if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+        const c = comment as any;
+        if (c.user_id !== authUser.user_id && authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        if (c.is_deleted) {
+            return res.status(400).json({ error: 'Cannot update a deleted comment' });
+        }
+
+        const baseTime = c.edited_at ? new Date(c.edited_at) : new Date(c.createdAt);
+        const diffMs = Date.now() - baseTime.getTime();
+        if (diffMs > 5 * 60 * 1000) {
+            return res.status(400).json({ error: 'Comments can only be updated within 5 minutes of posting or latest update' });
+        }
+
+        const currentHistory = Array.isArray(c.edit_history) ? c.edit_history : [];
+        c.edit_history = [
+            ...currentHistory,
+            { text: c.text, editedAt: new Date() }
+        ];
+        c.changed('edit_history', true);
+
+        c.text = text.trim();
+        c.is_edited = true;
+        c.edited_at = new Date();
+        await c.save();
+
+        const withUser = await comments.findByPk(c.id, {
+            include: [{ model: users, as: 'user', attributes: ['id', 'name', 'email'] }],
+        });
+
+        res.json({ message: 'Comment updated', comment: withUser });
+    } catch (error) {
+        console.error('updateComment error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+

@@ -87,7 +87,7 @@ export const inviteUser = async (req: Request, res: Response) => {
             isNewUser = true;
         } else {
             // User exists.
-            if (user.organization_id && user.organization_id !== authUser.organization_id) {
+            if (role !== 'vendor' && user.organization_id && user.organization_id !== authUser.organization_id) {
                 return res.status(400).json({
                     error: "User is already registered with another organization. Cross-organization invitations are not permitted for security reasons."
                 });

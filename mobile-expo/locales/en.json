@@ -333,7 +333,7 @@
             "shareInviteMessage": "You've been invited to access the project \"{{projectName}}\" on Apexis as a \"{{role}}\".\n\nClick the link below to securely login to your project:\n{{url}}",
             "inviteContributor": "Invite Contributor",
             "invitationLinkGenerated": "Invitation Link Generated!",
-            "shareInviteSub": "Share this secure link with the consultant/vendor so they can access the project.",
+            "shareInviteSub": "Share this secure link with the vendor so they can access the project.",
             "close": "Close",
             "emailOrPhone": "Email or Phone Number",
             "roleType": "Role Type",
@@ -344,7 +344,8 @@
             "manageFolderPermissionsCount": "Manage Folder Permissions ({{count}})",
             "selectFolders": "Select Folders",
             "sendInvitation": "Send Invitation",
-            "inviteConsultantVendor": "Invite Consultant / Vendor",
+            "inviteConsultantVendor": "Invite Vendor",
+            "inviteVendor": "Invite Vendor",
             "selectFromContacts": "Select from contacts"
         },
         "projectSnags": {

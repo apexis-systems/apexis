@@ -100,7 +100,7 @@ export default function UploadScreen() {
     const [folders, setFolders] = useState<any[]>([]);
     const [photoLocation, setPhotoLocation] = useState('');
     const [photoTags, setPhotoTags] = useState('');
-    const [assignedTo, setAssignedTo] = useState<string | null>(null);
+    const [assignedToIds, setAssignedToIds] = useState<string[]>([]);
     const [projectMembers, setProjectMembers] = useState<any[]>([]);
 
     // State: Folder Browse (for nested selection)
@@ -673,7 +673,7 @@ export default function UploadScreen() {
                 formData.append('file_name', `Scan_${new Date().toLocaleDateString().replace(/\//g, '-')}`);
                 if (photoLocation) formData.append('location', photoLocation);
                 if (photoTags) formData.append('tags', photoTags);
-                if (assignedTo) formData.append('assigned_to', assignedTo);
+                if (assignedToIds.length > 0) formData.append('assigned_to', JSON.stringify(assignedToIds));
                 formData.append('is_doc_mode', String(isDocMode));
                 formData.append('skipActivity', 'true');
 
@@ -716,7 +716,7 @@ export default function UploadScreen() {
                     formData.append('skipActivity', 'true');
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
-                    if (assignedTo) formData.append('assigned_to', assignedTo);
+                    if (assignedToIds.length > 0) formData.append('assigned_to', JSON.stringify(assignedToIds));
 
                     formData.append('file', {
                         uri: item.asset.uri,
@@ -800,6 +800,7 @@ export default function UploadScreen() {
         setMode('capture');
         setPhotoLocation('');
         setPhotoTags('');
+        setAssignedToIds([]);
 
         // If we came from a specific project via params, don't clear the selected project/folder
         if (!params.projectId) {
@@ -1318,12 +1319,14 @@ export default function UploadScreen() {
                                                 justifyContent: 'space-between'
                                             }}
                                         >
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
                                                 <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary + '10', alignItems: 'center', justifyContent: 'center' }}>
                                                     <Feather name="user" size={14} color={colors.primary} />
                                                 </View>
-                                                <Text style={{ fontSize: 14, color: assignedTo ? colors.text : colors.textMuted }}>
-                                                    {assignedTo ? projectMembers.find(m => String(m.user.id) === String(assignedTo))?.user?.name : t('upload.selectAssignee')}
+                                                <Text numberOfLines={1} style={{ fontSize: 14, color: assignedToIds.length > 0 ? colors.text : colors.textMuted, flex: 1 }}>
+                                                    {assignedToIds.length > 0 
+                                                        ? projectMembers.filter(m => assignedToIds.includes(String(m.user.id))).map(m => m.user.name).join(', ') 
+                                                        : t('upload.selectAssignee')}
                                                 </Text>
                                             </View>
                                             <Feather name="chevron-down" size={18} color={colors.textMuted} />
@@ -1425,32 +1428,35 @@ export default function UploadScreen() {
                             <ScrollView showsVerticalScrollIndicator={false} style={{ marginHorizontal: -4 }}>
                                 <TouchableOpacity
                                     onPress={() => {
-                                        setAssignedTo(null);
-                                        setMemberPickerVisible(false);
+                                        setAssignedToIds([]);
                                     }}
                                     style={{
                                         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                                         paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4,
-                                        backgroundColor: !assignedTo ? colors.primary + '10' : 'transparent',
+                                        backgroundColor: assignedToIds.length === 0 ? colors.primary + '10' : 'transparent',
                                     }}
                                 >
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: !assignedTo ? colors.primary : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}>
-                                            <Feather name="user-x" size={20} color={!assignedTo ? '#fff' : colors.textMuted} />
+                                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: assignedToIds.length === 0 ? colors.primary : colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border }}>
+                                            <Feather name="user-x" size={20} color={assignedToIds.length === 0 ? '#fff' : colors.textMuted} />
                                         </View>
-                                        <Text style={{ fontSize: 15, fontWeight: !assignedTo ? '700' : '600', color: !assignedTo ? colors.primary : colors.text }}>{t('upload.unassigned')}</Text>
+                                        <Text style={{ fontSize: 15, fontWeight: assignedToIds.length === 0 ? '700' : '600', color: assignedToIds.length === 0 ? colors.primary : colors.text }}>{t('upload.unassigned')}</Text>
                                     </View>
-                                    {!assignedTo && <Feather name="check-circle" size={20} color={colors.primary} />}
+                                    {assignedToIds.length === 0 && <Feather name="check-circle" size={20} color={colors.primary} />}
                                 </TouchableOpacity>
 
                                 {projectMembers.map((m) => {
-                                    const isSelected = String(assignedTo) === String(m.user.id);
+                                    const isSelected = assignedToIds.includes(String(m.user.id));
                                     return (
                                         <TouchableOpacity
                                             key={m.user.id}
                                             onPress={() => {
-                                                setAssignedTo(String(m.user.id));
-                                                setMemberPickerVisible(false);
+                                                const userId = String(m.user.id);
+                                                setAssignedToIds(prev => 
+                                                    prev.includes(userId) 
+                                                        ? prev.filter(id => id !== userId) 
+                                                        : [...prev, userId]
+                                                );
                                             }}
                                             style={{
                                                 flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -1472,6 +1478,20 @@ export default function UploadScreen() {
                                     );
                                 })}
                             </ScrollView>
+
+                            <TouchableOpacity
+                                onPress={() => setMemberPickerVisible(false)}
+                                style={{
+                                    height: 48,
+                                    borderRadius: 14,
+                                    backgroundColor: colors.primary,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginTop: 16
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Done</Text>
+                            </TouchableOpacity>
                         </View>
                     </TouchableOpacity>
                 </Modal>

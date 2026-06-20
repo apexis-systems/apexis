@@ -27,6 +27,29 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: true,
             },
+            is_deleted: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            deleted_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+            is_edited: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            edited_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+            edit_history: {
+                type: DataTypes.JSONB,
+                allowNull: false,
+                defaultValue: [],
+            },
         },
         {
             tableName: "comments",

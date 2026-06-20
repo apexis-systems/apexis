@@ -617,7 +617,7 @@ export const deleteSnag = async (req: Request, res: Response) => {
     });
 
     try {
-      getIO().to(`project-${snag.project_id}`).emit('snag-deleted', { snagId: Number(id) });
+      getIO().to(`project-${snag.project_id}`).emit('snag-deleted', { snagId: Number(id), project_id: snag.project_id });
     } catch (e) {
       console.error('Socket emit error (deleteSnag):', e);
     }

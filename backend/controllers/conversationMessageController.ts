@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
-import { conversation_messages, projects, rfis, snags, users } from "../models/index.ts";
+import { conversation_messages, projects, rfis, snags, users, project_members, project_member_folders } from "../models/index.ts";
 import { getIO } from "../socket.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 
@@ -28,6 +28,73 @@ const resolveItemConfig = (itemType: "rfi" | "snag") => {
 
 const canParticipate = (item: any, userId: number) =>
   Number(item.created_by) === Number(userId) || Number(item.assigned_to) === Number(userId);
+
+const hasAccessToItem = async (itemType: "rfi" | "snag", item: any, project: any, authUser: any) => {
+  const userId = Number(authUser.user_id);
+  const userRole = authUser.role;
+
+  if (userRole === 'superadmin') return true;
+  if (userRole === 'admin' && Number(project.organization_id) === Number(authUser.organization_id)) {
+    return true;
+  }
+
+  if (Number(item.created_by) === userId || Number(item.assigned_to) === userId) {
+    return true;
+  }
+
+  if (userRole === 'contributor') {
+    const isMember = await project_members.findOne({
+      where: { user_id: userId, project_id: item.project_id }
+    });
+    if (isMember) return true;
+  }
+
+  if (userRole === 'client') {
+    if (itemType === 'rfi' && !item.is_client_visible) {
+      return false;
+    }
+    const isMember = await project_members.findOne({
+      where: { user_id: userId, project_id: item.project_id }
+    });
+    if (isMember) return true;
+  }
+
+  if (userRole === 'consultant' || userRole === 'vendor') {
+    const member = await project_members.findOne({
+      where: { user_id: userId, project_id: item.project_id }
+    });
+    if (!member) return false;
+
+    let linkedFolderIds: number[] = [];
+    if (item.folder_ids) {
+      if (Array.isArray(item.folder_ids)) {
+        linkedFolderIds = item.folder_ids.map(Number);
+      } else if (typeof item.folder_ids === 'string') {
+        try {
+          const parsed = JSON.parse(item.folder_ids);
+          if (Array.isArray(parsed)) {
+            linkedFolderIds = parsed.map(Number);
+          }
+        } catch (e) {
+          linkedFolderIds = item.folder_ids.split(',').map(Number).filter((n: any) => !isNaN(n));
+        }
+      }
+    }
+
+    if (linkedFolderIds.length > 0) {
+      const allowedFolders = await project_member_folders.findAll({
+        where: { project_member_id: member.id },
+        attributes: ['folder_id']
+      });
+      const allowedFolderIds = allowedFolders.map((af: any) => Number(af.folder_id));
+      if (linkedFolderIds.some((fid: number) => allowedFolderIds.includes(fid))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
 
 const toMessageJson = async (message: any) => {
   const json = message.toJSON ? message.toJSON() : { ...message };
@@ -67,9 +134,9 @@ const getValidatedItem = async (itemType: "rfi" | "snag", itemId: number, authUs
     return { error: "Project not found", status: 404 as const };
   }
 
-  const isParticipant = canParticipate(item, authUser.user_id);
+  const hasAccess = await hasAccessToItem(itemType, item, project, authUser);
 
-  if (!isParticipant) {
+  if (!hasAccess) {
     return { error: "Forbidden", status: 403 as const };
   }
 

@@ -202,7 +202,10 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   // Mark as seen if assigned to current user
   useEffect(() => {
     if (open && currentFile && user?.id) {
-      if (currentFile.assigned_to && String(currentFile.assigned_to) === String(user.id) && !currentFile.seen_at) {
+      const isAssignedToMe = Array.isArray(currentFile.assigned_to)
+        ? currentFile.assigned_to.map(String).includes(String(user.id))
+        : currentFile.assigned_to && String(currentFile.assigned_to) === String(user.id);
+      if (isAssignedToMe && !currentFile.seen_at) {
         markFileSeen(currentFile.id).catch(console.error);
       }
     }
