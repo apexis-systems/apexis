@@ -862,7 +862,7 @@ export const switchContext = async (req: Request, res: Response) => {
         if (!normalizedRole) {
             return res.status(400).json({ error: "Role is required" });
         }
-        if (!["superadmin", "admin", "contributor", "client"].includes(normalizedRole)) {
+        if (!["superadmin", "admin", "contributor", "client", "consultant", "vendor"].includes(normalizedRole)) {
             return res.status(400).json({ error: "Invalid role" });
         }
 

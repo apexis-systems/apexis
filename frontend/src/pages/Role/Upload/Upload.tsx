@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Upload as UploadIcon, Check, Folder, X, ChevronRight, ChevronDown, MapPin, Tag, Camera, User } from 'lucide-react';
+import { Checkbox } from '@/components/ui/Checkbox';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -44,7 +45,7 @@ function UploadInner() {
     const [folderBrowseId, setFolderBrowseId] = useState<string | null>(null);
     const [done, setDone] = useState(false);
     const [doneType, setDoneType] = useState<'documents' | 'photos'>('documents');
-    const [assignedTo, setAssignedTo] = useState<string | null>(null);
+    const [assignedToIds, setAssignedToIds] = useState<string[]>([]);
     const [projectMembers, setProjectMembers] = useState<any[]>([]);
 
     const { usageData, checkLimit, refreshUsage } = useUsage();
@@ -287,7 +288,9 @@ function UploadInner() {
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
                 }
-                if (assignedTo) formData.append('assigned_to', assignedTo);
+                if (assignedToIds.length > 0) {
+                    formData.append('assigned_to', JSON.stringify(assignedToIds));
+                }
                 formData.append('file', f);
                 return uploadFile(formData);
             }));
@@ -341,7 +344,7 @@ function UploadInner() {
                 <h2 className="text-base font-bold mb-1">Upload Complete</h2>
                 <p className="text-sm text-muted-foreground mb-6">Your files were uploaded successfully.</p>
                 <div className="flex flex-col gap-3 w-full max-w-xs">
-                    <Button onClick={() => { setDone(false); setFiles([]); setUploadType(urlType); setMetaOpen(false); }} className="w-full rounded-xl bg-accent text-accent-foreground hover:bg-accent/90">
+                    <Button onClick={() => { setDone(false); setFiles([]); setUploadType(urlType); setMetaOpen(false); setAssignedToIds([]); }} className="w-full rounded-xl bg-accent text-accent-foreground hover:bg-accent/90">
                         Upload Again
                     </Button>
                     <Button variant="outline" onClick={() => router.push(goToUrl)} className="w-full rounded-xl">
@@ -474,38 +477,54 @@ function UploadInner() {
                         </div>
                     </div>
                     <div className="p-4">
-                        <Select
-                            value={assignedTo || 'unassigned'}
-                            onValueChange={(val) => setAssignedTo(val === 'unassigned' ? null : val)}
-                        >
-                            <SelectTrigger className="w-full h-12 rounded-xl border-border bg-surface">
-                                <SelectValue placeholder={t('selectAssignee')} />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-border bg-card">
-                                <SelectItem value="unassigned" className="cursor-pointer hover:bg-accent/10 transition-colors">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center">
-                                            <User className="h-3.5 w-3.5 text-muted-foreground" />
-                                        </div>
-                                        <span className="text-sm">{t('unassigned')}</span>
-                                    </div>
-                                </SelectItem>
-                                {projectMembers.map((m) => (
-                                    <SelectItem key={m.user.id} value={String(m.user.id)} className="cursor-pointer hover:bg-accent/10 transition-colors">
-                                        <div className="flex items-center gap-2">
-                                            <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center">
+                        <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
+                            <div className="flex items-center justify-between pb-1.5 border-b border-border">
+                                <span className="text-xs text-muted-foreground">Select team members to assign:</span>
+                                {assignedToIds.length > 0 && (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setAssignedToIds([])}
+                                        className="text-[10px] text-accent font-semibold hover:underline"
+                                    >
+                                        Clear All
+                                    </button>
+                                )}
+                            </div>
+                            {projectMembers.map((m) => {
+                                const isChecked = assignedToIds.includes(String(m.user.id));
+                                return (
+                                    <label 
+                                        key={m.user.id} 
+                                        className="flex items-center justify-between p-2.5 rounded-xl border border-border/50 hover:bg-secondary/20 cursor-pointer transition-colors"
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="h-6 w-6 rounded-full bg-accent/15 flex items-center justify-center">
                                                 <span className="text-[10px] font-bold text-accent">{m.user.name.charAt(0).toUpperCase()}</span>
                                             </div>
                                             <div className="flex flex-col">
-                                                <span className="text-sm font-medium">{m.user.name}</span>
-                                                <span className="text-[10px] text-muted-foreground">{m.role || 'Member'}</span>
+                                                <span className="text-xs font-semibold text-foreground">{m.user.name}</span>
+                                                <span className="text-[9px] text-muted-foreground">{m.role || 'Member'}</span>
                                             </div>
                                         </div>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <p className="text-[10px] text-muted-foreground mt-2 px-1">{t('assigneeDescription')}</p>
+                                        <Checkbox 
+                                            checked={isChecked} 
+                                            onCheckedChange={(checked) => {
+                                                const userId = String(m.user.id);
+                                                setAssignedToIds(prev => 
+                                                    checked 
+                                                        ? [...prev, userId] 
+                                                        : prev.filter(id => id !== userId)
+                                                );
+                                            }}
+                                        />
+                                    </label>
+                                );
+                            })}
+                            {projectMembers.length === 0 && (
+                                <p className="text-xs text-muted-foreground text-center py-2">No project members found</p>
+                            )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-3 px-1">{t('assigneeDescription')}</p>
                     </div>
                 </div>
             )}

@@ -63,7 +63,7 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
             },
             assigned_to: {
-                type: DataTypes.INTEGER,
+                type: DataTypes.ARRAY(DataTypes.INTEGER),
                 allowNull: true,
             },
             seen_at: {

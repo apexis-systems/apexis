@@ -53,7 +53,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
   // Consultant/Vendor Invite Modal States
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'consultant' | 'vendor'>('consultant');
+  const [inviteRole, setInviteRole] = useState<'vendor'>('vendor');
   const [projectFolders, setProjectFolders] = useState<any[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<(string | number)[]>([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
@@ -102,7 +102,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         .finally(() => setLoadingFolders(false));
     } else {
       setInviteEmail('');
-      setInviteRole('consultant');
+      setInviteRole('vendor');
       setProjectFolders([]);
       setSelectedFolders([]);
       setGeneratedInviteUrl(null);
@@ -142,7 +142,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
     try {
       setInviting(true);
       const res = await inviteUser(payload);
-      toast.success(`${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'} invited successfully`);
+      toast.success("Vendor invited successfully");
       if (res.inviteUrl) {
         setGeneratedInviteUrl(res.inviteUrl);
       } else {
@@ -603,7 +603,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
             className="w-full h-10 border-dashed border-accent/40 text-accent hover:bg-accent/5 hover:text-accent font-semibold text-xs flex items-center justify-center gap-1.5 mt-2"
           >
             <UserPlus className="h-3.5 w-3.5" />
-            Invite Consultant / Vendor
+            Invite Vendor
           </Button>
         </div>
       )}
@@ -786,7 +786,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl tracking-wide">
-              <span className="text-accent uppercase tracking-widest text-sm bg-accent/10 px-3 py-1 rounded-full">Invite Contributor</span>
+              <span className="text-accent uppercase tracking-widest text-sm bg-accent/10 px-3 py-1 rounded-full">Invite Vendor</span>
             </DialogTitle>
           </DialogHeader>
           
@@ -811,7 +811,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                   type="button"
                   onClick={() => {
                     setShareItem({
-                      file_name: `Project Invite (${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'})`,
+                      file_name: "Project Invite (Vendor)",
                       downloadUrl: generatedInviteUrl,
                       role: inviteRole
                     });
@@ -839,37 +839,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Role Type</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setInviteRole('consultant')}
-                    className={cn(
-                      "flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all",
-                      inviteRole === 'consultant' 
-                        ? "border-accent bg-accent/5 text-foreground" 
-                        : "border-border bg-card text-muted-foreground hover:bg-secondary/50"
-                    )}
-                  >
-                    <span className="font-bold text-sm">Consultant</span>
-                    <span className="text-[10px] opacity-75 mt-0.5">Specialist access control</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInviteRole('vendor')}
-                    className={cn(
-                      "flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all",
-                      inviteRole === 'vendor' 
-                        ? "border-accent bg-accent/5 text-foreground" 
-                        : "border-border bg-card text-muted-foreground hover:bg-secondary/50"
-                    )}
-                  >
-                    <span className="font-bold text-sm">Vendor</span>
-                    <span className="text-[10px] opacity-75 mt-0.5">Supplier access control</span>
-                  </button>
-                </div>
-              </div>
+
 
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Folder Permissions</label>

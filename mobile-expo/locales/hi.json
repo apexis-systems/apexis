@@ -333,7 +333,7 @@
             "shareInviteMessage": "आपको Apexis पर प्रोजेक्ट \"{{projectName}}\" को \"{{role}}\" के रूप में एक्सेस करने के लिए आमंत्रित किया गया है।\n\nअपने प्रोजेक्ट में सुरक्षित रूप से लॉगिन करने के लिए नीचे दिए गए लिंक पर क्लिक करें:\n{{url}}",
             "inviteContributor": "योगदानकर्ता को आमंत्रित करें",
             "invitationLinkGenerated": "आमंत्रण लिंक जनरेट हो गया!",
-            "shareInviteSub": "इस सुरक्षित लिंक को कंसल्टेंट/वेंडर के साथ साझा करें ताकि वे प्रोजेक्ट तक पहुंच सकें।",
+            "shareInviteSub": "इस सुरक्षित लिंक को वेंडर के साथ साझा करें ताकि वे प्रोजेक्ट तक पहुंच सकें।",
             "close": "बंद करें",
             "emailOrPhone": "ईमेल या फ़ोन नंबर",
             "roleType": "भूमिका का प्रकार",
@@ -344,7 +344,8 @@
             "manageFolderPermissionsCount": "फोल्डर अनुमतियां प्रबंधित करें ({{count}})",
             "selectFolders": "फोल्डर चुनें",
             "sendInvitation": "निमंत्रण भेजें",
-            "inviteConsultantVendor": "कंसल्टेंट/वेंडर को आमंत्रित करें",
+            "inviteConsultantVendor": "वेंडर को आमंत्रित करें",
+            "inviteVendor": "वेंडर को आमंत्रित करें",
             "selectFromContacts": "संपर्क सूची से चुनें"
         },
         "projectSnags": {

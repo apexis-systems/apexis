@@ -740,12 +740,14 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
 
     socket.emit('join-project', projectId);
 
-    const onRFISeen = (data: { rfiId: number, seen_at: string }) => {
+    const onRFISeen = (data: { rfiId: number, seen_at: string, project_id?: number }) => {
+      if (data.project_id && Number(data.project_id) !== projectId) return;
       setRfis(prev => prev.map(r => r.id === data.rfiId ? { ...r, seen_at: data.seen_at } : r));
       setSelectedRFI(prev => (prev && prev.id === data.rfiId) ? { ...prev, seen_at: data.seen_at } : prev);
     };
 
     const onRFIUpdated = (data: { rfi: RFI }) => {
+      if (data.rfi && Number(data.rfi.project_id) !== projectId) return;
       setRfis(prev => {
         const idx = prev.findIndex(r => r.id === data.rfi.id);
         if (idx !== -1) {
@@ -758,7 +760,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       setSelectedRFI(prev => (prev && prev.id === data.rfi.id) ? data.rfi : prev);
     };
 
-    const onRFIDeleted = (data: { rfiId: number }) => {
+    const onRFIDeleted = (data: { rfiId: number, project_id?: number }) => {
+      if (data.project_id && Number(data.project_id) !== projectId) return;
       setRfis(prev => prev.filter(r => r.id !== data.rfiId));
       setSelectedRFI(prev => (prev && prev.id === data.rfiId) ? null : prev);
     };
@@ -767,7 +770,9 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     socket.on('rfi-updated', onRFIUpdated);
     socket.on('rfi-deleted', onRFIDeleted);
     socket.on('rfi-conversation-message', ({ itemType, itemId, message }: { itemType: 'rfi' | 'snag'; itemId: number; message: ConversationMessage }) => {
-      if (itemType !== 'rfi' || !selectedRFI || selectedRFI.id !== itemId) return;
+      if (itemType !== 'rfi') return;
+      if (message && message.project_id && Number(message.project_id) !== projectId) return;
+      if (!selectedRFI || selectedRFI.id !== itemId) return;
       setConversationMessages(prev => mergeUniqueMessages([...prev, message]));
     });
 
@@ -797,6 +802,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
     }
 
     setLoadingMessages(true);
+    setConversationMessages([]);
     getRFIMessages(selectedRFI.id)
       .then((messages) => setConversationMessages(mergeUniqueMessages(messages)))
       .catch(err => {
@@ -1736,91 +1742,89 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </View>
                     )}
 
-                    {isConversationParticipant && (
-                      <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('projectRfi.response')}</Text>
-                        {loadingMessages ? (
-                          <ActivityIndicator color={colors.primary} />
-                        ) : (conversationMessages.length === 0 && !selectedRFI?.response && (!selectedRFI?.responsePhotoUrls || selectedRFI.responsePhotoUrls.length === 0)) ? (
-                          <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectRfi.noMessagesYet')}</Text>
-                        ) : (
-                          <View style={{ gap: 10 }}>
-                            {/* Legacy Response Block */}
-                            {(selectedRFI?.response || (selectedRFI?.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
-                              <View style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+                    <View style={{ gap: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, marginTop: 10 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('projectRfi.response')}</Text>
+                      {loadingMessages ? (
+                        <ActivityIndicator color={colors.primary} />
+                      ) : (conversationMessages.length === 0 && !selectedRFI?.response && (!selectedRFI?.responsePhotoUrls || selectedRFI.responsePhotoUrls.length === 0)) ? (
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>{t('projectRfi.noMessagesYet')}</Text>
+                      ) : (
+                        <View style={{ gap: 10 }}>
+                          {/* Legacy Response Block */}
+                          {(selectedRFI?.response || (selectedRFI?.responsePhotoUrls && selectedRFI.responsePhotoUrls.length > 0)) && (
+                            <View style={{ alignItems: 'flex-start', marginBottom: 10 }}>
+                              <View style={{
+                                maxWidth: '86%',
+                                padding: 12,
+                                borderRadius: 16,
+                                backgroundColor: colors.surface,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                              }}>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>
+                                  Response
+                                </Text>
+                                {selectedRFI.response ? (
+                                  <Text style={{ fontSize: 13, color: colors.text }}>{selectedRFI.response}</Text>
+                                ) : null}
+                                {selectedRFI.responsePhotoUrls?.map((url, idx) => {
+                                  const isAudioFile = isAudio(url);
+                                  if (isAudioFile) {
+                                    return (
+                                      <View key={idx} style={{ marginTop: 8 }}>
+                                        <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                      </View>
+                                    );
+                                  } else {
+                                    return (
+                                      <TouchableOpacity key={idx} onPress={() => setPreviewImage(url)}>
+                                        <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
+                                      </TouchableOpacity>
+                                    );
+                                  }
+                                })}
+                              </View>
+                            </View>
+                          )}
+                          {conversationMessages.map((message) => {
+                            const isMine = String(message.sender_id) === String(user.id);
+                            return (
+                              <View key={message.id} style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
                                 <View style={{
                                   maxWidth: '86%',
                                   padding: 12,
                                   borderRadius: 16,
-                                  backgroundColor: colors.surface,
+                                  backgroundColor: isMine ? colors.primary : colors.surface,
                                   borderWidth: 1,
-                                  borderColor: colors.border,
+                                  borderColor: isMine ? colors.primary : colors.border,
                                 }}>
-                                  <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textMuted, marginBottom: 4 }}>
-                                    Response
+                                  <Text style={{ fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : colors.textMuted, marginBottom: 4 }}>
+                                    {message.sender?.name || (isMine ? 'You' : 'User')}
                                   </Text>
-                                  {selectedRFI.response ? (
-                                    <Text style={{ fontSize: 13, color: colors.text }}>{selectedRFI.response}</Text>
+                                  {message.text ? <Text style={{ fontSize: 13, color: isMine ? '#fff' : colors.text }}>{message.text}</Text> : null}
+                                  {message.attachment_type === 'image' && message.downloadUrl ? (
+                                    <TouchableOpacity onPress={() => setPreviewImage(message.downloadUrl!)}>
+                                      <Image source={{ uri: message.downloadUrl }} style={{ width: 160, height: 160, borderRadius: 12, marginTop: 8 }} />
+                                    </TouchableOpacity>
                                   ) : null}
-                                  {selectedRFI.responsePhotoUrls?.map((url, idx) => {
-                                    const isAudioFile = isAudio(url);
-                                    if (isAudioFile) {
-                                      return (
-                                        <View key={idx} style={{ marginTop: 8 }}>
-                                          <VoiceNotePlayer uri={url} isMe={false} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                        </View>
-                                      );
-                                    } else {
-                                      return (
-                                        <TouchableOpacity key={idx} onPress={() => setPreviewImage(url)}>
-                                          <Image source={{ uri: url }} style={{ width: 120, height: 120, borderRadius: 10, marginTop: 8 }} />
-                                        </TouchableOpacity>
-                                      );
-                                    }
-                                  })}
+                                  {message.attachment_type === 'audio' && message.downloadUrl ? (
+                                    <View style={{ marginTop: 8 }}>
+                                      <VoiceNotePlayer uri={message.downloadUrl} isMe={isMine} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
+                                    </View>
+                                  ) : null}
+                                  <Text style={{ fontSize: 10, color: isMine ? 'rgba(255,255,255,0.8)' : colors.textMuted, marginTop: 6 }}>
+                                    {new Date(message.createdAt).toLocaleString()}
+                                  </Text>
                                 </View>
                               </View>
-                            )}
-                            {conversationMessages.map((message) => {
-                              const isMine = String(message.sender_id) === String(user.id);
-                              return (
-                                <View key={message.id} style={{ alignItems: isMine ? 'flex-end' : 'flex-start' }}>
-                                  <View style={{
-                                    maxWidth: '86%',
-                                    padding: 12,
-                                    borderRadius: 16,
-                                    backgroundColor: isMine ? colors.primary : colors.surface,
-                                    borderWidth: 1,
-                                    borderColor: isMine ? colors.primary : colors.border,
-                                  }}>
-                                    <Text style={{ fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : colors.textMuted, marginBottom: 4 }}>
-                                      {message.sender?.name || (isMine ? 'You' : 'User')}
-                                    </Text>
-                                    {message.text ? <Text style={{ fontSize: 13, color: isMine ? '#fff' : colors.text }}>{message.text}</Text> : null}
-                                    {message.attachment_type === 'image' && message.downloadUrl ? (
-                                      <TouchableOpacity onPress={() => setPreviewImage(message.downloadUrl!)}>
-                                        <Image source={{ uri: message.downloadUrl }} style={{ width: 160, height: 160, borderRadius: 12, marginTop: 8 }} />
-                                      </TouchableOpacity>
-                                    ) : null}
-                                    {message.attachment_type === 'audio' && message.downloadUrl ? (
-                                      <View style={{ marginTop: 8 }}>
-                                        <VoiceNotePlayer uri={message.downloadUrl} isMe={isMine} colors={colors} playingUri={playingUri} onPlay={setPlayingUri} />
-                                      </View>
-                                    ) : null}
-                                    <Text style={{ fontSize: 10, color: isMine ? 'rgba(255,255,255,0.8)' : colors.textMuted, marginTop: 6 }}>
-                                      {new Date(message.createdAt).toLocaleString()}
-                                    </Text>
-                                  </View>
-                                </View>
-                              );
-                            })}
-                          </View>
-                        )}
-                      </View>
-                    )}
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
 
                     {/* Linked Attachments Pill */}
-                    {isConversationParticipant && (selectedRFI.file_rfi_links && selectedRFI.file_rfi_links.length > 0) ? (
+                    {(selectedRFI.file_rfi_links && selectedRFI.file_rfi_links.length > 0) ? (
                       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, marginBottom: 4 }}>
                         <TouchableOpacity
                           onPress={() => setShowFilePicker(true)}

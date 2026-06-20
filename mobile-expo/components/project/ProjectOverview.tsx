@@ -69,7 +69,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     // Consultant/Vendor Invite Modal States
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState<'consultant' | 'vendor'>('consultant');
+    const [inviteRole, setInviteRole] = useState<'vendor'>('vendor');
     const [projectFolders, setProjectFolders] = useState<any[]>([]);
     const [selectedFolders, setSelectedFolders] = useState<(string | number)[]>([]);
     const [loadingFolders, setLoadingFolders] = useState(false);
@@ -226,7 +226,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 .finally(() => setLoadingFolders(false));
         } else {
             setInviteEmail('');
-            setInviteRole('consultant');
+            setInviteRole('vendor');
             setProjectFolders([]);
             setSelectedFolders([]);
             setGeneratedInviteUrl(null);
@@ -262,7 +262,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         try {
             setInviting(true);
             const res = await inviteUser(payload);
-            Alert.alert("Success", `${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'} invited successfully`);
+            Alert.alert("Success", "Vendor invited successfully");
             if (res.inviteUrl) {
                 setGeneratedInviteUrl(res.inviteUrl);
             } else {
@@ -800,7 +800,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 >
                                     <Feather name="user-plus" size={16} color={colors.primary} />
                                     <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
-                                        {t('projectOverview.inviteConsultantVendor')}
+                                        {t('projectOverview.inviteVendor')}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
@@ -1050,7 +1050,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             <Modal visible={isInviteModalOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsInviteModalOpen(false)}>
                 <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{t('projectOverview.inviteContributor')}</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{t('projectOverview.inviteVendor')}</Text>
                         <TouchableOpacity onPress={() => setIsInviteModalOpen(false)} style={{ padding: 8, backgroundColor: colors.surface, borderRadius: 20 }}>
                             <Feather name="x" size={20} color={colors.text} />
                         </TouchableOpacity>
@@ -1080,12 +1080,12 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                     onPress={async () => {
                                         try {
                                             await Share.share({
-                                                title: `Join Project as ${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'}`,
+                                                title: 'Join Project as Vendor',
                                                 message: Platform.OS === 'android'
-                                                    ? `You've been invited to access the project "${project.name}" on Apexis as a "${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'}".\n\nClick the link below to securely login to your project:\n${generatedInviteUrl}`
-                                                    : `You've been invited to access the project "${project.name}" on Apexis as a "${inviteRole === 'consultant' ? 'Consultant' : 'Vendor'}".\n\nClick the link below to securely login to your project:`,
+                                                    ? `You've been invited to access the project "${project.name}" on Apexis as a "Vendor".\n\nClick the link below to securely login to your project:\n${generatedInviteUrl}`
+                                                    : `You've been invited to access the project "${project.name}" on Apexis as a "Vendor".\n\nClick the link below to securely login to your project:`,
                                                 url: generatedInviteUrl,
-                                             });
+                                            });
                                         } catch (e) {
                                             console.error('Share error:', e);
                                         }
@@ -1153,36 +1153,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 </View>
                             </View>
 
-                            <View style={{ gap: 8 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>{t('projectOverview.roleType')}</Text>
-                                <View style={{ flexDirection: 'row', gap: 12 }}>
-                                    {[
-                                        { id: 'consultant' as const, title: t('projectOverview.consultant'), desc: t('projectOverview.specialistAccess') },
-                                        { id: 'vendor' as const, title: t('projectOverview.vendor'), desc: t('projectOverview.supplierAccess') }
-                                    ].map((role) => {
-                                        const isSelected = inviteRole === role.id;
-                                        return (
-                                            <TouchableOpacity
-                                                key={role.id}
-                                                onPress={() => setInviteRole(role.id)}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: 12,
-                                                    borderRadius: 12,
-                                                    borderWidth: 2,
-                                                    borderColor: isSelected ? colors.primary : colors.border,
-                                                    backgroundColor: isSelected ? 'rgba(249, 116, 22, 0.04)' : colors.surface,
-                                                    alignItems: 'center',
-                                                    gap: 2
-                                                }}
-                                            >
-                                                <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? colors.primary : colors.text }}>{role.title}</Text>
-                                                <Text style={{ fontSize: 10, color: colors.textMuted }}>{role.desc}</Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </View>
-                            </View>
+
 
                             <View style={{ gap: 8 }}>
                                 <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' }}>Folder Permissions</Text>
