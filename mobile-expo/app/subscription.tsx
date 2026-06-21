@@ -143,7 +143,9 @@ export default function SubscriptionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { usageData, loading: usageLoading, refreshUsage } = useUsage();
-  const { user, updateUser } = useAuth() as any;
+  const { user, updateUser, logout } = useAuth() as any;
+
+  const isLocked = user?.organization?.subscription_locked || usageData?.plan?.access?.isLocked;
 
   const [availablePlans, setAvailablePlans] = useState<any[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
@@ -348,11 +350,22 @@ export default function SubscriptionScreen() {
           styles.customHeader,
           { paddingTop: insets.top + 8, backgroundColor: colors.background },
         ]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.headerIconBtn}>
-          <Feather name="arrow-left" size={24} color={colors.text} />
-        </TouchableOpacity>
+        {isLocked ? (
+          <TouchableOpacity
+            onPress={async () => {
+              await logout();
+              router.replace('/(auth)/login');
+            }}
+            style={styles.headerIconBtn}>
+            <Feather name="log-out" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.headerIconBtn}>
+            <Feather name="arrow-left" size={24} color={colors.text} />
+          </TouchableOpacity>
+        )}
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           {t('subscription.title')}
         </Text>
