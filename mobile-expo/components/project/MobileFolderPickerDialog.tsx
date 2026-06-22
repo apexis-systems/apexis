@@ -105,7 +105,7 @@ export default function MobileFolderPickerDialog({
         const folders = activeTab === 'document' ? docFolders : photoFolders;
         return folders.filter(f => {
             const nameLower = f.name.toLowerCase();
-            return nameLower !== 'archive' && nameLower !== 'confirmation' && nameLower !== 'confirmations';
+            return nameLower !== 'archive' && nameLower !== 'confirmation' && nameLower !== 'confirmations' && nameLower !== 'confidential';
         });
     };
 

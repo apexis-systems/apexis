@@ -16,7 +16,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { KeyRound, CheckCircle2, Edit2, Check, Building, Layers, RefreshCw } from 'lucide-react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop, PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
@@ -377,31 +376,6 @@ const Profile = () => {
                                             </Button>
                                         </div>
                                     </div>
-
-                                    <div className="flex items-center space-x-2 pt-2 border-t border-border/30">
-                                        <Checkbox
-                                            id="restrict_onboarding"
-                                            checked={!!user.organization?.restrict_onboarding}
-                                            onCheckedChange={async (checked) => {
-                                                try {
-                                                    const updated = await updateOrganization({ restrict_onboarding: checked });
-                                                    setUser({
-                                                        ...user,
-                                                        organization: {
-                                                            ...user.organization,
-                                                            restrict_onboarding: checked
-                                                        }
-                                                    });
-                                                    toast.success(checked ? "Onboarding restricted to Admins" : "Onboarding restriction removed");
-                                                } catch (e) {
-                                                    toast.error("Failed to update onboarding restriction");
-                                                }
-                                            }}
-                                        />
-                                        <Label htmlFor="restrict_onboarding" className="text-sm font-medium cursor-pointer">
-                                            Restrict Onboarding (Only Admin can invite users)
-                                        </Label>
-                                    </div>
                                 </div>
                             </div>
                         )}
@@ -470,7 +444,56 @@ const Profile = () => {
                             </div>
                         )}
                     </div>
-                )}                {/* Trash Settings */}
+                )}
+
+                {/* Restrict Onboarding Toggle */}
+                {user.role === 'admin' && (
+                    <div className="border border-border rounded-2xl p-4 bg-secondary/10 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                                <User className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="flex flex-col items-start text-left">
+                                <span className="font-bold text-sm uppercase tracking-wide">Restrict Onboarding</span>
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold">Only Admin can invite users (contributors/clients)</span>
+                            </div>
+                        </div>
+                        <button
+                            role="switch"
+                            aria-checked={!!user.organization?.restrict_onboarding}
+                            id="restrict_onboarding"
+                            onClick={async () => {
+                                const nextChecked = !user.organization?.restrict_onboarding;
+                                try {
+                                    await updateOrganization({ restrict_onboarding: nextChecked });
+                                    setUser({
+                                        ...user,
+                                        organization: {
+                                            ...user.organization,
+                                            restrict_onboarding: nextChecked
+                                        }
+                                    });
+                                    toast.success(nextChecked ? "Onboarding restricted to Admins" : "Onboarding restriction removed");
+                                } catch (e) {
+                                    toast.error("Failed to update onboarding restriction");
+                                }
+                            }}
+                            className={cn(
+                                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                                user.organization?.restrict_onboarding ? "bg-primary" : "bg-zinc-200 dark:bg-zinc-800"
+                            )}
+                        >
+                            <span
+                                className={cn(
+                                    "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform duration-200",
+                                    user.organization?.restrict_onboarding ? "translate-x-5" : "translate-x-0.5"
+                                )}
+                            />
+                        </button>
+                    </div>
+                )}
+
+                {/* Trash Settings */}
                 {(user.role === 'admin' || user.role === 'superadmin') && (
                     <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
                         <button
