@@ -13,7 +13,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, toggleOnlyForReference, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen, getLinkedItems, linkFiles, deleteLink } from '@/services/fileService';
+import { getProjectFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, toggleOnlyForReference, updateFile, archiveFile, unarchiveFile, downloadFile, markFileSeen, getLinkedItems, linkFiles, deleteLink, getFileVersions } from '@/services/fileService';
 import { setActiveProjectContext } from '@/utils/projectSelection';
 import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import LinkFileModal from '../shared/LinkFileModal';
@@ -51,6 +51,19 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
     const { socket } = useSocket();
+
+    const isAssigneeSeen = (doc: any, assigneeId: number) => {
+        if (doc.seen_by && Array.isArray(doc.seen_by)) {
+            return doc.seen_by.includes(assigneeId);
+        }
+        if (doc.seen_at) {
+            const isSingleAssignee = (doc.assignees && doc.assignees.length === 1) || (doc.assignee && !doc.assignees);
+            if (isSingleAssignee) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     const router = useRouter();
     const searchParams = useLocalSearchParams();
@@ -299,6 +312,55 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [loadingRFIs, setLoadingRFIs] = useState(false);
     const insets = useSafeAreaInsets();
 
+    // Version sheet state
+    const [versionSheetDoc, setVersionSheetDoc] = useState<any | null>(null);
+    const [versionSheetVersions, setVersionSheetVersions] = useState<any[]>([]);
+    const [versionSheetLoading, setVersionSheetLoading] = useState(false);
+    const [versionCache, setVersionCache] = useState<Record<string, any[]>>({});
+    const versionFetchedRef = useRef<Set<string>>(new Set());
+    const [dropdownPosition, setDropdownPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+    const fetchVersionsForDoc = async (docId: string | number) => {
+        const key = String(docId);
+        if (versionFetchedRef.current.has(key)) return;
+        versionFetchedRef.current.add(key);
+        try {
+            const data = await getFileVersions(docId);
+            const vers = data.versions || [];
+            setVersionCache(prev => ({ ...prev, [key]: vers }));
+        } catch (e) {
+            versionFetchedRef.current.delete(key);
+            console.error('fetchVersionsForDoc error', e);
+        }
+    };
+
+    useEffect(() => {
+        if (docs.length === 0) return;
+        docs.forEach(doc => fetchVersionsForDoc(doc.id));
+    }, [docs]);
+
+    const openVersionSheet = async (doc: any) => {
+        setVersionSheetDoc(doc);
+        setVersionSheetVersions([]);
+        const cached = versionCache[String(doc.id)];
+        if (cached) {
+            setVersionSheetVersions(cached);
+            return;
+        }
+        setVersionSheetLoading(true);
+        try {
+            const data = await getFileVersions(doc.id);
+            const vers = data.versions || [];
+            setVersionSheetVersions(vers);
+            setVersionCache(prev => ({ ...prev, [String(doc.id)]: vers }));
+            versionFetchedRef.current.add(String(doc.id));
+        } catch (e) {
+            console.error('openVersionSheet error', e);
+        } finally {
+            setVersionSheetLoading(false);
+        }
+    };
+
     // Comment state
     const commentInputRef = useRef<any>(null);
     const [docComments, setDocComments] = useState<CommentThread[]>([]);
@@ -452,8 +514,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     useEffect(() => {
         if (!socket) return;
 
-        socket.on('file-seen', (data: { fileId: string | number, seen_at: string }) => {
-            setDocs((prev) => prev.map((d) => String(d.id) === String(data.fileId) ? { ...d, seen_at: data.seen_at } : d));
+        socket.on('file-seen', (data: { fileId: string | number, seen_at: string, seen_by?: number[] }) => {
+            setDocs((prev) => prev.map((d) => String(d.id) === String(data.fileId) ? { ...d, seen_at: data.seen_at, seen_by: data.seen_by || d.seen_by } : d));
         });
 
         return () => {
@@ -989,10 +1051,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     key={doc.id}
                     style={{
                         width: '23.8%',
-                        aspectRatio: 1,
+                        minHeight: 90,
                         backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
                         borderRadius: 10,
-                        overflow: 'hidden',
                         borderWidth: 1,
                         borderColor: isSelected ? colors.primary : colors.border,
                         alignItems: 'center',
@@ -1008,26 +1069,60 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         }}
                         onLongPress={() => handleLongPress('file', doc.id)}
                         style={{
-                            ...StyleSheet.absoluteFillObject,
-                            zIndex: 5,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100%',
+                            flex: 1,
                         }}
-                    />
-                    <Feather name="file-text" size={32} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 12 }} />
-                    <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'center', paddingHorizontal: 2 }}>{doc.file_name}</Text>
-                    {doc.assignees && doc.assignees.length > 0 ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2, maxWidth: '100%' }}>
-                            <Text numberOfLines={1} style={{ fontSize: 7, color: colors.textMuted }}>
-                                {doc.assignees.map((a: any) => a.name).join(', ')}
+                    >
+                        <Feather name="file-text" size={32} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} style={{ marginBottom: 4 }} />
+                        <Text numberOfLines={1} style={{ fontSize: 9, fontWeight: '600', color: colors.text, textAlign: 'center', paddingHorizontal: 2 }}>{doc.file_name}</Text>
+                    </TouchableOpacity>
+                    {/* Version badge - grid view */}
+                    {(versionCache[String(doc.id)] ? versionCache[String(doc.id)].length > 1 : (doc.version_count > 1)) && (
+                        <TouchableOpacity
+                            onPress={(e) => {
+                                const { pageX, pageY } = e.nativeEvent;
+                                setDropdownPosition({ x: pageX, y: pageY });
+                                openVersionSheet(doc);
+                            }}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 2,
+                                backgroundColor: isDark ? 'rgba(249,115,22,0.15)' : 'rgba(249,115,22,0.1)',
+                                borderWidth: 1,
+                                borderColor: isDark ? 'rgba(249,115,22,0.4)' : 'rgba(249,115,22,0.3)',
+                                borderRadius: 10,
+                                paddingHorizontal: 5,
+                                paddingVertical: 2,
+                                marginTop: 3,
+                            }}
+                        >
+                            <Feather name="chevron-down" size={8} color={colors.primary} />
+                            <Text style={{ fontSize: 8, fontWeight: '800', color: colors.primary }}>
+                                {versionCache[String(doc.id)] ? `V${versionCache[String(doc.id)].length}` : `V${doc.version_count || 1}`}
                             </Text>
-                            {doc.seen_at && (
-                                <Feather name="check-circle" size={8} color="#f97316" />
-                            )}
+                        </TouchableOpacity>
+                    )}
+                    {doc.assignees && doc.assignees.length > 0 ? (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 3, marginTop: 2, maxWidth: '100%' }}>
+                            {doc.assignees.map((a: any) => (
+                                <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 6 }}>
+                                    <Feather name="user" size={6} color={colors.textMuted} />
+                                    <Text style={{ fontSize: 7, color: colors.textMuted }}>{a.name}</Text>
+                                    {isAssigneeSeen(doc, a.id) && (
+                                        <Feather name="check-circle" size={7} color="#f97316" />
+                                    )}
+                                </View>
+                            ))}
                         </View>
                     ) : doc.assignee && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 6 }}>
+                            <Feather name="user" size={6} color={colors.textMuted} />
                             <Text numberOfLines={1} style={{ fontSize: 7, color: colors.textMuted }}>{doc.assignee.name}</Text>
-                            {doc.seen_at && (
-                                <Feather name="check-circle" size={8} color="#f97316" />
+                            {isAssigneeSeen(doc, doc.assignee.id) && (
+                                <Feather name="check-circle" size={7} color="#f97316" />
                             )}
                         </View>
                     )}
@@ -1124,55 +1219,88 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         }}
                         onLongPress={() => handleLongPress('file', doc.id)}
                         style={{
-                            ...StyleSheet.absoluteFillObject,
-                            zIndex: 5,
-                        }}
-                    />
-                    <View
-                        style={{
-                            width: 34,
-                            height: 34,
-                            borderRadius: 8,
-                            backgroundColor: doc.file_type?.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                            flexDirection: 'row',
                             alignItems: 'center',
-                            justifyContent: 'center',
+                            gap: 8,
+                            flex: 1,
                         }}
                     >
-                        <Feather name="file-text" size={16} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} />
-                    </View>
-                    {isSelected && (
-                        <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
-                            <Feather name="check" size={10} color="#fff" />
+                        <View
+                            style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: 8,
+                                backgroundColor: doc.file_type?.includes('pdf') ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <Feather name="file-text" size={16} color={doc.file_type?.includes('pdf') ? '#ef4444' : '#3b82f6'} />
                         </View>
+                        {isSelected && (
+                            <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                <Feather name="check" size={10} color="#fff" />
+                            </View>
+                        )}
+                        <View style={{ flex: 1, marginRight: 4 }}>
+                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text }}>{doc.file_name}</Text>
+                            <Text style={{ fontSize: 9, color: colors.textMuted, marginTop: 2 }}>{formatFileSize(doc.file_size_mb)}</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Sibling element: Version Badge */}
+                    {(versionCache[String(doc.id)] ? versionCache[String(doc.id)].length > 1 : (doc.version_count > 1)) && (
+                        <TouchableOpacity
+                            onPress={(e) => {
+                                const { pageX, pageY } = e.nativeEvent;
+                                setDropdownPosition({ x: pageX, y: pageY });
+                                openVersionSheet(doc);
+                            }}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 2,
+                                backgroundColor: isDark ? 'rgba(249,115,22,0.15)' : 'rgba(249,115,22,0.1)',
+                                borderWidth: 1,
+                                borderColor: isDark ? 'rgba(249,115,22,0.4)' : 'rgba(249,115,22,0.3)',
+                                borderRadius: 8,
+                                paddingHorizontal: 5,
+                                paddingVertical: 2,
+                                flexShrink: 0,
+                            }}
+                        >
+                            <Feather name="chevron-down" size={8} color={colors.primary} />
+                            <Text style={{ fontSize: 8, fontWeight: '800', color: colors.primary }}>
+                                {versionCache[String(doc.id)] ? `V${versionCache[String(doc.id)].length}` : `V${doc.version_count || 1}`}
+                            </Text>
+                        </TouchableOpacity>
                     )}
-                    <View style={{ flex: 1, marginRight: 4 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Text numberOfLines={1} style={{ fontSize: 10, fontWeight: '600', color: colors.text, flexShrink: 1 }}>{doc.file_name}</Text>
+
+                    {/* Sibling element: Assignees */}
+                    {doc.assignees && doc.assignees.length > 0 ? (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
+                            {doc.assignees.map((a: any) => (
+                                <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
+                                    <Feather name="user" size={8} color={colors.textMuted} />
+                                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{a.name}</Text>
+                                    {isAssigneeSeen(doc, a.id) && (
+                                        <Feather name="check-circle" size={9} color="#f97316" />
+                                    )}
+                                </View>
+                            ))}
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ fontSize: 9, color: colors.textMuted }}>{formatFileSize(doc.file_size_mb)}</Text>
-                            {doc.assignees && doc.assignees.length > 0 ? (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
-                                    <Feather name="user" size={8} color={colors.textMuted} />
-                                    <Text numberOfLines={1} style={{ fontSize: 8, color: colors.textMuted, maxWidth: 100 }}>
-                                        {doc.assignees.map((a: any) => a.name).join(', ')}
-                                    </Text>
-                                    {doc.seen_at && (
-                                        <Feather name="check-circle" size={10} color="#f97316" />
-                                    )}
-                                </View>
-                            ) : doc.assignee && (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
-                                    <Feather name="user" size={8} color={colors.textMuted} />
-                                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{doc.assignee.name}</Text>
-                                    {doc.seen_at && (
-                                        <Feather name="check-circle" size={10} color="#f97316" />
-                                    )}
-                                </View>
+                    ) : doc.assignee && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
+                            <Feather name="user" size={8} color={colors.textMuted} />
+                            <Text style={{ fontSize: 8, color: colors.textMuted }}>{doc.assignee.name}</Text>
+                            {isAssigneeSeen(doc, doc.assignee.id) && (
+                                <Feather name="check-circle" size={9} color="#f97316" />
                             )}
                         </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', zIndex: 10 }}>
+                    )}
+
+                    {/* Sibling element: Action menu */}
+                    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }}>
                         {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                             <TouchableOpacity
                                 onPress={() => {
@@ -1239,6 +1367,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             <View style={{
                                 flexDirection: viewMode === 'grid' ? 'row' : 'column',
                                 flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                                alignItems: viewMode === 'grid' ? 'flex-start' : 'stretch',
                                 gap: viewMode === 'grid' ? 4 : 4
                             }}>
                                 {group.data.map(renderDocItem)}
@@ -1317,6 +1446,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             <View style={{
                 flexDirection: viewMode === 'grid' ? 'row' : 'column',
                 flexWrap: viewMode === 'grid' ? 'wrap' : 'nowrap',
+                alignItems: viewMode === 'grid' ? 'flex-start' : 'stretch',
                 gap: viewMode === 'grid' ? 4 : 4
             }}>
                 {sortedDocs.map(renderDocItem)}
@@ -2556,7 +2686,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             {pdfViewerName}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
-                            <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowInfoModal(true))} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                            <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
                                 <Feather name="info" size={18} color="#fff" />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowLinkModal(true))} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
@@ -2894,6 +3024,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
                                 ? () => {
                                       if (activeActionFile) {
+                                          setPdfViewerUrl(null);
+                                          setCurrentDoc(null);
+                                          setShowComments(false);
+                                          setDocComments([]);
+                                          setShowInfoModal(false);
+                                          setActionMenuVisible(false);
                                           router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
                                       }
                                   }
@@ -2913,6 +3049,119 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         processingAction={processing}
                         useView={Platform.OS === 'ios'}
                     />
+                    <FileInformationModal
+                        visible={showInfoModal}
+                        onClose={() => setShowInfoModal(false)}
+                        file={currentDoc}
+                        folders={folders}
+                        projectName={project?.name || ''}
+                        onUpdate={(updatedFile) => {
+                            openDoc(updatedFile);
+                            fetchFolders(true);
+                        }}
+                    />
+
+                </View>
+            </Modal>
+
+            {/* ── Version Selection Sheet ── */}
+            <Modal
+                visible={!!versionSheetDoc}
+                transparent
+                statusBarTranslucent
+                animationType="fade"
+                onRequestClose={() => setVersionSheetDoc(null)}
+            >
+                <View style={{ flex: 1, position: 'relative' }}>
+                    {/* Backdrop sibling to capture taps outside the dropdown card */}
+                    <TouchableOpacity
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.15)'
+                        }}
+                        activeOpacity={1}
+                        onPress={() => setVersionSheetDoc(null)}
+                    />
+
+                    {/* Floating Dropdown Card */}
+                    <View style={{
+                        position: 'absolute',
+                        top: Math.min(dropdownPosition.y + 10, Dimensions.get('window').height - 240),
+                        left: Math.max(10, Math.min(Dimensions.get('window').width - 190, dropdownPosition.x - 90)),
+                        width: 180,
+                        backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 8,
+                        elevation: 5,
+                        paddingVertical: 4,
+                    }}>
+                        <Text style={{
+                            fontSize: 9,
+                            fontWeight: '900',
+                            letterSpacing: 1,
+                            textTransform: 'uppercase',
+                            color: colors.textMuted,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderBottomWidth: 1,
+                            borderBottomColor: colors.border
+                        }}>
+                            Versions
+                        </Text>
+                        <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled">
+                            {versionSheetLoading ? (
+                                <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                </View>
+                            ) : versionSheetVersions.length === 0 ? (
+                                <Text style={{ color: colors.textMuted, fontSize: 10, padding: 12, textAlign: 'center' }}>Only 1 version</Text>
+                            ) : (
+                                versionSheetVersions.map((v: any, idx: number) => {
+                                    const isActive = versionSheetDoc && String(v.id) === String(versionSheetDoc.id);
+                                    return (
+                                        <TouchableOpacity
+                                            key={v.id}
+                                            onPress={() => {
+                                                setVersionSheetDoc(null);
+                                                openDoc(v);
+                                            }}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                paddingVertical: 10,
+                                                paddingHorizontal: 12,
+                                                backgroundColor: isActive ? (isDark ? 'rgba(249,115,22,0.12)' : 'rgba(249,115,22,0.06)') : 'transparent',
+                                                borderBottomWidth: idx < versionSheetVersions.length - 1 ? 0.5 : 0,
+                                                borderBottomColor: colors.border,
+                                                gap: 8,
+                                            }}
+                                        >
+                                            <Text style={{ fontSize: 9, fontWeight: '900', color: colors.primary, minWidth: 22 }}>
+                                                V{versionSheetVersions.length - idx}
+                                            </Text>
+                                            <Text numberOfLines={1} style={{ fontSize: 10, color: colors.text, flex: 1 }}>
+                                                {v.file_name}
+                                            </Text>
+                                            {v.is_current && (
+                                                <View style={{ backgroundColor: 'rgba(52,199,89,0.15)', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                                                    <Text style={{ color: '#34c759', fontSize: 7, fontWeight: '800' }}>ACT</Text>
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })
+                            )}
+                        </ScrollView>
+                    </View>
                 </View>
             </Modal>
 
@@ -2926,33 +3175,6 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     handleLinkItemClick={handleLinkItemClick}
                 />
             )}
-
-            <FileInformationModal
-                visible={showInfoModal}
-                onClose={() => { setShowInfoModal(false); checkAndRestoreViewer(); }}
-                file={currentDoc}
-                folders={folders}
-                projectName={project?.name || ''}
-                onUpdate={(updatedFile) => {
-                    setDocs(prev => prev.map(d => {
-                        const dRoot = d.parent_file_id || d.id;
-                        const uRoot = updatedFile.parent_file_id || updatedFile.id;
-                        if (dRoot === uRoot) {
-                            return updatedFile;
-                        }
-                        return d;
-                    }));
-                    restoreViewerUrlRef.current = null;
-                    setShowInfoModal(false);
-                    if (Platform.OS === 'ios') {
-                        setTimeout(() => {
-                            openDoc(updatedFile);
-                        }, 350);
-                    } else {
-                        openDoc(updatedFile);
-                    }
-                }}
-            />
 
             {/* Sharing Overlay (For cases where viewer isn't open) */}
             {sharing && !pdfViewerUrl && (

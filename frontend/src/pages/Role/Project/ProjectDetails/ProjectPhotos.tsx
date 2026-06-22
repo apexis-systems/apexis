@@ -980,17 +980,20 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                                 <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="w-48 bg-background border border-border text-foreground">
                               {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditFile(photo); }}>
-                                  {t('rename_btn')}
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditFile(photo); }} className="cursor-pointer">
+                                  <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                                  <span>{t('rename_btn')}</span>
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }}>
-                                {t('create_rfi')}
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }} className="cursor-pointer">
+                                <HelpCircle className="mr-2 h-4 w-4 text-muted-foreground" />
+                                <span>{t('create_rfi')}</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateSnag(photo); }}>
-                                {t('create_snag')}
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateSnag(photo); }} className="cursor-pointer">
+                                <AlertTriangle className="mr-2 h-4 w-4 text-muted-foreground" />
+                                <span>{t('create_snag')}</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

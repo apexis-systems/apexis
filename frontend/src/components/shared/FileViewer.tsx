@@ -30,9 +30,10 @@ interface FileViewerProps {
   onCreateRfi?: (photo: any) => void;
   initialTab?: null | 'links';
   initialOpenLinkModal?: boolean;
+  initialVersionFileId?: string | null;
 }
 
-const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi, initialTab, initialOpenLinkModal }: FileViewerProps) => {
+const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, targetType = 'photo', projectId, onCreateSnag, onCreateRfi, initialTab, initialOpenLinkModal, initialVersionFileId }: FileViewerProps) => {
   const router = useRouter();
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -58,6 +59,29 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     setRotation(0);
     setLocalActiveFile(null);
   }, [currentIndex]);
+
+  // When initialVersionFileId is provided, auto-fetch versions and jump to that version
+  useEffect(() => {
+    if (!open || !initialVersionFileId) return;
+    const jumpToVersion = async () => {
+      const parentFile = files[initialIndex];
+      if (!parentFile?.id) return;
+      try {
+        const data = await getFileVersions(parentFile.id);
+        const vers = data.versions || [];
+        const target = vers.find((v: any) => String(v.id) === String(initialVersionFileId));
+        if (target) {
+          setLocalActiveFile(target);
+          setVersions(vers);
+          setActiveTab('versions');
+        }
+      } catch (e) {
+        console.error('jumpToVersion error', e);
+      }
+    };
+    jumpToVersion();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialVersionFileId]);
 
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [shareItem, setShareItem] = useState<any | null>(null);
@@ -706,9 +730,10 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               </div>
 
               <div className="flex items-center gap-1.5 pr-2">
-                <DropdownMenu>
+                <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
                     <Button
+                      data-three-dot-trigger="true"
                       size="icon"
                       variant="ghost"
                       className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
@@ -716,7 +741,16 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 bg-background border border-border text-foreground">
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-48 bg-background border border-border text-foreground"
+                    onPointerDownOutside={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (target.closest('[data-three-dot-trigger="true"]')) {
+                        e.preventDefault();
+                      }
+                    }}
+                  >
                     {onCreateRfi && (
                       <DropdownMenuItem onClick={() => onCreateRfi(currentFile)} className="cursor-pointer">
                         <HelpCircle className="mr-2 h-4 w-4 text-muted-foreground" />

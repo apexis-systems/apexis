@@ -2650,18 +2650,18 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     {viewerIndex + 1} / {sortedPhotos.length}
                                 </Text>
                                 <View style={{ flexDirection: 'row', gap: 4 }}>
-                                    <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowInfoModal(true))} style={{ padding: 8 }}>
+                                    <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8 }}>
                                         <Feather name="info" size={20} color="#fff" />
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowLinkModal(true))} style={{ padding: 8 }}>
                                         <Feather name="link" size={20} color="#fff" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => handleSharePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }} disabled={sharing || downloading}>
+                                    {/* <TouchableOpacity onPress={() => handleSharePhoto(sortedPhotos[viewerIndex])} style={{ padding: 8 }} disabled={sharing || downloading}>
                                         {sharing
                                             ? <ActivityIndicator size="small" color="#fff" />
                                             : <Feather name="share-2" size={20} color="#fff" />
                                         }
-                                    </TouchableOpacity>
+                                    </TouchableOpacity> */}
                                     <TouchableOpacity onPress={downloadToGallery} style={{ padding: 8 }} disabled={downloading || sharing}>
                                         {downloading
                                             ? <ActivityIndicator size="small" color={colors.primary} />
@@ -2891,7 +2891,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     isUploader={activeActionFile && String(activeActionFile.created_by) === String(user.id)}
                     clientVisible={activeActionFile?.client_visible !== false}
                     doNotFollow={false}
-                    canDelete={activeActionFile && String(activeActionFile.created_by) === String(user.id) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
+                    canDelete={false}
                     canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('confirmation') && !currentFolder?.name.toLowerCase().includes('archive')}
                     onRename={() => handleRenameFileAction(activeActionFile)}
                     onArchive={() => handleArchiveFile(activeActionFile)}
@@ -2902,6 +2902,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     isArchived={currentFolder?.name.toLowerCase().includes('archive')}
                     fileName={activeActionFile?.file_name || ''}
                     useView={Platform.OS === 'ios'}
+                />
+                <FileInformationModal
+                    visible={showInfoModal}
+                    onClose={() => setShowInfoModal(false)}
+                    file={sortedPhotos[viewerIndex]}
+                    folders={folders}
+                    projectName={project?.name || ''}
                 />
             </Modal>
 
@@ -2918,16 +2925,6 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     handleLinkItemClick={handleLinkItemClick}
                 />
             )}
-            <FileInformationModal
-                visible={showInfoModal}
-                onClose={() => {
-                    setShowInfoModal(false);
-                    checkAndRestoreViewer();
-                }}
-                file={sortedPhotos[viewerIndex]}
-                folders={folders}
-                projectName={project?.name || ''}
-            />
 
             {/* Rename Folder Modal */}
             <Modal visible={showEditFolder} transparent animationType="fade">
