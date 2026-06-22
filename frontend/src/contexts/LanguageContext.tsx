@@ -686,6 +686,12 @@ const translations: Record<Language, Record<string, string>> = {
     confirmations_folder_name: 'Confirmations',
     'projectSnags.viewLinkedAttachments': 'View Linked Attachments',
     'projectRfi.viewLinkedAttachments': 'View Linked Attachments',
+    rename_btn: 'Rename',
+    rename_file_title: 'Rename File',
+    rename_folder_title: 'Rename Folder',
+    new_name_label: 'New Name',
+    enter_new_name_placeholder: 'Enter new file name',
+    renaming_btn: 'Renaming...',
   },
   hi: {
     welcome_back: 'वापसी पर स्वागत है',
@@ -1368,6 +1374,12 @@ const translations: Record<Language, Record<string, string>> = {
     confirmations_folder_name: 'Confirmations',
     'projectSnags.viewLinkedAttachments': 'लिंक किए गए अनुलग्नक देखें',
     'projectRfi.viewLinkedAttachments': 'लिंक किए गए अनुलग्नक देखें',
+    rename_btn: 'नाम बदलें',
+    rename_file_title: 'फ़ाइल का नाम बदलें',
+    rename_folder_title: 'फ़ोल्डर का नाम बदलें',
+    new_name_label: 'नया नाम',
+    enter_new_name_placeholder: 'नया फ़ाइल नाम दर्ज करें',
+    renaming_btn: 'नाम बदला जा रहा है...',
   },
   te: {
     welcome_back: 'తిరిగి స్వాగతం',
@@ -2042,6 +2054,12 @@ const translations: Record<Language, Record<string, string>> = {
     confirmations_folder_name: 'Confirmations',
     'projectSnags.viewLinkedAttachments': 'లింక్ చేయబడిన జోడింపులను వీక్షించండి',
     'projectRfi.viewLinkedAttachments': 'లింక్ చేయబడిన జోడింపులను వీక్షించండి',
+    rename_btn: 'పేరు మార్చు',
+    rename_file_title: 'ఫైల్ పేరు మార్చండి',
+    rename_folder_title: 'ఫోల్డర్ పేరు మార్చండి',
+    new_name_label: 'కొత్త పేరు',
+    enter_new_name_placeholder: 'కొత్త ఫైల్ పేరును నమోదు చేయండి',
+    renaming_btn: 'పేరు మారుస్తోంది...',
   },
 };
 

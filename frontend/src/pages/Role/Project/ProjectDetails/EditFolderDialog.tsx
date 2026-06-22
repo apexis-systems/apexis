@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface EditFolderDialogProps {
   open: boolean;
@@ -14,6 +15,7 @@ interface EditFolderDialogProps {
 }
 
 const EditFolderDialog = ({ open, onOpenChange, onRename, currentName }: EditFolderDialogProps) => {
+  const { t } = useLanguage();
   const [name, setName] = useState(currentName || "");
   const [loading, setLoading] = useState(false);
 
@@ -43,12 +45,12 @@ const EditFolderDialog = ({ open, onOpenChange, onRename, currentName }: EditFol
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>Rename Folder</DialogTitle>
+          <DialogTitle>{t('rename_folder_title')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="folder-name">New Name</Label>
+              <Label htmlFor="folder-name">{t('new_name_label')}</Label>
               <Input
                 id="folder-name"
                 value={name || ""}
@@ -64,10 +66,10 @@ const EditFolderDialog = ({ open, onOpenChange, onRename, currentName }: EditFol
               onClick={() => onOpenChange && onOpenChange(false)}
               disabled={loading}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button type="submit" disabled={loading || !name?.trim()}>
-              {loading ? "Renaming..." : "Save Changes"}
+              {loading ? t('renaming_btn') : t('save_changes')}
             </Button>
           </DialogFooter>
         </form>

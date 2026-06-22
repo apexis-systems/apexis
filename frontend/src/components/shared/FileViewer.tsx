@@ -3,12 +3,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert, RotateCw, Link as LinkIcon, Trash2 } from 'lucide-react';
+import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert, RotateCw, Link as LinkIcon, Trash2, MoreVertical, Pencil, Share2, Info } from 'lucide-react';
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
-import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink } from '@/services/fileService';
+import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink, toggleDoNotFollow, toggleOnlyForReference } from '@/services/fileService';
 import LinkFileModal from './LinkFileModal';
+import ShareDialog from './ShareDialog';
+import RenameFileDialog from '@/pages/Role/Project/ProjectDetails/RenameFileDialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -50,6 +53,46 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   }, [currentIndex]);
 
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [shareItem, setShareItem] = useState<any | null>(null);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+
+  const handleRename = async (newName: string) => {
+    try {
+      await updateFile(currentFile.id, { file_name: newName });
+      toast.success(t('file_renamed_msg').replace('{name}', newName));
+      if (onUpdate) {
+        onUpdate({ ...currentFile, file_name: newName });
+      }
+    } catch (e: any) {
+      toast.error(t('failed_rename_file') || 'Failed to rename file');
+    }
+  };
+
+  const handleToggleDoNotFollow = async () => {
+    try {
+      const targetState = !currentFile.do_not_follow;
+      await toggleDoNotFollow(currentFile.id, targetState);
+      toast.success(t(targetState ? 'doc_marked_dnf' : 'doc_unmarked_dnf'));
+      if (onUpdate) {
+        onUpdate({ ...currentFile, do_not_follow: targetState });
+      }
+    } catch (e: any) {
+      toast.error(t('failed_toggle_dnf') || 'Failed to toggle Do Not Follow');
+    }
+  };
+
+  const handleToggleOnlyForReference = async () => {
+    try {
+      const targetState = !currentFile.only_for_reference;
+      await toggleOnlyForReference(currentFile.id, targetState);
+      toast.success(t(targetState ? 'doc_marked_ofr' : 'doc_unmarked_ofr'));
+      if (onUpdate) {
+        onUpdate({ ...currentFile, only_for_reference: targetState });
+      }
+    } catch (e: any) {
+      toast.error(t('failed_toggle_ofr') || 'Failed to toggle Only for Reference');
+    }
+  };
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'discussion' | 'links'>('discussion');
   const [linksSubTab, setLinksSubTab] = useState<'rfi' | 'snag' | 'photo' | 'doc'>('rfi');
@@ -505,24 +548,53 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               </div>
 
               <div className="flex items-center gap-1.5 pr-2">
-                {onCreateRfi && (
-                  <Button
-                    variant="ghost"
-                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
-                    onClick={() => onCreateRfi(currentFile)}
-                  >
-                    <Plus className="h-3.5 w-3.5" /> {t('rfi_label')}
-                  </Button>
-                )}
-                {onCreateSnag && (
-                  <Button
-                    variant="ghost"
-                    className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
-                    onClick={() => onCreateSnag(currentFile)}
-                  >
-                    <Plus className="h-3.5 w-3.5" /> {t('snag')}
-                  </Button>
-                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 backdrop-blur-md rounded-full bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 bg-background border border-border text-foreground">
+                    {onCreateRfi && (
+                      <DropdownMenuItem onClick={() => onCreateRfi(currentFile)} className="cursor-pointer">
+                        <Plus className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <span>{t('create_rfi')}</span>
+                      </DropdownMenuItem>
+                    )}
+                    {onCreateSnag && (
+                      <DropdownMenuItem onClick={() => onCreateSnag(currentFile)} className="cursor-pointer">
+                        <Plus className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <span>{t('create_snag')}</span>
+                      </DropdownMenuItem>
+                    )}
+                    {(user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'contributor') && (
+                      <DropdownMenuItem onClick={() => setShowRenameDialog(true)} className="cursor-pointer">
+                        <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <span>{t('rename_btn')}</span>
+                      </DropdownMenuItem>
+                    )}
+                    {targetType === 'document' && (user?.role === 'admin' || user?.role === 'superadmin' || (user?.role === 'contributor' && (String(currentFile.created_by) === String(user.id) || String(currentFile.creator?.id) === String(user.id)))) && (
+                      <>
+                        <DropdownMenuItem onClick={handleToggleDoNotFollow} className="cursor-pointer">
+                          <ShieldAlert className={`mr-2 h-4 w-4 ${currentFile.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                          <span>{t('toggle_dnf_tip')}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleToggleOnlyForReference} className="cursor-pointer">
+                          <Info className={`mr-2 h-4 w-4 ${currentFile.only_for_reference ? 'text-blue-500' : 'text-muted-foreground'}`} />
+                          <span>{t('toggle_ofr_tip')}</span>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    <DropdownMenuItem onClick={() => setShareItem(currentFile)} className="cursor-pointer">
+                      <Share2 className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span>{t('share_btn')}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
                   variant="ghost"
                   className="h-9 px-3 gap-1.5 backdrop-blur-md rounded-full text-[11px] font-black uppercase bg-background/80 text-foreground border border-border/60 hover:bg-background shadow-md dark:bg-black/60 dark:text-white dark:border-white/20 dark:hover:bg-black/80"
@@ -668,6 +740,21 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
         currentFileId={currentFile?.id}
         onLink={handleLinkFile}
         handleLinkItemClick={handleLinkItemClick}
+      />
+      {shareItem && (
+        <ShareDialog
+          open={!!shareItem}
+          onOpenChange={() => setShareItem(null)}
+          itemName={shareItem?.file_name || ''}
+          downloadUrl={shareItem?.downloadUrl}
+          fileType={shareItem?.file_type}
+        />
+      )}
+      <RenameFileDialog
+        open={showRenameDialog}
+        onOpenChange={setShowRenameDialog}
+        onRename={handleRename}
+        currentName={currentFile?.file_name || ''}
       />
     </Dialog>
   );
