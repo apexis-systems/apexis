@@ -48,6 +48,26 @@ function RootLayoutNav() {
   const [pendingNotification, setPendingNotification] = useState<any>(null);
   const lastProcessedUrl = useRef<string | null>(null);
   const lastProcessedNotifId = useRef<string | null>(null);
+  const isColdStartWithLink = useRef(!!nativeUrl);
+
+  if (isAuthLoading && nativeUrl && !isColdStartWithLink.current) {
+    isColdStartWithLink.current = true;
+  }
+
+  // Clear the cold start flag once we successfully route to the auth/redirect pages
+  const isAlreadyOnAuthScreen = segments[0] === 'auth' || segments[0] === '(auth)';
+  if (isAlreadyOnAuthScreen && isColdStartWithLink.current) {
+    isColdStartWithLink.current = false;
+  }
+
+  const [fontsLoaded, fontError] = useFonts({
+    'Angelica': require('../assets/fonts/Angelica-C.otf'),
+    'Montserrat': require('../assets/fonts/Montserrat-Regular.ttf'),
+    'Montserrat-Medium': require('../assets/fonts/Montserrat-Medium.ttf'),
+    'Montserrat-SemiBold': require('../assets/fonts/Montserrat-SemiBold.ttf'),
+    'Montserrat-Bold': require('../assets/fonts/Montserrat-Bold.ttf'),
+    'Montserrat-ExtraBold': require('../assets/fonts/Montserrat-ExtraBold.ttf'),
+  });
 
   const [versionConfig, setVersionConfig] = useState<{
     minAppVersion: string;
@@ -59,7 +79,20 @@ function RootLayoutNav() {
 
   // Hardened Deep Link Watcher (Reacts to useURL changes on background resume)
   useEffect(() => {
+    if (isAuthLoading || !fontsLoaded || isVersionChecking) return;
     if (!nativeUrl) return;
+
+    // If it's a cold start with a link, we let Expo Router's native navigation handle it.
+    // We only process links that come in during background resume.
+    if (isColdStartWithLink.current) {
+      isColdStartWithLink.current = false;
+      lastProcessedUrl.current = nativeUrl;
+      return;
+    }
+
+    // If we are already on the login-redirect or invite page, let the page component handle it
+    const isAlreadyRouting = segments[0] === 'auth' && (segments[1] === 'login-redirect' || segments[1] === 'invite');
+    if (isAlreadyRouting) return;
 
     // LOOP GUARD: Stop if we've already handled this exact URL string
     if (nativeUrl === lastProcessedUrl.current) return;
@@ -97,7 +130,7 @@ function RootLayoutNav() {
     };
 
     handleDeepLink(nativeUrl);
-  }, [nativeUrl, isLoggedIn, logout]);
+  }, [nativeUrl, isLoggedIn, logout, isAuthLoading, fontsLoaded, isVersionChecking, segments]);
 
   // 1. Listen for notification taps while the app is running (foreground/background)
   useEffect(() => {
@@ -218,14 +251,6 @@ function RootLayoutNav() {
     checkOnboarding();
   }, [segments]); // Re-check when route changes to catch updates from onboarding screen
 
-  const [fontsLoaded, fontError] = useFonts({
-    'Angelica': require('../assets/fonts/Angelica-C.otf'),
-    'Montserrat': require('../assets/fonts/Montserrat-Regular.ttf'),
-    'Montserrat-Medium': require('../assets/fonts/Montserrat-Medium.ttf'),
-    'Montserrat-SemiBold': require('../assets/fonts/Montserrat-SemiBold.ttf'),
-    'Montserrat-Bold': require('../assets/fonts/Montserrat-Bold.ttf'),
-    'Montserrat-ExtraBold': require('../assets/fonts/Montserrat-ExtraBold.ttf'),
-  });
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
@@ -273,7 +298,17 @@ function RootLayoutNav() {
       // Don't run until initial auth check (getMe) has resolved
       if (isAuthLoading) return;
 
-      const inAuthGroup = segments[0] === '(auth)';
+      // If we cold-started with a link and the router has not transitioned to the auth page yet,
+      // skip checkAndRedirect to prevent preemptive overrides
+      if (isColdStartWithLink.current) {
+        const isAlreadyOnAuthScreen = segments[0] === 'auth' || segments[0] === '(auth)';
+        if (!isAlreadyOnAuthScreen) {
+          console.log('[NAV] Cold start deep link active, skipping checkAndRedirect');
+          return;
+        }
+      }
+
+      const inAuthGroup = segments[0] === '(auth)' || segments[0] === 'auth';
       const isSignupWithToken = segments[0] === '(auth)' && segments[1] === 'signup';
       const isSetupName = segments[0] === '(auth)' && segments[1] === 'setup-name';
       const isOnboarding = segments[0] === 'onboarding';

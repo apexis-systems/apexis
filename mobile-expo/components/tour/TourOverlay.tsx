@@ -18,6 +18,7 @@ interface TourStep {
     spotlightId: string;
     shape?: 'circle' | 'rect';
     tooltipShiftY?: number;
+    tooltipPosition?: 'top' | 'bottom';
     defaultPos: {
         x: number;
         y: number;
@@ -35,7 +36,7 @@ export const TOUR_STEPS: TourStep[] = [
         description: 'Your central hub for project activity. View your profile overview and track total projects, folders, and documents at a glance.',
         spotlightId: 'dashboardHeader',
         shape: 'rect',
-        defaultPos: { x: width / 2, y: 70, w: width - 40, h: 100, r: 16 },
+        defaultPos: { x: width / 2, y: 250, w: width - 40, h: 200, r: 16 },
     },
     {
         id: 2,
@@ -73,6 +74,15 @@ export const TOUR_STEPS: TourStep[] = [
     },
     {
         id: 6,
+        title: 'Video Tutorials',
+        description: 'Browse our collection of quick video guides to learn how to use the different features of APEXISpro™.',
+        spotlightId: 'helpSupportVideos',
+        shape: 'rect',
+        tooltipPosition: 'bottom',
+        defaultPos: { x: width / 2, y: height * 0.55, w: width - 48, h: height * 0.25, r: 12 },
+    },
+    {
+        id: 7,
         title: 'Notifications',
         description: 'Stay updated with important alerts and team mentions.',
         spotlightId: 'notificationsIcon',
@@ -80,7 +90,7 @@ export const TOUR_STEPS: TourStep[] = [
         defaultPos: { x: width - 62, y: 40, r: 28 },
     },
     {
-        id: 7,
+        id: 8,
         title: 'Team Chat',
         description: 'Instant collaboration with room members and easy file sharing.',
         spotlightId: 'chatTab',
@@ -88,7 +98,7 @@ export const TOUR_STEPS: TourStep[] = [
         defaultPos: { x: width * 0.68, y: height - 60, r: 40 },
     },
     {
-        id: 8,
+        id: 9,
         title: 'Settings',
         description: 'Manage your profile, theme, and application preferences.',
         spotlightId: 'settingsTab',
@@ -143,7 +153,10 @@ export default function TourOverlay() {
     }));
 
     const tooltipStyle = useAnimatedStyle(() => {
-        const isBottom = spotY.value > height / 2;
+        const defaultIsBottom = spotY.value > height / 2;
+        const isBottom = step?.tooltipPosition 
+            ? step.tooltipPosition === 'top' 
+            : defaultIsBottom;
         const offset = spotH.value / 2 + 20;
         const extraShift = step?.tooltipShiftY || 0;
         return {
@@ -156,9 +169,9 @@ export default function TourOverlay() {
     const handleNext = async () => {
         if (currentStep === 3) router.push('/activity');
         if (currentStep === 4) router.push('/(tabs)');
-        // Step 5 (Help & Support) stays on /(tabs) for Step 6 (Notifications)
-        if (currentStep === 6) router.push('/chat');
-        if (currentStep === 7) router.push('/settings');
+        // Step 5 (Help & Support button), Step 6 (Help Center modal) and Step 7 (Notifications) stay on /(tabs)
+        if (currentStep === 7) router.push('/chat');
+        if (currentStep === 8) router.push('/settings');
 
         if (currentStep === TOUR_STEPS.length) {
             await stopTour();

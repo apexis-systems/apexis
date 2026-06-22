@@ -71,7 +71,7 @@ export default function FileInformationModal({
         try {
             setPromotingVersionId(versionId);
             await promoteFile(versionId);
-            Alert.alert(t('common.success') || 'Success', t('projectDocuments.versionPromotedSuccess') || 'Version promoted to active');
+            Alert.alert(t('common.success'), t('projectDocuments.versionPromotedSuccess'));
             fetchVersions();
             const promoted = versions.find(v => v.id === versionId);
             if (promoted && onUpdate) {
@@ -79,7 +79,7 @@ export default function FileInformationModal({
             }
         } catch (err) {
             console.error(err);
-            Alert.alert(t('common.error') || 'Error', t('projectDocuments.failedPromoteVersion') || 'Failed to promote version');
+            Alert.alert(t('common.error'), t('projectDocuments.failedPromoteVersion'));
         } finally {
             setPromotingVersionId(null);
         }
@@ -87,18 +87,18 @@ export default function FileInformationModal({
 
     const handleDelete = async (versionId: number) => {
         Alert.alert(
-            t('projectDocuments.deleteVersion') || 'Delete Version',
-            t('projectDocuments.confirmDeleteVersion') || 'Are you sure you want to delete this version?',
+            t('projectDocuments.deleteVersion'),
+            t('projectDocuments.confirmDeleteVersion'),
             [
-                { text: t('common.cancel') || 'Cancel', style: 'cancel' },
+                { text: t('common.cancel'), style: 'cancel' },
                 {
-                    text: t('common.delete') || 'Delete',
+                    text: t('common.delete'),
                     style: 'destructive',
                     onPress: async () => {
                         try {
                             setDeletingVersionId(versionId);
                             await deleteFile(versionId);
-                            Alert.alert(t('common.success') || 'Success', t('projectDocuments.versionDeletedSuccess') || 'Version deleted successfully');
+                            Alert.alert(t('common.success'), t('projectDocuments.versionDeletedSuccess'));
                             if (versionId === file.id) {
                                 const remaining = versions.filter(v => v.id !== versionId);
                                 if (remaining.length > 0) {
@@ -112,7 +112,7 @@ export default function FileInformationModal({
                             fetchVersions();
                         } catch (err) {
                             console.error(err);
-                            Alert.alert(t('common.error') || 'Error', t('projectDocuments.failedDeleteVersion') || 'Failed to delete version');
+                            Alert.alert(t('common.error'), t('projectDocuments.failedDeleteVersion'));
                         } finally {
                             setDeletingVersionId(null);
                         }

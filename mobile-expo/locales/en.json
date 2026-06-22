@@ -2,7 +2,10 @@
     "translation": {
         "common": {
             "cancel": "Cancel",
-            "share": "Share"
+            "share": "Share",
+            "success": "Success",
+            "error": "Error",
+            "delete": "Delete"
         },
         "Activity": "Activity",
         "All": "All",
@@ -743,7 +746,13 @@
             "marked": "marked",
             "unmarked": "unmarked",
             "folderDeletedMovingContents": "Folder \"{{name}}\" deleted after moving contents",
-            "failedToDeleteEmptyFolder": "Contents moved, but failed to delete empty folder"
+            "failedToDeleteEmptyFolder": "Contents moved, but failed to delete empty folder",
+            "versionPromotedSuccess": "Version promoted to active",
+            "failedPromoteVersion": "Failed to promote version",
+            "deleteVersion": "Delete Version",
+            "confirmDeleteVersion": "Are you sure you want to delete this version?",
+            "versionDeletedSuccess": "Version deleted successfully",
+            "failedDeleteVersion": "Failed to delete version"
         },
         "upload": {
             "assignTo": "Assign To",
