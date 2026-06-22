@@ -648,6 +648,7 @@
             "close": "बंद करें"
         },
         "projectDocuments": {
+            "makeActive": "सक्रिय करें",
             "selectMonth": "महीना चुनें",
             "uploadDocument": "दस्तावेज़ अपलोड करें",
             "newFolder": "नया फ़ोल्डर",
@@ -918,6 +919,7 @@
             "errorHeader": "त्रुटि"
         },
         "fileActionMenu": {
+            "uploadNewVersion": "नया संस्करण अपलोड करें",
             "createRfi": "RFI बनाएँ",
             "createSnag": "स्नेग बनाएँ",
             "share": "साझा करें",
@@ -926,6 +928,8 @@
             "showContent": "सामग्री दिखाएँ",
             "followFile": "फ़ाइल फ़ॉलो करें",
             "dontFollow": "फ़ॉलो न करें",
+            "unmarkOfr": "संदर्भ का निशान हटाएँ",
+            "markOfr": "केवल संदर्भ के लिए",
             "archiveFile": "फ़ाइल आर्काइव करें",
             "unarchiveFile": "फ़ाइल अनआर्काइव करें",
             "deleteFile": "फ़ाइल हटाएँ",

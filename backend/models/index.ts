@@ -102,6 +102,10 @@ db.files.belongsTo(db.users, { foreignKey: 'created_by', as: 'creator' });
 // db.files.belongsTo(db.users, { foreignKey: 'assigned_to', as: 'assignee' });
 db.users.hasMany(db.files, { foreignKey: 'created_by' });
 
+// File <-> File (Versioning)
+db.files.belongsTo(db.files, { as: 'parent', foreignKey: 'parent_file_id' });
+db.files.hasMany(db.files, { as: 'versions', foreignKey: 'parent_file_id' });
+
 // File <-> FileLink
 db.files.hasMany(db.file_links, { foreignKey: 'file_id_1', as: 'links_source' });
 db.files.hasMany(db.file_links, { foreignKey: 'file_id_2', as: 'links_target' });

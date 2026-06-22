@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert, RotateCw, Link as LinkIcon, Trash2, MoreVertical, Pencil, Share2, Info } from 'lucide-react';
+import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalLink, FileText, MapPin, Calendar, User as UserIcon, Maximize2, Minimize2, ZoomIn, ZoomOut, ShieldAlert, HelpCircle, AlertTriangle, RotateCw, Link as LinkIcon, Trash2, MoreVertical, Pencil, Share2, Info, Loader2 } from 'lucide-react';
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
-import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink, toggleDoNotFollow, toggleOnlyForReference } from '@/services/fileService';
+import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink, toggleDoNotFollow, toggleOnlyForReference, getFileVersions, promoteFile, deleteFile } from '@/services/fileService';
 import LinkFileModal from './LinkFileModal';
 import ShareDialog from './ShareDialog';
 import RenameFileDialog from '@/pages/Role/Project/ProjectDetails/RenameFileDialog';
@@ -45,11 +45,18 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [rotation, setRotation] = useState(0);
 
+  const [localActiveFile, setLocalActiveFile] = useState<any | null>(null);
+  const [versions, setVersions] = useState<any[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [promotingVersionId, setPromotingVersionId] = useState<number | string | null>(null);
+  const [deletingVersionId, setDeletingVersionId] = useState<number | string | null>(null);
+
   // Reset zoom, pan and rotation when changing files
   useEffect(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setRotation(0);
+    setLocalActiveFile(null);
   }, [currentIndex]);
 
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -94,7 +101,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     }
   };
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'discussion' | 'links'>('discussion');
+  const [activeTab, setActiveTab] = useState<'discussion' | 'links' | 'versions'>('discussion');
   const [linksSubTab, setLinksSubTab] = useState<'rfi' | 'snag' | 'photo' | 'doc'>('rfi');
 
   const isFilePhoto = (item: any) => {
@@ -120,7 +127,8 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     ? linksSubTab
     : (linkedSubTabs[0]?.key || 'rfi');
 
-  const currentFile = files[currentIndex];
+  const parentFile = files[currentIndex];
+  const currentFile = localActiveFile || parentFile;
   const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
     ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
   const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') ||
@@ -137,9 +145,72 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     }
   }, [currentFile?.id]);
 
+  const fetchVersions = useCallback(async () => {
+    const rootFile = parentFile;
+    if (rootFile?.id) {
+      setLoadingVersions(true);
+      try {
+        const data = await getFileVersions(rootFile.id);
+        setVersions(data.versions || []);
+      } catch (err) {
+        console.error("fetchVersions Error", err);
+      } finally {
+        setLoadingVersions(false);
+      }
+    }
+  }, [parentFile?.id]);
+
+  const handlePromoteVersion = async (fileId: string | number) => {
+    try {
+      setPromotingVersionId(fileId);
+      await promoteFile(fileId);
+      toast.success(t('version_promoted_success') || 'Version promoted to current active version');
+      fetchVersions();
+      const promoted = versions.find(v => v.id === fileId);
+      if (promoted) {
+        setLocalActiveFile(promoted);
+        if (onUpdate) {
+          onUpdate({ ...promoted, is_current: true });
+        }
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to promote version');
+    } finally {
+      setPromotingVersionId(null);
+    }
+  };
+
+  const handleDeleteVersion = async (fileId: string | number) => {
+    if (!confirm(t('confirm_delete_version') || 'Are you sure you want to delete this version?')) return;
+    try {
+      setDeletingVersionId(fileId);
+      await deleteFile(fileId);
+      toast.success(t('version_deleted_success') || 'Version deleted successfully');
+      if (fileId === currentFile.id) {
+        const remaining = versions.filter(v => v.id !== fileId);
+        if (remaining.length > 0) {
+          setLocalActiveFile(remaining[0]);
+          if (onUpdate) {
+            onUpdate({ ...remaining[0], is_current: true });
+          }
+        } else {
+          onOpenChange(false);
+        }
+      }
+      fetchVersions();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || 'Failed to delete version');
+    } finally {
+      setDeletingVersionId(null);
+    }
+  };
+
   useEffect(() => {
-    if (open) fetchLinks();
-  }, [open, fetchLinks]);
+    if (open) {
+      fetchLinks();
+      fetchVersions();
+    }
+  }, [open, fetchLinks, fetchVersions]);
 
   useEffect(() => {
     if (open && initialOpenLinkModal) {
@@ -236,6 +307,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   useEffect(() => {
     if (open) {
       setCurrentIndex(initialIndex);
+      setLocalActiveFile(null);
       if (initialTab) {
         setActiveTab(initialTab);
       }
@@ -444,26 +516,112 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
               {/* Comments Section (Fills remaining height) */}
               <div className="flex-1 flex flex-col min-h-0 border-t border-border/50">
                 <div className="px-6 py-4 flex flex-col h-full overflow-hidden">
-                  <div className="flex items-center gap-4 mb-4 shrink-0 border-b border-border/50 pb-2">
+                  <div className="flex items-center gap-4 mb-4 shrink-0 border-b border-border/50 pb-2 overflow-x-auto no-scrollbar">
                     <button
                       onClick={() => setActiveTab('discussion')}
-                      className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'discussion' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
+                      className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative whitespace-nowrap", activeTab === 'discussion' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
                     >
                       {activeTab === 'discussion' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
                       {t('discussion')}
                     </button>
                     <button
                       onClick={() => setActiveTab('links')}
-                      className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative", activeTab === 'links' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
+                      className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative whitespace-nowrap", activeTab === 'links' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
                     >
                       {activeTab === 'links' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
                       {t('links_label')} ({linkedItems.length})
                     </button>
+                    {targetType === 'document' && (
+                      <button
+                        onClick={() => setActiveTab('versions')}
+                        className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative whitespace-nowrap", activeTab === 'versions' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
+                      >
+                        {activeTab === 'versions' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
+                        {t('versions') || 'Versions'} ({versions.length})
+                      </button>
+                    )}
                   </div>
                   <div className="flex-1 min-h-0 flex flex-col">
                     {activeTab === 'discussion' ? (
                       <div className="flex-1 overflow-y-auto">
                         <CommentThread targetId={currentFile.id} targetType={targetType} projectId={projectId || currentFile.project_id} />
+                      </div>
+                    ) : activeTab === 'versions' ? (
+                      <div className="flex flex-col h-full min-h-0">
+                        {loadingVersions ? (
+                          <div className="text-center py-8 text-xs text-muted-foreground">{t('loading_versions') || 'Loading versions...'}</div>
+                        ) : versions.length === 0 ? (
+                          <div className="text-center py-8 text-xs text-muted-foreground">{t('no_versions') || 'No versions found'}</div>
+                        ) : (
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-2 min-h-0">
+                            {versions.map((v, idx) => {
+                              const isActiveVersion = currentFile.id === v.id;
+                              const isCurrentVersion = v.is_current;
+                              return (
+                                <div 
+                                  key={v.id} 
+                                  onClick={() => setLocalActiveFile(v)}
+                                  className={cn(
+                                    "flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer",
+                                    isActiveVersion 
+                                      ? "bg-accent/10 border-accent shadow-sm" 
+                                      : "bg-secondary/50 border-border/50 hover:bg-secondary"
+                                  )}
+                                >
+                                  <div className="flex-1 min-w-0 pr-2">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                      <span className="text-[10px] uppercase font-bold text-accent tracking-wider">
+                                        V{versions.length - idx}
+                                      </span>
+                                      {isCurrentVersion && (
+                                        <span className="bg-emerald-500/10 text-emerald-600 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-wider">
+                                          {t('current_version') || 'Active'}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-sm font-semibold truncate text-foreground">{v.file_name}</div>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                                      {formatDate(v.createdAt)} &bull; {v.creator?.name || t('system_label')}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    {!isCurrentVersion && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                      <Button 
+                                        size="sm" 
+                                        variant="ghost" 
+                                        className="h-7 text-[10px] font-black uppercase text-accent hover:bg-accent/10 px-2"
+                                        onClick={() => handlePromoteVersion(v.id)}
+                                        disabled={promotingVersionId !== null || deletingVersionId !== null}
+                                      >
+                                        {promotingVersionId === v.id ? (
+                                          <Loader2 className="h-3 w-3 animate-spin text-accent" />
+                                        ) : (
+                                          t('make_active') || 'Make Active'
+                                        )}
+                                      </Button>
+                                    )}
+                                    {(user.role === 'admin' || user.role === 'superadmin' || String(v.created_by) === String(user.id)) && (
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-7 w-7 text-muted-foreground hover:text-destructive" 
+                                        onClick={() => handleDeleteVersion(v.id)} 
+                                        title={t('delete')}
+                                        disabled={promotingVersionId !== null || deletingVersionId !== null}
+                                      >
+                                        {deletingVersionId === v.id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                        ) : (
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-col h-full min-h-0">
@@ -561,13 +719,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                   <DropdownMenuContent align="end" className="w-48 bg-background border border-border text-foreground">
                     {onCreateRfi && (
                       <DropdownMenuItem onClick={() => onCreateRfi(currentFile)} className="cursor-pointer">
-                        <Plus className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <HelpCircle className="mr-2 h-4 w-4 text-muted-foreground" />
                         <span>{t('create_rfi')}</span>
                       </DropdownMenuItem>
                     )}
                     {onCreateSnag && (
                       <DropdownMenuItem onClick={() => onCreateSnag(currentFile)} className="cursor-pointer">
-                        <Plus className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <AlertTriangle className="mr-2 h-4 w-4 text-muted-foreground" />
                         <span>{t('create_snag')}</span>
                       </DropdownMenuItem>
                     )}
