@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle, CheckCircle2, Archive, MoreVertical, Plus } from 'lucide-react';
+import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle, HelpCircle, CheckCircle2, Archive, MoreVertical, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -1104,11 +1104,11 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }} className="cursor-pointer">
-                            <Plus className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <HelpCircle className="mr-2 h-4 w-4 text-muted-foreground" />
                             <span>{t('create_rfi')}</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateSnag(photo); }} className="cursor-pointer">
-                            <Plus className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <AlertTriangle className="mr-2 h-4 w-4 text-muted-foreground" />
                             <span>{t('create_snag')}</span>
                           </DropdownMenuItem>
                         </DropdownMenuContent>

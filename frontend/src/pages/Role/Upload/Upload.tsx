@@ -31,6 +31,7 @@ function UploadInner() {
     const urlFolderId = searchParams?.get('folderId');
     // returnUrl used to go back to the exact project folder page after upload
     const returnUrl = searchParams?.get('returnUrl') || null;
+    const parentFileId = searchParams?.get('parentFileId') || null;
 
     const [selectedProject, setSelectedProject] = useState<string | null>(null);
     const [projectName, setProjectName] = useState<string>('');
@@ -290,6 +291,9 @@ function UploadInner() {
                 }
                 if (assignedToIds.length > 0) {
                     formData.append('assigned_to', JSON.stringify(assignedToIds));
+                }
+                if (parentFileId) {
+                    formData.append('parent_file_id', parentFileId);
                 }
                 formData.append('file', f);
                 return uploadFile(formData);

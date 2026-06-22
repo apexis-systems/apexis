@@ -223,7 +223,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { folder_id, project_id, skipActivity, location, tags, assigned_to } = req.body;
+        const { folder_id, project_id, skipActivity, location, tags, assigned_to, parent_file_id } = req.body;
         const project = await projects.findByPk(project_id);
 
         if (!project) {
@@ -327,6 +327,28 @@ export const uploadFile = async (req: Request | any, res: Response) => {
 
         const assignedToArray = assigned_to ? parseAssignedTo(assigned_to) : [];
 
+        let rootParentId: number | null = null;
+        if (parent_file_id && parent_file_id !== 'null' && parent_file_id !== 'undefined' && parent_file_id !== '') {
+            const parentFile = await files.findByPk(parseInt(parent_file_id, 10));
+            if (parentFile) {
+                rootParentId = parentFile.parent_file_id || parentFile.id;
+            }
+        }
+
+        if (rootParentId) {
+            await files.update(
+                { is_current: false },
+                {
+                    where: {
+                        [Op.or]: [
+                            { id: rootParentId },
+                            { parent_file_id: rootParentId }
+                        ]
+                    }
+                }
+            );
+        }
+
         const newFile = await files.create({
             folder_id: finalFolderId,
             project_id: parseInt(project_id, 10),
@@ -339,6 +361,8 @@ export const uploadFile = async (req: Request | any, res: Response) => {
             location: location || null,
             tags: tags || null,
             assigned_to: assignedToArray.length > 0 ? assignedToArray : null,
+            parent_file_id: rootParentId,
+            is_current: true
         });
 
         const isImage = file_type.startsWith('image/');
@@ -543,6 +567,7 @@ export const listFiles = async (req: Request, res: Response) => {
                                 { folder_id: { [Op.in]: folderIds } }
                             ]
                         },
+                    { is_current: true },
                     search ? { file_name: { [Op.iLike]: `%${search}%` } } : {}
                 ].filter(Boolean) as any
             },
@@ -671,6 +696,63 @@ export const deleteFile = async (req: Request, res: Response) => {
             transaction: t
         });
 
+        // Version fallback and promotion logic
+        const deletedIds = [file.id];
+        const rootId = file.parent_file_id || file.id;
+        const wasCurrent = file.is_current;
+
+        const otherVersions = await files.findAll({
+            where: {
+                id: { [Op.notIn]: deletedIds },
+                [Op.or]: [
+                    { id: rootId },
+                    { parent_file_id: rootId }
+                ]
+            },
+            order: [['createdAt', 'DESC']],
+            transaction: t
+        });
+
+        if (otherVersions.length > 0) {
+            if (file.id === rootId) {
+                const newRoot = otherVersions[otherVersions.length - 1];
+                await newRoot.update({ parent_file_id: null }, { transaction: t });
+                const otherVersionIds = otherVersions
+                    .filter(v => v.id !== newRoot.id)
+                    .map(v => v.id);
+
+                if (otherVersionIds.length > 0) {
+                    await files.update(
+                        { parent_file_id: newRoot.id },
+                        {
+                            where: { id: { [Op.in]: otherVersionIds } },
+                            transaction: t
+                        }
+                    );
+                }
+
+                if (wasCurrent) {
+                    await files.update(
+                        { is_current: true },
+                        {
+                            where: { id: otherVersions[0].id },
+                            transaction: t
+                        }
+                    );
+                }
+            } else {
+                if (wasCurrent) {
+                    await files.update(
+                        { is_current: true },
+                        {
+                            where: { id: otherVersions[0].id },
+                            transaction: t
+                        }
+                    );
+                }
+            }
+        }
+
         await file.destroy({ transaction: t });
 
         await t.commit();
@@ -764,6 +846,62 @@ export const bulkDeleteFiles = async (req: Request, res: Response) => {
                 where: { file_id: file.id },
                 transaction: t
             });
+
+            // Version fallback and promotion logic for each file in bulk delete
+            const rootId = file.parent_file_id || file.id;
+            const wasCurrent = file.is_current;
+
+            const otherVersions = await files.findAll({
+                where: {
+                    id: { [Op.notIn]: ids },
+                    [Op.or]: [
+                        { id: rootId },
+                        { parent_file_id: rootId }
+                    ]
+                },
+                order: [['createdAt', 'DESC']],
+                transaction: t
+            });
+
+            if (otherVersions.length > 0) {
+                if (file.id === rootId) {
+                    const newRoot = otherVersions[otherVersions.length - 1];
+                    await newRoot.update({ parent_file_id: null }, { transaction: t });
+                    const otherVersionIds = otherVersions
+                        .filter(v => v.id !== newRoot.id)
+                        .map(v => v.id);
+
+                    if (otherVersionIds.length > 0) {
+                        await files.update(
+                            { parent_file_id: newRoot.id },
+                            {
+                                where: { id: { [Op.in]: otherVersionIds } },
+                                transaction: t
+                            }
+                        );
+                    }
+
+                    if (wasCurrent) {
+                        await files.update(
+                            { is_current: true },
+                            {
+                                where: { id: otherVersions[0].id },
+                                transaction: t
+                            }
+                        );
+                    }
+                } else {
+                    if (wasCurrent) {
+                        await files.update(
+                            { is_current: true },
+                            {
+                                where: { id: otherVersions[0].id },
+                                transaction: t
+                            }
+                        );
+                    }
+                }
+            }
 
             await file.destroy({ transaction: t });
         }
@@ -1052,7 +1190,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         const authUser = (req as any).user;
         if (!authUser) return res.status(401).json({ error: "Unauthorized" });
 
-        const { project_id, folder_id, mode, file_name, location, tags, is_doc_mode, assigned_to } = req.body;
+        const { project_id, folder_id, mode, file_name, location, tags, is_doc_mode, assigned_to, parent_file_id } = req.body;
         const project = await projects.findByPk(project_id);
         if (!project) {
             return res.status(404).json({ error: "Project not found" });
@@ -1110,6 +1248,14 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         const folderPath = validFolderId ? validFolderId.toString() : 'root';
         const isSeparate = mode === 'separate';
         const shouldSkip = req.body.skipActivity === 'true' || req.body.skipActivity === true;
+
+        let rootParentId: number | null = null;
+        if (parent_file_id && parent_file_id !== 'null' && parent_file_id !== 'undefined' && parent_file_id !== '') {
+            const parentFile = await files.findByPk(parseInt(parent_file_id, 10));
+            if (parentFile) {
+                rootParentId = parentFile.parent_file_id || parentFile.id;
+            }
+        }
 
         const createdFiles = [];
 
@@ -1199,6 +1345,20 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     Body: uploadBuffer
                 }));
 
+                if (rootParentId) {
+                    await files.update(
+                        { is_current: false },
+                        {
+                            where: {
+                                [Op.or]: [
+                                    { id: rootParentId },
+                                    { parent_file_id: rootParentId }
+                                ]
+                            }
+                        }
+                    );
+                }
+
                 const newFile = await files.create({
                     folder_id: validFolderId,
                     project_id: parseInt(project_id, 10),
@@ -1211,6 +1371,8 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     location: location || null,
                     tags: tags || null,
                     assigned_to: assigned_to ? parseInt(assigned_to, 10) : null,
+                    parent_file_id: rootParentId,
+                    is_current: true
                 });
 
                 createdFiles.push(newFile);
@@ -1281,6 +1443,20 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     Body: uploadBuffer
                 }));
 
+                if (rootParentId) {
+                    await files.update(
+                        { is_current: false },
+                        {
+                            where: {
+                                [Op.or]: [
+                                    { id: rootParentId },
+                                    { parent_file_id: rootParentId }
+                                ]
+                            }
+                        }
+                    );
+                }
+
                 const newFile = await files.create({
                     folder_id: validFolderId,
                     project_id: parseInt(project_id, 10),
@@ -1293,6 +1469,8 @@ export const uploadScans = async (req: Request | any, res: Response) => {
                     location: location || null,
                     tags: tags || null,
                     assigned_to: assigned_to ? parseInt(assigned_to, 10) : null,
+                    parent_file_id: rootParentId,
+                    is_current: true
                 });
 
                 createdFiles.push(newFile);
@@ -1613,6 +1791,127 @@ export const markFileSeen = async (req: Request, res: Response) => {
         res.status(200).json({ success: true, seen_at: file.seen_at });
     } catch (error) {
         console.error("Mark File Seen Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getFileVersions = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { fileId } = req.params;
+        const file = await files.findByPk(fileId);
+        if (!file) {
+            return res.status(404).json({ error: "File not found" });
+        }
+
+        // Verify access
+        const access = await checkProjectAccess(authUser.user_id, file.project_id, authUser.role, authUser.organization_id);
+        if (!access) {
+            return res.status(403).json({ error: "Forbidden: No access to this project" });
+        }
+
+        const rootId = file.parent_file_id || file.id;
+
+        const versionData = await files.findAll({
+            where: {
+                [Op.or]: [
+                    { id: rootId },
+                    { parent_file_id: rootId }
+                ]
+            },
+            include: [
+                {
+                    model: UsersModel,
+                    as: 'creator',
+                    attributes: ['id', 'name', 'email']
+                }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
+
+        const versions = await Promise.all(versionData.map(async (v: any) => {
+            const fileJson = v.toJSON();
+            const command = new GetObjectCommand({
+                Bucket: BUCKET_NAME,
+                Key: fileJson.file_url
+            });
+            fileJson.downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+            return fileJson;
+        }));
+
+        res.status(200).json({ versions });
+    } catch (error) {
+        console.error("Get File Versions Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const promoteFile = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) {
+            await t.rollback();
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        const { fileId } = req.params;
+        const file = await files.findByPk(fileId, { transaction: t });
+        if (!file) {
+            await t.rollback();
+            return res.status(404).json({ error: "File not found" });
+        }
+
+        // Only admins, superadmins, contributors or creator can promote
+        const authId = authUser.user_id || authUser.id;
+        const isCreator = String(file.created_by) === String(authId);
+        let isAuthorized = ['admin', 'superadmin'].includes(authUser.role) || isCreator;
+
+        if (!isAuthorized && authUser.role === 'contributor') {
+            const membership = await checkProjectAccess(Number(authId), file.project_id, authUser.role, authUser.organization_id);
+            if (membership) isAuthorized = true;
+        }
+
+        if (!isAuthorized) {
+            await t.rollback();
+            return res.status(403).json({ error: "Forbidden: You are not authorized to promote this file" });
+        }
+
+        const rootId = file.parent_file_id || file.id;
+
+        // Reset is_current on all sibling/root files
+        await files.update(
+            { is_current: false },
+            {
+                where: {
+                    [Op.or]: [
+                        { id: rootId },
+                        { parent_file_id: rootId }
+                    ]
+                },
+                transaction: t
+            }
+        );
+
+        // Set is_current = true for the promoted file
+        await file.update({ is_current: true }, { transaction: t });
+
+        await logActivity({
+            projectId: file.project_id,
+            userId: authId,
+            type: 'edit',
+            description: `Promoted version "${file.file_name}" to active`,
+            metadata: { fileId: file.id, type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
+        });
+
+        await t.commit();
+
+        res.status(200).json({ message: "Version promoted successfully", file });
+    } catch (error) {
+        await t.rollback();
+        console.error("Promote File Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

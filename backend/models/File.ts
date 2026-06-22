@@ -71,6 +71,15 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
                 defaultValue: null,
             },
+            parent_file_id: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+            },
+            is_current: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: true,
+            },
         },
         {
             tableName: "files",

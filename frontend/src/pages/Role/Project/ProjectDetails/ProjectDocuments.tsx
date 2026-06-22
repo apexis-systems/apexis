@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus, MoreVertical } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, HelpCircle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus, MoreVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUsage } from '@/contexts/UsageContext';
 import { createRFI, getRFIAssignees } from '@/services/rfiService';
@@ -874,9 +874,13 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                             </button>
                           )}
                           <button
-                            onClick={(e) => { e.stopPropagation();}}
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                              router.push(`/${user.role}/upload?projectId=${project.id}&type=documents&folderId=${doc.folder_id || ''}&parentFileId=${doc.id}&returnUrl=${returnUrl}`);
+                            }}
                             className="rounded-full p-1 hover:bg-secondary transition-colors"
-                            title="Create RFI"
+                            title={t('upload_new_version') || "Upload New Version"}
                           >
                             <Plus className="h-2.5 w-2.5 text-muted-foreground" />
                           </button>
@@ -891,6 +895,16 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="cursor-pointer">
                                   <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
                                   <span>{t('rename_btn')}</span>
+                                </DropdownMenuItem>
+                              )}
+                              {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
+                                <DropdownMenuItem onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                                  router.push(`/${user.role}/upload?projectId=${project.id}&type=documents&folderId=${doc.folder_id || ''}&parentFileId=${doc.id}&returnUrl=${returnUrl}`);
+                                }} className="cursor-pointer">
+                                  <Upload className="mr-2 h-4 w-4 text-muted-foreground" />
+                                  <span>{t('upload_new_version') || "Upload New Version"}</span>
                                 </DropdownMenuItem>
                               )}
                               {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)))) && (
@@ -920,7 +934,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }} className="cursor-pointer">
-                                <Plus className="mr-2 h-4 w-4 text-muted-foreground" />
+                                <HelpCircle className="mr-2 h-4 w-4 text-muted-foreground" />
                                 <span>{t('create_rfi')}</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -1043,6 +1057,17 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                               <Archive className="h-3.5 w-3.5 text-amber-600" />
                             </button>
                           )}
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+                              router.push(`/${user.role}/upload?projectId=${project.id}&type=documents&folderId=${doc.folder_id || ''}&parentFileId=${doc.id}&returnUrl=${returnUrl}`);
+                            }} 
+                            className="rounded-md p-1 hover:bg-secondary" 
+                            title={t('upload_new_version') || "Upload New Version"}
+                          >
+                            <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
                           <button onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }} className="rounded-md p-1 hover:bg-secondary" title="Create RFI">
                             <Plus className="h-3.5 w-3.5 text-muted-foreground" />
                           </button>
@@ -1090,7 +1115,11 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               }
             }}
             user={user}
-            onUpdate={(updatedFile) => setDocs(prev => prev.map(d => d.id === updatedFile.id ? updatedFile : d))}
+            onUpdate={(updatedFile) => setDocs(prev => prev.map(d => {
+              const dRoot = d.parent_file_id || d.id;
+              const uRoot = updatedFile.parent_file_id || updatedFile.id;
+              return dRoot === uRoot ? updatedFile : d;
+            }))}
             targetType="document"
             projectId={project.id}
             onCreateRfi={handleStartCreateRfi}

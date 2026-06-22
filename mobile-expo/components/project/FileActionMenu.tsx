@@ -20,6 +20,7 @@ interface FileActionMenuProps {
     onUnarchive?: () => void;
     onCreateRfi?: () => void;
     onCreateSnag?: () => void;
+    onUploadNewVersion?: () => void;
     clientVisible: boolean;
     doNotFollow: boolean;
     onlyForReference?: boolean;
@@ -49,6 +50,7 @@ export default function FileActionMenu({
     onUnarchive,
     onCreateRfi,
     onCreateSnag,
+    onUploadNewVersion,
     clientVisible,
     doNotFollow,
     onlyForReference,
@@ -82,6 +84,17 @@ export default function FileActionMenu({
                         </View>
 
                         <View style={styles.optionsContainer}>
+                            {onUploadNewVersion && (
+                                <TouchableOpacity 
+                                    style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                    onPress={() => { !isProcessing && onUploadNewVersion(); !isProcessing && onClose(); }}
+                                    disabled={isProcessing}
+                                >
+                                    <Feather name="plus-circle" size={18} color={colors.primary} />
+                                    <Text style={[styles.optionText, { color: colors.text }]}>{t('fileActionMenu.uploadNewVersion') || 'Upload New Version'}</Text>
+                                </TouchableOpacity>
+                            )}
+
                             {onCreateRfi && (
                                 <TouchableOpacity 
                                     style={[styles.option, isProcessing && { opacity: 0.5 }]} 
