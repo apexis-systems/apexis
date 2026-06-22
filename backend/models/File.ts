@@ -71,6 +71,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
                 defaultValue: null,
             },
+            seen_by: {
+                type: DataTypes.ARRAY(DataTypes.INTEGER),
+                allowNull: true,
+                defaultValue: [],
+            },
             parent_file_id: {
                 type: DataTypes.INTEGER,
                 allowNull: true,

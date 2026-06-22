@@ -582,6 +582,27 @@ export const listFiles = async (req: Request, res: Response) => {
 
         let filteredFiles = fileData.map((f: any) => f.toJSON());
 
+        // Query version counts grouped by parent_file_id to compute exact count for each file tree
+        const versionCounts = await files.findAll({
+            attributes: [
+                'parent_file_id',
+                [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']
+            ],
+            where: {
+                parent_file_id: { [Op.ne]: null },
+                project_id: projectId
+            },
+            group: ['parent_file_id']
+        });
+        const versionCountMap = new Map<number, number>();
+        versionCounts.forEach((vc: any) => {
+            const val = vc.get('count');
+            const count = typeof val === 'string' ? parseInt(val, 10) : Number(val);
+            if (vc.parent_file_id) {
+                versionCountMap.set(vc.parent_file_id, count);
+            }
+        });
+
         // Retrieve and populate assignees array and backwards-compatible assignee object
         const allAssigneeIds = Array.from(
             new Set(
@@ -602,6 +623,10 @@ export const listFiles = async (req: Request, res: Response) => {
                 .filter(Boolean);
             file.assignees = fileAssignees;
             file.assignee = fileAssignees[0] || null;
+
+            // Compute and assign version count
+            const rootId = file.parent_file_id || file.id;
+            file.version_count = 1 + (versionCountMap.get(rootId) || 0);
         }
 
         if (authUser.role !== "admin" && authUser.role !== "superadmin") {
@@ -718,8 +743,8 @@ export const deleteFile = async (req: Request, res: Response) => {
                 const newRoot = otherVersions[otherVersions.length - 1];
                 await newRoot.update({ parent_file_id: null }, { transaction: t });
                 const otherVersionIds = otherVersions
-                    .filter(v => v.id !== newRoot.id)
-                    .map(v => v.id);
+                    .filter((v: any) => v.id !== newRoot.id)
+                    .map((v: any) => v.id);
 
                 if (otherVersionIds.length > 0) {
                     await files.update(
@@ -868,8 +893,8 @@ export const bulkDeleteFiles = async (req: Request, res: Response) => {
                     const newRoot = otherVersions[otherVersions.length - 1];
                     await newRoot.update({ parent_file_id: null }, { transaction: t });
                     const otherVersionIds = otherVersions
-                        .filter(v => v.id !== newRoot.id)
-                        .map(v => v.id);
+                        .filter((v: any) => v.id !== newRoot.id)
+                        .map((v: any) => v.id);
 
                     if (otherVersionIds.length > 0) {
                         await files.update(
@@ -1770,8 +1795,19 @@ export const markFileSeen = async (req: Request, res: Response) => {
             : file.assigned_to && String(file.assigned_to) === String(authUser.user_id);
 
         if (isAssignee) {
-            if (!file.seen_at) {
-                file.seen_at = new Date();
+            // Update seen_by list
+            const currentSeenBy = Array.isArray(file.seen_by) ? file.seen_by : [];
+            const userId = parseInt(authUser.user_id, 10);
+            if (!currentSeenBy.includes(userId)) {
+                file.seen_by = [...currentSeenBy, userId];
+                
+                // If this is the first person seeing it, set the root seen_at
+                if (!file.seen_at) {
+                    file.seen_at = new Date();
+                }
+                
+                // Sequelize requires setting changed for arrays in some versions
+                file.changed('seen_by', true);
                 await file.save();
 
                 // Broadcast real-time update
@@ -1780,7 +1816,8 @@ export const markFileSeen = async (req: Request, res: Response) => {
                     io.to(`project-${file.project_id}`).emit('file-seen', {
                         fileId: file.id,
                         projectId: file.project_id,
-                        seen_at: file.seen_at
+                        seen_at: file.seen_at,
+                        seen_by: file.seen_by
                     });
                 } catch (e) {
                     console.error('Socket emit error:', e);
@@ -1788,7 +1825,7 @@ export const markFileSeen = async (req: Request, res: Response) => {
             }
         }
 
-        res.status(200).json({ success: true, seen_at: file.seen_at });
+        res.status(200).json({ success: true, seen_at: file.seen_at, seen_by: file.seen_by });
     } catch (error) {
         console.error("Mark File Seen Error:", error);
         res.status(500).json({ error: "Internal server error" });
