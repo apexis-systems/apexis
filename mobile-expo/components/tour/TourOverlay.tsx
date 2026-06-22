@@ -65,6 +65,14 @@ export const TOUR_STEPS: TourStep[] = [
     },
     {
         id: 5,
+        title: 'Help & Support',
+        description: 'Need assistance? Tap the options menu to access our Help & Support center and view FAQs or contact support.',
+        spotlightId: 'moreMenuIcon',
+        shape: 'rect',
+        defaultPos: { x: width - 90, y: 155, w: 160, h: 44, r: 8 },
+    },
+    {
+        id: 6,
         title: 'Notifications',
         description: 'Stay updated with important alerts and team mentions.',
         spotlightId: 'notificationsIcon',
@@ -72,7 +80,7 @@ export const TOUR_STEPS: TourStep[] = [
         defaultPos: { x: width - 62, y: 40, r: 28 },
     },
     {
-        id: 6,
+        id: 7,
         title: 'Team Chat',
         description: 'Instant collaboration with room members and easy file sharing.',
         spotlightId: 'chatTab',
@@ -80,7 +88,7 @@ export const TOUR_STEPS: TourStep[] = [
         defaultPos: { x: width * 0.68, y: height - 60, r: 40 },
     },
     {
-        id: 7,
+        id: 8,
         title: 'Settings',
         description: 'Manage your profile, theme, and application preferences.',
         spotlightId: 'settingsTab',
@@ -148,8 +156,9 @@ export default function TourOverlay() {
     const handleNext = async () => {
         if (currentStep === 3) router.push('/activity');
         if (currentStep === 4) router.push('/(tabs)');
-        if (currentStep === 5) router.push('/chat');
-        if (currentStep === 6) router.push('/settings');
+        // Step 5 (Help & Support) stays on /(tabs) for Step 6 (Notifications)
+        if (currentStep === 6) router.push('/chat');
+        if (currentStep === 7) router.push('/settings');
 
         if (currentStep === TOUR_STEPS.length) {
             await stopTour();
