@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Modal, View, TouchableOpacity, ScrollView, TextInput, Image, Linking } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { Modal, View, TouchableOpacity, ScrollView, TextInput, Image, Linking, Platform, StatusBar, Dimensions } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Feather } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import { useTour } from '@/contexts/TourContext';
 
 interface Props {
     visible: boolean;
@@ -202,6 +203,29 @@ export default function HelpSupportModal({ visible, onClose }: Props) {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeVideo, setActiveVideo] = useState<YouTubeVideo | null>(null);
 
+    const firstVideoRef = useRef<View>(null);
+    const { isTourActive, currentStep, registerSpotlight } = useTour();
+
+    useEffect(() => {
+        if (isTourActive && currentStep === 6 && visible) {
+            const timer = setTimeout(() => {
+                firstVideoRef.current?.measureInWindow((x, y, w, h) => {
+                    if (w > 0) {
+                        const androidStatusBarOffset = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
+                        registerSpotlight('helpSupportVideos', {
+                            x: x + w / 2,
+                            y: y + h / 2 + androidStatusBarOffset + 50,
+                            w: w + 8,
+                            h: h + 110,
+                            r: 12
+                        });
+                    }
+                });
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [isTourActive, currentStep, visible, registerSpotlight]);
+
     const handleClose = () => {
         setActiveVideo(null);
         setSearchQuery('');
@@ -220,10 +244,9 @@ export default function HelpSupportModal({ visible, onClose }: Props) {
         f.q.toLowerCase().includes(searchQuery.toLowerCase()) ||
         f.a.toLowerCase().includes(searchQuery.toLowerCase())
     );
-    return (
-        <Modal visible={visible} animationType="slide" transparent>
-            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                <View style={{ backgroundColor: colors.surface, padding: 24, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '80%' }}>
+    const modalContent = (
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: colors.surface, padding: 24, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '80%' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <Feather name="help-circle" size={20} color={colors.primary} />
@@ -375,7 +398,8 @@ export default function HelpSupportModal({ visible, onClose }: Props) {
                         </View>
                     )}
 
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 24 }}>
+                    <View style={{ flex: 1 }}>
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 24 }}>
                         {/* {activeTab === 'videos' && (
                             filteredVideos.length > 0 ? (
                                 filteredVideos.map((v, i) => (
@@ -397,6 +421,7 @@ export default function HelpSupportModal({ visible, onClose }: Props) {
                                 filteredTutorials.map((v, i) => (
                                     <TouchableOpacity 
                                         key={i} 
+                                        ref={i === 0 ? firstVideoRef : undefined}
                                         onPress={() => setActiveVideo(v)}
                                         style={{ 
                                             flexDirection: 'row', 
@@ -489,6 +514,22 @@ export default function HelpSupportModal({ visible, onClose }: Props) {
                     </ScrollView>
                 </View>
             </View>
+        </View>
+    );
+
+    if (!visible) return null;
+
+    if (isTourActive) {
+        return (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, height: Dimensions.get('window').height, width: '100%', zIndex: 10000 }}>
+                {modalContent}
+            </View>
+        );
+    }
+
+    return (
+        <Modal visible={visible} animationType="slide" transparent>
+            {modalContent}
         </Modal>
     );
 }

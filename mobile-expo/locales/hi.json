@@ -2,7 +2,10 @@
     "translation": {
         "common": {
             "cancel": "रद्द करें",
-            "share": "साझा करें"
+            "share": "साझा करें",
+            "success": "सफलता",
+            "error": "त्रुटि",
+            "delete": "हटाएं"
         },
         "Activity": "गतिविधि",
         "All": "सभी",
@@ -736,7 +739,13 @@
             "marked": "चिह्नित",
             "unmarked": "अचिह्नित",
             "folderDeletedMovingContents": "सामग्री स्थानांतरित करने के बाद फ़ोल्डर \"{{name}}\" हटा दिया गया",
-            "failedToDeleteEmptyFolder": "सामग्री स्थानांतरित कर दी गई, लेकिन खाली फ़ोल्डर हटाने में विफल"
+            "failedToDeleteEmptyFolder": "सामग्री स्थानांतरित कर दी गई, लेकिन खाली फ़ोल्डर हटाने में विफल",
+            "versionPromotedSuccess": "संस्करण को सक्रिय किया गया",
+            "failedPromoteVersion": "संस्करण को सक्रिय करने में विफल",
+            "deleteVersion": "संस्करण हटाएं",
+            "confirmDeleteVersion": "क्या आप निश्चित रूप से इस संस्करण को हटाना चाहते हैं?",
+            "versionDeletedSuccess": "संस्करण सफलतापूर्वक हटा दिया गया",
+            "failedDeleteVersion": "संस्करण को हटाने में विफल"
         },
         "upload": {
             "assignTo": "किसे सौंपें",

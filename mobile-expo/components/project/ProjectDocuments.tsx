@@ -2556,7 +2556,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             {pdfViewerName}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 4 }}>
-                            <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowInfoModal(true))} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                            <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
                                 <Feather name="info" size={18} color="#fff" />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowLinkModal(true))} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
@@ -2894,6 +2894,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
                                 ? () => {
                                       if (activeActionFile) {
+                                          setPdfViewerUrl(null);
+                                          setCurrentDoc(null);
+                                          setShowComments(false);
+                                          setDocComments([]);
+                                          setShowInfoModal(false);
+                                          setActionMenuVisible(false);
                                           router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
                                       }
                                   }
@@ -2913,6 +2919,17 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         processingAction={processing}
                         useView={Platform.OS === 'ios'}
                     />
+                    <FileInformationModal
+                        visible={showInfoModal}
+                        onClose={() => setShowInfoModal(false)}
+                        file={currentDoc}
+                        folders={folders}
+                        projectName={project?.name || ''}
+                        onUpdate={(updatedFile) => {
+                            openDoc(updatedFile);
+                            fetchFolders(true);
+                        }}
+                    />
                 </View>
             </Modal>
 
@@ -2927,32 +2944,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 />
             )}
 
-            <FileInformationModal
-                visible={showInfoModal}
-                onClose={() => { setShowInfoModal(false); checkAndRestoreViewer(); }}
-                file={currentDoc}
-                folders={folders}
-                projectName={project?.name || ''}
-                onUpdate={(updatedFile) => {
-                    setDocs(prev => prev.map(d => {
-                        const dRoot = d.parent_file_id || d.id;
-                        const uRoot = updatedFile.parent_file_id || updatedFile.id;
-                        if (dRoot === uRoot) {
-                            return updatedFile;
-                        }
-                        return d;
-                    }));
-                    restoreViewerUrlRef.current = null;
-                    setShowInfoModal(false);
-                    if (Platform.OS === 'ios') {
-                        setTimeout(() => {
-                            openDoc(updatedFile);
-                        }, 350);
-                    } else {
-                        openDoc(updatedFile);
-                    }
-                }}
-            />
+            
 
             {/* Sharing Overlay (For cases where viewer isn't open) */}
             {sharing && !pdfViewerUrl && (

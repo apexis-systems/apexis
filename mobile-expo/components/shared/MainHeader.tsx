@@ -38,14 +38,14 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
     const helpButtonRef = useRef<any>(null);
 
     useEffect(() => {
-        if (isTourActive && currentStep === 5) {
-            const timer = setTimeout(() => {
+        if (isTourActive) {
+            if (currentStep === 5) {
                 setShowMoreMenu(true);
-            }, 100);
-            return () => clearTimeout(timer);
-        } else {
-            // Only automatically close it if we are in the tour
-            if (isTourActive) {
+                setShowHelp(false);
+            } else if (currentStep === 6) {
+                setShowMoreMenu(false);
+                setShowHelp(true);
+            } else {
                 setShowMoreMenu(false);
                 setShowHelp(false);
             }
@@ -163,6 +163,70 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                 break;
         }
     };
+
+    const renderMenuContent = () => (
+        <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setShowMoreMenu(false)}
+            style={{ 
+                flex: 1, 
+                backgroundColor: isTourActive ? 'transparent' : 'rgba(0,0,0,0.4)', 
+                justifyContent: 'flex-start', 
+                alignItems: 'flex-end', 
+                paddingRight: 10, 
+                paddingTop: Platform.OS === 'ios' ? 60 : 50 
+            }}
+        >
+            <View style={{
+                backgroundColor: colors.surface,
+                borderRadius: 12,
+                width: 180,
+                padding: 4,
+                borderWidth: 1,
+                borderColor: colors.border,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 10,
+                elevation: 10,
+            }}>
+                <TouchableOpacity
+                    onPress={() => { setShowMoreMenu(false); toggleTheme(); }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+                >
+                    <Feather name={isDark ? "sun" : "moon"} size={16} color={colors.textMuted} />
+                    <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() => { setShowMoreMenu(false); setShowLanguage(true); }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+                >
+                    <Feather name="globe" size={16} color={colors.textMuted} />
+                    <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Language</Text>
+                </TouchableOpacity>
+
+                <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4, marginHorizontal: 8 }} />
+
+                <TouchableOpacity
+                    ref={helpButtonRef}
+                    onPress={() => { setShowMoreMenu(false); setShowHelp(true); }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+                >
+                    <Feather name="help-circle" size={16} color={colors.textMuted} />
+                    <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Help & Support</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() => Linking.openURL('mailto:support@apexis.in')}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+                >
+                    <Feather name="message-square" size={16} color={colors.textMuted} />
+                    <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Feedback</Text>
+                </TouchableOpacity>
+            </View>
+        </TouchableOpacity>
+    );
 
     return (
         <>
@@ -466,63 +530,20 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
 
             {/* More Menu Dropdown */}
             {showMoreMenu && (
-                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, height: SCREEN_H, width: '100%', zIndex: 10000 }}>
-                    <TouchableOpacity
-                        activeOpacity={1}
-                        onPress={() => setShowMoreMenu(false)}
-                        style={{ flex: 1, backgroundColor: isTourActive ? 'transparent' : 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingRight: 10, paddingTop: 50 }}
+                isTourActive ? (
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, height: SCREEN_H, width: '100%', zIndex: 10000 }}>
+                        {renderMenuContent()}
+                    </View>
+                ) : (
+                    <Modal
+                        visible={showMoreMenu}
+                        transparent={true}
+                        animationType="fade"
+                        onRequestClose={() => setShowMoreMenu(false)}
                     >
-                        <View style={{
-                            backgroundColor: colors.surface,
-                            borderRadius: 12,
-                            width: 180,
-                            padding: 4,
-                            borderWidth: 1,
-                            borderColor: colors.border,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.15,
-                            shadowRadius: 10,
-                            elevation: 10,
-                        }}>
-                            <TouchableOpacity
-                                onPress={() => { setShowMoreMenu(false); toggleTheme(); }}
-                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-                            >
-                                <Feather name={isDark ? "sun" : "moon"} size={16} color={colors.textMuted} />
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                onPress={() => { setShowMoreMenu(false); setShowLanguage(true); }}
-                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-                            >
-                                <Feather name="globe" size={16} color={colors.textMuted} />
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Language</Text>
-                            </TouchableOpacity>
-
-                            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4, marginHorizontal: 8 }} />
-
-                            <TouchableOpacity
-                                ref={helpButtonRef}
-                                onPress={() => { setShowMoreMenu(false); setShowHelp(true); }}
-                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-                            >
-                                <Feather name="help-circle" size={16} color={colors.textMuted} />
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Help & Support</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                // onPress={() => { setShowMoreMenu(false); setShowFeedback(true); }}
-                                onPress={() => Linking.openURL('mailto:support@apexis.in')}
-                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-                            >
-                                <Feather name="message-square" size={16} color={colors.textMuted} />
-                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Feedback</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-                </View>
+                        {renderMenuContent()}
+                    </Modal>
+                )
             )}
 
             <HelpSupportModal visible={showHelp} onClose={() => setShowHelp(false)} />
