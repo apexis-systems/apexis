@@ -236,3 +236,23 @@ export const deleteLink = async (fileId: string | number, targetType: string, ta
         throw error;
     }
 };
+
+export const getFileVersions = async (fileId: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/files/${fileId}/versions`);
+        return response.data;
+    } catch (error) {
+        console.error("getFileVersions Error", error);
+        throw error;
+    }
+};
+
+export const promoteFile = async (fileId: string | number) => {
+    try {
+        const response = await PrivateAxios.post(`/files/${fileId}/promote`);
+        return response.data;
+    } catch (error) {
+        console.error("promoteFile Error", error);
+        throw error;
+    }
+};

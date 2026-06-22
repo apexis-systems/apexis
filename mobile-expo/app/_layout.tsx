@@ -288,11 +288,14 @@ function RootLayoutNav() {
         if (currentOnboardingDone) setHasSeenOnboarding(true);
       }
 
-      if (!currentOnboardingDone && !isOnboarding) {
-        router.replace({
-          pathname: '/onboarding',
-          params: code ? { code, role } : {}
-        });
+      // Force onboarding flow first if it has not been completed
+      if (!currentOnboardingDone) {
+        if (!isOnboarding) {
+          router.replace({
+            pathname: '/onboarding',
+            params: code ? { code, role } : {}
+          });
+        }
         return;
       }
 

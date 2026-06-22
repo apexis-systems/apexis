@@ -97,7 +97,7 @@ const FolderPickerDialog = ({
     const getValidFolders = () => {
         return folders.filter(f => {
             const nameLower = f.name.toLowerCase();
-            return nameLower !== 'archive' && nameLower !== 'confirmation' && nameLower !== 'confirmations';
+            return nameLower !== 'archive' && nameLower !== 'confirmation' && nameLower !== 'confirmations' && nameLower !== 'confidential';
         });
     };
 

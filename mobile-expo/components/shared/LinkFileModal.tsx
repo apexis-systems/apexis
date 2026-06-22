@@ -147,7 +147,7 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
     const getValidFolders = () =>
         folders.filter(f => {
             const n = f.name.toLowerCase();
-            return n !== 'archive' && n !== 'confirmation' && n !== 'confirmations';
+            return n !== 'archive' && n !== 'confirmation' && n !== 'confirmations' && n !== 'confidential';
         });
 
     const getFoldersInCurrentLevel = () => {

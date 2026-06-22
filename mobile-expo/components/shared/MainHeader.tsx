@@ -23,7 +23,7 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
     const { isDark, colors, toggleTheme } = useTheme();
     const router = useRouter();
     const { unreadNotificationCount } = useSocket();
-    const { isTourActive, registerSpotlight } = useTour();
+    const { isTourActive, currentStep, registerSpotlight } = useTour();
 
     const [isSearchActive, setIsSearchActive] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +35,22 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
     const [loadingResults, setLoadingResults] = useState(false);
 
     const bellRef = useRef<View>(null);
+    const helpButtonRef = useRef<any>(null);
+
+    useEffect(() => {
+        if (isTourActive && currentStep === 5) {
+            const timer = setTimeout(() => {
+                setShowMoreMenu(true);
+            }, 100);
+            return () => clearTimeout(timer);
+        } else {
+            // Only automatically close it if we are in the tour
+            if (isTourActive) {
+                setShowMoreMenu(false);
+                setShowHelp(false);
+            }
+        }
+    }, [isTourActive, currentStep]);
 
     useEffect(() => {
         if (isTourActive) {
@@ -52,6 +68,25 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
             }, 1000);
         }
     }, [isTourActive, registerSpotlight]);
+
+    useEffect(() => {
+        if (isTourActive && currentStep === 5 && showMoreMenu) {
+            setTimeout(() => {
+                helpButtonRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+                    if (w > 0) {
+                        const androidStatusBarOffset = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
+                        registerSpotlight('moreMenuIcon', { 
+                            x: x + w / 2, 
+                            y: y + h / 2 + androidStatusBarOffset, 
+                            w: w + 16,
+                            h: h + 12,
+                            r: 8
+                        });
+                    }
+                });
+            }, 300);
+        }
+    }, [isTourActive, currentStep, showMoreMenu, registerSpotlight]);
 
     const handleSearchChange = (text: string) => {
         setSearchQuery(text);
@@ -429,63 +464,66 @@ export default function MainHeader({ showBack, onSearchChange, searchPlaceholder
                 </TouchableOpacity>
             </Modal>
 
-            {/* More Menu Modal */}
-            <Modal visible={showMoreMenu} transparent animationType="fade" onRequestClose={() => setShowMoreMenu(false)}>
-                <TouchableOpacity
-                    activeOpacity={1}
-                    onPress={() => setShowMoreMenu(false)}
-                    style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingRight: 10, paddingTop: 50 }}
-                >
-                    <View style={{
-                        backgroundColor: colors.surface,
-                        borderRadius: 12,
-                        width: 180,
-                        padding: 4,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 10,
-                        elevation: 10,
-                    }}>
-                        <TouchableOpacity
-                            onPress={() => { setShowMoreMenu(false); toggleTheme(); }}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-                        >
-                            <Feather name={isDark ? "sun" : "moon"} size={16} color={colors.textMuted} />
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
-                        </TouchableOpacity>
+            {/* More Menu Dropdown */}
+            {showMoreMenu && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, height: SCREEN_H, width: '100%', zIndex: 10000 }}>
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        onPress={() => setShowMoreMenu(false)}
+                        style={{ flex: 1, backgroundColor: isTourActive ? 'transparent' : 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingRight: 10, paddingTop: 50 }}
+                    >
+                        <View style={{
+                            backgroundColor: colors.surface,
+                            borderRadius: 12,
+                            width: 180,
+                            padding: 4,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 10,
+                            elevation: 10,
+                        }}>
+                            <TouchableOpacity
+                                onPress={() => { setShowMoreMenu(false); toggleTheme(); }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+                            >
+                                <Feather name={isDark ? "sun" : "moon"} size={16} color={colors.textMuted} />
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>{isDark ? 'Light Mode' : 'Dark Mode'}</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity
-                            onPress={() => { setShowMoreMenu(false); setShowLanguage(true); }}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-                        >
-                            <Feather name="globe" size={16} color={colors.textMuted} />
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Language</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => { setShowMoreMenu(false); setShowLanguage(true); }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+                            >
+                                <Feather name="globe" size={16} color={colors.textMuted} />
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Language</Text>
+                            </TouchableOpacity>
 
-                        <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4, marginHorizontal: 8 }} />
+                            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 4, marginHorizontal: 8 }} />
 
-                        <TouchableOpacity
-                            onPress={() => { setShowMoreMenu(false); setShowHelp(true); }}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-                        >
-                            <Feather name="help-circle" size={16} color={colors.textMuted} />
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Help & Support</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity
+                                ref={helpButtonRef}
+                                onPress={() => { setShowMoreMenu(false); setShowHelp(true); }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+                            >
+                                <Feather name="help-circle" size={16} color={colors.textMuted} />
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Help & Support</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity
-                            // onPress={() => { setShowMoreMenu(false); setShowFeedback(true); }}
-                            onPress={() => Linking.openURL('mailto:support@apexis.in')}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
-                        >
-                            <Feather name="message-square" size={16} color={colors.textMuted} />
-                            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Feedback</Text>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
+                            <TouchableOpacity
+                                // onPress={() => { setShowMoreMenu(false); setShowFeedback(true); }}
+                                onPress={() => Linking.openURL('mailto:support@apexis.in')}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8 }}
+                            >
+                                <Feather name="message-square" size={16} color={colors.textMuted} />
+                                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }}>Feedback</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             <HelpSupportModal visible={showHelp} onClose={() => setShowHelp(false)} />
             <FeedbackModal visible={showFeedback} onClose={() => setShowFeedback(false)} />

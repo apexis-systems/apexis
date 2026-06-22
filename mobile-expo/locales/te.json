@@ -648,6 +648,7 @@
             "close": "మూసివేయి"
         },
         "projectDocuments": {
+            "makeActive": "యాక్టివ్ చేయి",
             "selectMonth": "నెల ఎంచుకోండి",
             "uploadDocument": "పత్రాన్ని అప్‌లోడ్ చేయండి",
             "newFolder": "కొత్త ఫోల్డర్",
@@ -918,6 +919,7 @@
             "errorHeader": "లోపం"
         },
         "fileActionMenu": {
+            "uploadNewVersion": "కొత్త సంస్కరణను అప్‌లోడ్ చేయండి",
             "createRfi": "RFI సృష్టించు",
             "createSnag": "స్నాగ్ సృష్టించు",
             "share": "షేర్ చేయి",

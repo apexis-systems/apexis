@@ -75,7 +75,7 @@ export default function UploadScreen() {
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
     const { colors } = useTheme();
-    const params = useLocalSearchParams<{ projectId?: string; folderId?: string; type?: string }>();
+    const params = useLocalSearchParams<{ projectId?: string; folderId?: string; type?: string; parentFileId?: string }>();
 
     const isFocused = useIsFocused();
 
@@ -118,7 +118,7 @@ export default function UploadScreen() {
     const [hasWarnedScanner, setHasWarnedScanner] = useState(false);
     // State: Camera doc mode
 
-    const [isDocMode, setIsDocMode] = useState(params.type === 'documents');
+    const [isDocMode, setIsDocMode] = useState(params.type === 'documents' || !!params.parentFileId);
     const [scanMode, setScanMode] = useState<'single' | 'separate'>('single');
 
     // Physical Orientation Tracking (to bypass iOS Orientation Lock)
@@ -675,6 +675,7 @@ export default function UploadScreen() {
                 if (photoTags) formData.append('tags', photoTags);
                 if (assignedToIds.length > 0) formData.append('assigned_to', JSON.stringify(assignedToIds));
                 formData.append('is_doc_mode', String(isDocMode));
+                if (params.parentFileId) formData.append('parent_file_id', params.parentFileId);
                 formData.append('skipActivity', 'true');
 
 
@@ -717,7 +718,7 @@ export default function UploadScreen() {
                     if (photoLocation) formData.append('location', photoLocation);
                     if (photoTags) formData.append('tags', photoTags);
                     if (assignedToIds.length > 0) formData.append('assigned_to', JSON.stringify(assignedToIds));
-
+                    if (params.parentFileId) formData.append('parent_file_id', params.parentFileId);
                     formData.append('file', {
                         uri: item.asset.uri,
                         name: item.asset.fileName || `photo_${i}.jpg`,

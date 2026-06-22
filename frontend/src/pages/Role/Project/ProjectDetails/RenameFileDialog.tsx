@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface RenameFileDialogProps {
   open: boolean;
@@ -14,6 +15,7 @@ interface RenameFileDialogProps {
 }
 
 const RenameFileDialog = ({ open, onOpenChange, onRename, currentName }: RenameFileDialogProps) => {
+  const { t } = useLanguage();
   const [name, setName] = useState(currentName || "");
   const [loading, setLoading] = useState(false);
 
@@ -43,18 +45,18 @@ const RenameFileDialog = ({ open, onOpenChange, onRename, currentName }: RenameF
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>Rename File</DialogTitle>
+          <DialogTitle>{t('rename_file_title')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="file-name">New Name</Label>
+              <Label htmlFor="file-name">{t('new_name_label')}</Label>
               <Input
                 id="file-name"
                 value={name || ""}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
-                placeholder="Enter new file name"
+                placeholder={t('enter_new_name_placeholder')}
               />
             </div>
           </div>
@@ -65,10 +67,10 @@ const RenameFileDialog = ({ open, onOpenChange, onRename, currentName }: RenameF
               onClick={() => onOpenChange && onOpenChange(false)}
               disabled={loading}
             >
-              Cancel
+              {t('cancel')}
             </Button>
             <Button type="submit" disabled={loading || !name?.trim()}>
-              {loading ? "Renaming..." : "Save Changes"}
+              {loading ? t('renaming_btn') : t('save_changes')}
             </Button>
           </DialogFooter>
         </form>

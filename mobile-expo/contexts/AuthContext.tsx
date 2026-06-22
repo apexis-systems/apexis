@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { User, UserRole } from '@/types';
 import * as SecureStore from 'expo-secure-store';
 import { getMe, revokeAllWebSessions, logout as logoutApi } from '@/services/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthContextType {
     user: User | null;
@@ -93,7 +94,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [logout]);
 
     useEffect(() => {
-        fetchUser(true);
+        const initAuth = async () => {
+            try {
+                // Check if this is the first launch after a reinstall (AsyncStorage is cleared, but SecureStore/Keychain persists)
+                const isFirstLaunch = await AsyncStorage.getItem('first_launch_done');
+                if (isFirstLaunch !== 'true') {
+                    // Clear leftover Keychain data from previous install
+                    await SecureStore.deleteItemAsync('token');
+                    await SecureStore.deleteItemAsync('subscriptionLocked');
+                    await SecureStore.deleteItemAsync('is_screen_capture_protected_v2');
+                    await AsyncStorage.setItem('first_launch_done', 'true');
+                }
+            } catch (error) {
+                console.error("Failed to handle first launch check:", error);
+            } finally {
+                fetchUser(true);
+            }
+        };
+
+        initAuth();
     }, [fetchUser]);
 
     // Initialize screen capture protection

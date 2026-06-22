@@ -655,6 +655,7 @@
             "failedToUnarchive": "Failed to unarchive photo"
         },
         "projectDocuments": {
+            "makeActive": "Make Active",
             "selectMonth": "Select Month",
             "uploadDocument": "Upload Document",
             "newFolder": "New Folder",
@@ -926,6 +927,7 @@
             "errorHeader": "Error"
         },
         "fileActionMenu": {
+            "uploadNewVersion": "Upload New Version",
             "createRfi": "Create RFI",
             "createSnag": "Create Snag",
             "share": "Share",

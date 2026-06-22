@@ -2889,6 +2889,16 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         onShare={() => handleShareDoc(activeActionFile)}
                         onRename={() => handleRenameFileAction(activeActionFile)}
                         onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
+                        onUploadNewVersion={
+                            !currentFolder?.name.toLowerCase().includes('archive') && 
+                            (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
+                                ? () => {
+                                      if (activeActionFile) {
+                                          router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
+                                      }
+                                  }
+                                : undefined
+                        }
                         clientVisible={activeActionFile?.client_visible !== false}
                         doNotFollow={activeActionFile?.do_not_follow === true}
                         onlyForReference={activeActionFile?.only_for_reference === true}
@@ -2923,6 +2933,25 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 file={currentDoc}
                 folders={folders}
                 projectName={project?.name || ''}
+                onUpdate={(updatedFile) => {
+                    setDocs(prev => prev.map(d => {
+                        const dRoot = d.parent_file_id || d.id;
+                        const uRoot = updatedFile.parent_file_id || updatedFile.id;
+                        if (dRoot === uRoot) {
+                            return updatedFile;
+                        }
+                        return d;
+                    }));
+                    restoreViewerUrlRef.current = null;
+                    setShowInfoModal(false);
+                    if (Platform.OS === 'ios') {
+                        setTimeout(() => {
+                            openDoc(updatedFile);
+                        }, 350);
+                    } else {
+                        openDoc(updatedFile);
+                    }
+                }}
             />
 
             {/* Sharing Overlay (For cases where viewer isn't open) */}
@@ -3265,6 +3294,16 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 onShare={() => handleShareDoc(activeActionFile)}
                 onRename={() => handleRenameFileAction(activeActionFile)}
                 onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
+                onUploadNewVersion={
+                    !currentFolder?.name.toLowerCase().includes('archive') && 
+                    (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
+                        ? () => {
+                              if (activeActionFile) {
+                                  router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
+                              }
+                          }
+                        : undefined
+                }
                 clientVisible={activeActionFile?.client_visible !== false}
                 doNotFollow={activeActionFile?.do_not_follow === true}
                 onlyForReference={activeActionFile?.only_for_reference === true}

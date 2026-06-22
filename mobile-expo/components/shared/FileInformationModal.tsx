@@ -1,17 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Modal,
     TouchableOpacity,
     TouchableWithoutFeedback,
     StyleSheet,
-    Platform
+    Platform,
+    ScrollView,
+    ActivityIndicator,
+    Alert,
+    Dimensions
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatFileSize } from '@/helpers/format';
+import { useAuth } from '@/contexts/AuthContext';
+import { getFileVersions, promoteFile, deleteFile } from '../../services/fileService';
 
 interface FileInformationModalProps {
     visible: boolean;
@@ -19,6 +26,7 @@ interface FileInformationModalProps {
     file: any;
     folders: any[];
     projectName: string;
+    onUpdate?: (updatedFile: any) => void;
 }
 
 export default function FileInformationModal({
@@ -26,10 +34,93 @@ export default function FileInformationModal({
     onClose,
     file,
     folders,
-    projectName
+    projectName,
+    onUpdate
 }: FileInformationModalProps) {
     const { colors, isDark } = useTheme();
     const insets = useSafeAreaInsets();
+    const { user } = useAuth();
+    const { t } = useTranslation();
+
+    const [versions, setVersions] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [promotingVersionId, setPromotingVersionId] = useState<number | null>(null);
+    const [deletingVersionId, setDeletingVersionId] = useState<number | null>(null);
+
+    const fetchVersions = useCallback(async () => {
+        if (file?.id) {
+            setLoading(true);
+            try {
+                const data = await getFileVersions(file.id);
+                setVersions(data.versions || []);
+            } catch (err) {
+                console.error("fetchVersions mobile Error", err);
+            } finally {
+                setLoading(false);
+            }
+        }
+    }, [file?.id]);
+
+    useEffect(() => {
+        if (visible) {
+            fetchVersions();
+        }
+    }, [visible, fetchVersions]);
+
+    const handlePromote = async (versionId: number) => {
+        try {
+            setPromotingVersionId(versionId);
+            await promoteFile(versionId);
+            Alert.alert(t('common.success') || 'Success', t('projectDocuments.versionPromotedSuccess') || 'Version promoted to active');
+            fetchVersions();
+            const promoted = versions.find(v => v.id === versionId);
+            if (promoted && onUpdate) {
+                onUpdate({ ...promoted, is_current: true });
+            }
+        } catch (err) {
+            console.error(err);
+            Alert.alert(t('common.error') || 'Error', t('projectDocuments.failedPromoteVersion') || 'Failed to promote version');
+        } finally {
+            setPromotingVersionId(null);
+        }
+    };
+
+    const handleDelete = async (versionId: number) => {
+        Alert.alert(
+            t('projectDocuments.deleteVersion') || 'Delete Version',
+            t('projectDocuments.confirmDeleteVersion') || 'Are you sure you want to delete this version?',
+            [
+                { text: t('common.cancel') || 'Cancel', style: 'cancel' },
+                {
+                    text: t('common.delete') || 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setDeletingVersionId(versionId);
+                            await deleteFile(versionId);
+                            Alert.alert(t('common.success') || 'Success', t('projectDocuments.versionDeletedSuccess') || 'Version deleted successfully');
+                            if (versionId === file.id) {
+                                const remaining = versions.filter(v => v.id !== versionId);
+                                if (remaining.length > 0) {
+                                    if (onUpdate) {
+                                        onUpdate({ ...remaining[0], is_current: true });
+                                    }
+                                } else {
+                                    onClose();
+                                }
+                            }
+                            fetchVersions();
+                        } catch (err) {
+                            console.error(err);
+                            Alert.alert(t('common.error') || 'Error', t('projectDocuments.failedDeleteVersion') || 'Failed to delete version');
+                        } finally {
+                            setDeletingVersionId(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
 
     if (!file) return null;
 
@@ -128,44 +219,129 @@ export default function FileInformationModal({
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Main Details Section */}
-                            <View style={styles.content}>
-                                {/* Date and Time */}
-                                <Text style={[styles.dateText, { color: colors.text }]}>
-                                    {uploadedDateStr || 'Unknown date'}
-                                </Text>
+                            {/* Scrollable Content */}
+                            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: Dimensions.get('window').height * 0.65 }}>
+                                <View style={styles.content}>
+                                    {/* Date and Time */}
+                                    <Text style={[styles.dateText, { color: colors.text }]}>
+                                        {uploadedDateStr || 'Unknown date'}
+                                    </Text>
 
-                                {/* File Name */}
-                                <Text style={[styles.fileNameText, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>
-                                    {file.file_name}
-                                </Text>
+                                    {/* File Name */}
+                                    <Text style={[styles.fileNameText, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>
+                                        {file.file_name}
+                                    </Text>
 
-                                {/* Size and Format Details */}
-                                <View style={[styles.detailsRow, { borderColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
-                                    <View style={styles.detailItem}>
-                                        <Text style={[styles.detailLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Format</Text>
-                                        <Text style={[styles.detailValue, { color: colors.text }]}>{fileFormatStr}</Text>
+                                    {/* Size and Format Details */}
+                                    <View style={[styles.detailsRow, { borderColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
+                                        <View style={styles.detailItem}>
+                                            <Text style={[styles.detailLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Format</Text>
+                                            <Text style={[styles.detailValue, { color: colors.text }]}>{fileFormatStr}</Text>
+                                        </View>
+                                        <View style={[styles.verticalDivider, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]} />
+                                        <View style={styles.detailItem}>
+                                            <Text style={[styles.detailLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Size</Text>
+                                            <Text style={[styles.detailValue, { color: colors.text }]}>{fileSizeStr || '—'}</Text>
+                                        </View>
                                     </View>
-                                    <View style={[styles.verticalDivider, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]} />
-                                    <View style={styles.detailItem}>
-                                        <Text style={[styles.detailLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Size</Text>
-                                        <Text style={[styles.detailValue, { color: colors.text }]}>{fileSizeStr || '—'}</Text>
+
+                                    {/* Location/Folder Path */}
+                                    <View style={styles.pathContainer}>
+                                        <View style={[styles.iconContainer, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
+                                            <Feather name="folder" size={18} color={colors.primary} />
+                                        </View>
+                                        <View style={styles.pathTextContainer}>
+                                            <Text style={[styles.pathLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Folder Path</Text>
+                                            <Text style={[styles.pathValue, { color: colors.text }]} numberOfLines={2}>
+                                                {folderPathStr}
+                                            </Text>
+                                        </View>
                                     </View>
+
+                                    {/* Version History Section */}
+                                    {file.file_type && !file.file_type.startsWith('image/') && (
+                                        <View style={[styles.versionsSection, { borderTopColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
+                                            <Text style={[styles.sectionTitle, { color: colors.text }]}>Version History</Text>
+                                            {loading ? (
+                                                <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 10 }} />
+                                            ) : versions.length === 0 ? (
+                                                <Text style={{ color: colors.textMuted, fontSize: 13, marginVertical: 10 }}>No other versions found</Text>
+                                            ) : (
+                                                <View style={styles.versionsList}>
+                                                    {versions.map((v, idx) => {
+                                                        const isActive = file.id === v.id;
+                                                        const isCurrent = v.is_current;
+                                                        return (
+                                                            <View 
+                                                                key={v.id} 
+                                                                style={[
+                                                                    styles.versionItem, 
+                                                                    { 
+                                                                        borderColor: isActive ? colors.primary : (isDark ? '#2c2c2e' : '#f2f2f7'),
+                                                                        backgroundColor: isActive ? (isDark ? 'rgba(0,122,255,0.15)' : 'rgba(0,122,255,0.05)') : 'transparent'
+                                                                    }
+                                                                ]}
+                                                            >
+                                                                <View style={{ flex: 1 }}>
+                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                                                                            V{versions.length - idx}
+                                                                        </Text>
+                                                                        {isCurrent && (
+                                                                            <View style={{ backgroundColor: isDark ? 'rgba(52, 199, 89, 0.2)' : 'rgba(52, 199, 89, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                                                <Text style={{ color: '#34c759', fontSize: 9, fontWeight: '700' }}>ACTIVE</Text>
+                                                                            </View>
+                                                                        )}
+                                                                    </View>
+                                                                    <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 2 }}>{v.file_name}</Text>
+                                                                    <Text style={{ fontSize: 10, color: colors.textMuted }}>
+                                                                        {formatUploadedDate(v.createdAt)}
+                                                                    </Text>
+                                                                </View>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                                    {!isActive && (
+                                                                        <TouchableOpacity onPress={() => onUpdate && onUpdate(v)} style={{ padding: 6 }}>
+                                                                            <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>VIEW</Text>
+                                                                        </TouchableOpacity>
+                                                                    )}
+                                                                    {!isCurrent && (user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'contributor') && (
+                                                                        <TouchableOpacity 
+                                                                            onPress={() => handlePromote(v.id)} 
+                                                                            style={{ padding: 6 }}
+                                                                            disabled={promotingVersionId !== null || deletingVersionId !== null}
+                                                                        >
+                                                                            {promotingVersionId === v.id ? (
+                                                                                <ActivityIndicator size="small" color={colors.primary} />
+                                                                            ) : (
+                                                                                <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>
+                                                                                    {t('projectDocuments.makeActive') || 'ACTIVATE'}
+                                                                                </Text>
+                                                                            )}
+                                                                        </TouchableOpacity>
+                                                                    )}
+                                                                    {(user?.role === 'admin' || user?.role === 'superadmin' || String(v.created_by) === String(user?.id)) && (
+                                                                        <TouchableOpacity 
+                                                                            onPress={() => handleDelete(v.id)} 
+                                                                            style={{ padding: 6 }}
+                                                                            disabled={promotingVersionId !== null || deletingVersionId !== null}
+                                                                        >
+                                                                            {deletingVersionId === v.id ? (
+                                                                                <ActivityIndicator size="small" color="#ef4444" />
+                                                                            ) : (
+                                                                                <Feather name="trash-2" size={16} color="#ef4444" />
+                                                                            )}
+                                                                        </TouchableOpacity>
+                                                                    )}
+                                                                </View>
+                                                            </View>
+                                                        );
+                                                    })}
+                                                </View>
+                                            )}
+                                        </View>
+                                    )}
                                 </View>
-
-                                {/* Location/Folder Path */}
-                                <View style={styles.pathContainer}>
-                                    <View style={[styles.iconContainer, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
-                                        <Feather name="folder" size={18} color={colors.primary} />
-                                    </View>
-                                    <View style={styles.pathTextContainer}>
-                                        <Text style={[styles.pathLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Folder Path</Text>
-                                        <Text style={[styles.pathValue, { color: colors.text }]} numberOfLines={2}>
-                                            {folderPathStr}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
+                            </ScrollView>
                         </View>
                     </TouchableWithoutFeedback>
                 </View>
@@ -185,7 +361,29 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 24,
         paddingHorizontal: 20,
         paddingTop: 8,
-        borderTopWidth: 1
+        borderTopWidth: 1,
+        maxHeight: Dimensions.get('window').height * 0.85,
+    },
+    versionsSection: {
+        marginTop: 20,
+        borderTopWidth: 1,
+        paddingTop: 20,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 12,
+    },
+    versionsList: {
+        gap: 10,
+    },
+    versionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
     },
     dragIndicator: {
         width: 36,

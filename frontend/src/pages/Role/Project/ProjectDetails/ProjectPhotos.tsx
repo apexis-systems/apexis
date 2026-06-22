@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle, CheckCircle2, Archive, MoreVertical } from 'lucide-react';
+import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle, HelpCircle, CheckCircle2, Archive, MoreVertical, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,10 +20,11 @@ import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, archiveFile, unarchiveFile } from '@/services/fileService';
+import { getFiles, deleteFile, bulkDeleteFiles, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, archiveFile, unarchiveFile, updateFile } from '@/services/fileService';
 
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
+import RenameFileDialog from './RenameFileDialog';
 import LinkedItemsTab from './LinkedItemsTab';
 import { getFolderSnags } from '@/services/snagService';
 import { getFolderRFIs } from '@/services/rfiService';
@@ -79,7 +80,9 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
 
   const { checkLimit } = useUsage();
   const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
+  const [activeDropdownPhotoId, setActiveDropdownPhotoId] = useState<number | null>(null);
   const [showCreateSnagDialog, setShowCreateSnagDialog] = useState(false);
+  const [editFile, setEditFile] = useState<any | null>(null);
   const [showCreateRfiDialog, setShowCreateRfiDialog] = useState(false);
 
   const [snagTitle, setSnagTitle] = useState('');
@@ -429,6 +432,17 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       toast.success(t('photo_deleted_msg'));
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('failed_delete_photo'));
+    }
+  };
+
+  const handleRenameFile = async (newName: string) => {
+    if (!editFile) return;
+    try {
+      await updateFile(editFile.id, { file_name: newName });
+      toast.success(t('file_renamed_msg').replace('{name}', newName));
+      await importFolders(); // Refetch
+    } catch (e) {
+      toast.error(t('failed_rename_file') || 'Failed to rename file');
     }
   };
 
@@ -877,6 +891,13 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
             currentName={editFolder?.name || ''}
           />
 
+          <RenameFileDialog
+            open={!!editFile}
+            onOpenChange={(open) => !open && setEditFile(null)}
+            onRename={handleRenameFile}
+            currentName={editFile?.file_name || ''}
+          />
+
 
           <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-0.5" : "space-y-1"}>
             {sortedPhotos.map((photo) => {
@@ -960,6 +981,11 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditFile(photo); }}>
+                                  {t('rename_btn')}
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }}>
                                 {t('create_rfi')}
                               </DropdownMenuItem>
@@ -1011,7 +1037,10 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                   )}
 
                   {!isSelectionMode && (
-                    <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
+                    <div className={cn(
+                      "absolute top-2 right-2 flex gap-0.5 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm",
+                      activeDropdownPhotoId === photo.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    )}>
                       <button
                         onClick={(e) => { e.stopPropagation(); setShareItem(photo); }}
                         className="rounded-full p-1 hover:bg-secondary transition-colors"
@@ -1061,18 +1090,26 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                         </>
                       )}
 
-                      <DropdownMenu>
+                      <DropdownMenu onOpenChange={(open) => setActiveDropdownPhotoId(open ? photo.id : null)}>
                         <DropdownMenuTrigger asChild>
                           <button onClick={(e) => e.stopPropagation()} className="rounded-full p-1 hover:bg-secondary transition-colors">
                             <MoreVertical className="h-2.5 w-2.5 text-muted-foreground" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }}>
-                            {t('create_rfi')}
+                        <DropdownMenuContent align="end" className="w-48 bg-background border border-border text-foreground">
+                          {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditFile(photo); }} className="cursor-pointer">
+                              <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                              <span>{t('rename_btn')}</span>
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(photo); }} className="cursor-pointer">
+                            <HelpCircle className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <span>{t('create_rfi')}</span>
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateSnag(photo); }}>
-                            {t('create_snag')}
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateSnag(photo); }} className="cursor-pointer">
+                            <AlertTriangle className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <span>{t('create_snag')}</span>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

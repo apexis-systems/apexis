@@ -101,9 +101,8 @@ export default function ChatDetail() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
 
-    const [selectedFile, setSelectedFile] = useState<any>(null);
-    const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
-    const [annotatingFile, setAnnotatingFile] = useState(false);
+    const [attachments, setAttachments] = useState<{ file: File; preview: string | null }[]>([]);
+    const [editingAttachmentIndex, setEditingAttachmentIndex] = useState<number | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [replyTo, setReplyTo] = useState<any>(null);
@@ -266,12 +265,21 @@ export default function ChatDetail() {
     };
 
     const handleAnnotateSave = (annotatedDataUrl: string) => {
+        if (editingAttachmentIndex === null) return;
+        const targetAttachment = attachments[editingAttachmentIndex];
         const blob = dataUrlToBlob(annotatedDataUrl);
-        const fileName = selectedFile?.name || `annotated_${Date.now()}.jpg`;
+        const fileName = targetAttachment?.file?.name || `annotated_${Date.now()}.jpg`;
         const file = new File([blob], fileName, { type: 'image/jpeg' });
-        setSelectedFile(file);
-        setSelectedFilePreview(annotatedDataUrl);
-        setAnnotatingFile(false);
+
+        setAttachments(prev => {
+            const next = [...prev];
+            next[editingAttachmentIndex] = {
+                file,
+                preview: annotatedDataUrl
+            };
+            return next;
+        });
+        setEditingAttachmentIndex(null);
     };
 
     const commonEmojis = ['😊', '😂', '❤️', '👍', '🔥', '🙌', '😮', '😢', '😍', '🤔', '✅', '❌', '🚀', '✨'];
@@ -449,55 +457,85 @@ export default function ChatDetail() {
         }
 
         const tempText = message.trim();
-        const fileToUpload = overrideFile || selectedFile;
+        const filesToUpload = overrideFile ? [{ file: overrideFile, preview: null }] : attachments;
 
-        if (!tempText && !fileToUpload) return;
+        if (!tempText && filesToUpload.length === 0) return;
 
         setIsUploading(true);
 
         if (!overrideFile) {
             setMessage('');
-            setSelectedFile(null);
-            setSelectedFilePreview(null);
+            setAttachments([]);
             setShowEmojiPicker(false);
         }
 
         try {
-            let fileData = null;
-            if (fileToUpload) {
-                const uploadRes = await uploadChatFile(fileToUpload);
-                if (uploadRes.success) {
-                    fileData = uploadRes;
+            if (filesToUpload.length === 0) {
+                const payload: any = {
+                    roomId,
+                    type: 'text',
+                    parent_id: replyTo?.id ? Number(replyTo.id) : null
+                };
+                if (tempText) payload.text = tempText;
+
+                console.log("[CHAT] Sending payload:", payload);
+                setReplyTo(null);
+
+                const res = await sendChatMessage(payload);
+                console.log("[CHAT] Response from server:", res);
+                if (res.success && res.message) {
+                    setMessages(prev => {
+                        const exists = prev.some(m => String(m.id) === String(res.message.id));
+                        if (exists) {
+                            return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                        }
+                        return [res.message, ...prev];
+                    });
                 }
-            }
-
-            const payload: any = {
-                roomId,
-                type: fileData ? (
-                    fileData.file_type.startsWith('image/') ? 'image' :
-                        fileData.file_type.startsWith('audio/') ? 'audio' : 'file'
-                ) : 'text',
-                file_url: fileData?.file_url,
-                file_name: fileData?.file_name,
-                file_type: fileData?.file_type,
-                file_size: fileData?.file_size,
-                parent_id: replyTo?.id ? Number(replyTo.id) : null
-            };
-            if (tempText) payload.text = tempText;
-
-            console.log("[CHAT] Sending payload:", payload);
-            setReplyTo(null);
-
-            const res = await sendChatMessage(payload);
-            console.log("[CHAT] Response from server:", res);
-            if (res.success && res.message) {
-                setMessages(prev => {
-                    const exists = prev.some(m => String(m.id) === String(res.message.id));
-                    if (exists) {
-                        return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+            } else {
+                for (let i = 0; i < filesToUpload.length; i++) {
+                    const item = filesToUpload[i];
+                    const uploadRes = await uploadChatFile(item.file);
+                    let fileData = null;
+                    if (uploadRes.success) {
+                        fileData = uploadRes;
                     }
-                    return [res.message, ...prev];
-                });
+
+                    if (fileData) {
+                        const payload: any = {
+                            roomId,
+                            type: fileData.file_type.startsWith('image/') ? 'image' :
+                                   fileData.file_type.startsWith('audio/') ? 'audio' : 'file',
+                            file_url: fileData.file_url,
+                            file_name: fileData.file_name,
+                            file_type: fileData.file_type,
+                            file_size: fileData.file_size,
+                            parent_id: replyTo?.id ? Number(replyTo.id) : null
+                        };
+
+                        // Send the text message with the first file only (just like mobile)
+                        if (i === 0 && tempText) {
+                            payload.text = tempText;
+                        }
+
+                        if (i === 0) {
+                            setReplyTo(null);
+                        }
+
+                        console.log("[CHAT] Sending payload:", payload);
+                        const res = await sendChatMessage(payload);
+                        console.log("[CHAT] Response from server:", res);
+                        if (res.success && res.message) {
+                            setMessages(prev => {
+                                const exists = prev.some(m => String(m.id) === String(res.message.id));
+                                if (exists) {
+                                    return prev.map(m => String(m.id) === String(res.message.id) ? res.message : m);
+                                }
+                                return [res.message, ...prev];
+                            });
+                        }
+                    }
+                }
             }
         } catch (err) {
             console.error("Failed to send message", err);
@@ -507,17 +545,23 @@ export default function ChatDetail() {
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setSelectedFile(file);
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = () => setSelectedFilePreview(reader.result as string);
-                reader.readAsDataURL(file);
-            } else {
-                setSelectedFilePreview(null);
-            }
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            const filesArray = Array.from(files);
+            
+            filesArray.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        setAttachments(prev => [...prev, { file, preview: reader.result as string }]);
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    setAttachments(prev => [...prev, { file, preview: null }]);
+                }
+            });
         }
+        e.target.value = '';
     };
 
     const addEmoji = (emoji: string) => {
@@ -851,34 +895,39 @@ export default function ChatDetail() {
                     </div>
                 )}
 
-                {/* File Preview */}
-                {selectedFile && (
-                    <div className="px-4 py-2 bg-secondary/30 flex items-center gap-3 border-b border-border animate-in slide-in-from-bottom-2">
-                        <div
-                            className="relative h-10 w-10 rounded bg-accent/20 flex items-center justify-center overflow-hidden group cursor-pointer"
-                            onClick={() => selectedFile.type.startsWith('image/') && setAnnotatingFile(true)}
-                        >
-                            {selectedFile.type.startsWith('image/') && selectedFilePreview ? (
-                                <>
-                                    <img src={selectedFilePreview} className="h-full w-full object-cover rounded" />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <Camera className="h-3 w-3 text-white" />
+                {/* File/Image Previews */}
+                {attachments.length > 0 && (
+                    <div className="px-4 py-3 bg-secondary/30 border-b border-border flex gap-3 overflow-x-auto scrollbar-thin select-none animate-in slide-in-from-bottom-2">
+                        {attachments.map((item, index) => (
+                            <div key={index} className="relative w-16 h-16 rounded-lg bg-accent/10 border border-border flex items-center justify-center shrink-0">
+                                {item.file.type.startsWith('image/') && item.preview ? (
+                                    <>
+                                        <img src={item.preview} className="h-full w-full object-cover rounded-lg" />
+                                        <button
+                                            onClick={() => setEditingAttachmentIndex(index)}
+                                            className="absolute -top-1.5 -left-1.5 bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition-transform border border-card"
+                                            title="Annotate Image"
+                                        >
+                                            <Edit2 className="h-2.5 w-2.5" />
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center p-1 text-center">
+                                        <FileText className="h-6 w-6 text-accent" />
+                                        <span className="text-[8px] text-muted-foreground truncate max-w-[56px] mt-0.5">{item.file.name}</span>
                                     </div>
-                                </>
-                            ) : (
-                                <FileText className="h-6 w-6 text-accent" />
-                            )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium truncate">{selectedFile.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)} KB</p>
-                        </div>
-                        <button
-                            onClick={() => { setSelectedFile(null); setSelectedFilePreview(null); }}
-                            className="p-1 rounded-full hover:bg-secondary transition-colors"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        setAttachments(prev => prev.filter((_, idx) => idx !== index));
+                                    }}
+                                    className="absolute -top-1.5 -right-1.5 bg-black/60 hover:bg-black/80 text-white w-5 h-5 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition-transform border border-card"
+                                    title="Remove"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 )}
 
@@ -922,6 +971,7 @@ export default function ChatDetail() {
                         ref={fileInputRef}
                         className="hidden"
                         onChange={handleFileSelect}
+                        multiple
                     />
                     <input
                         type="file"
@@ -930,6 +980,7 @@ export default function ChatDetail() {
                         accept="image/*"
                         capture="environment"
                         onChange={handleFileSelect}
+                        multiple
                     />
 
                     {!isRecordingVoice && (
@@ -964,7 +1015,7 @@ export default function ChatDetail() {
                         </div>
                     )}
 
-                    {(!message.trim() && !selectedFile) || isRecordingVoice ? (
+                    {(!message.trim() && attachments.length === 0) || isRecordingVoice ? (
                         <VoiceNoteRecorder
                             onRecordingStateChange={setIsRecordingVoice}
                             onSend={(file) => handleSend(file)}
@@ -1118,11 +1169,11 @@ export default function ChatDetail() {
                 </DialogContent>
             </Dialog>
 
-            {annotatingFile && selectedFilePreview && (
+            {editingAttachmentIndex !== null && attachments[editingAttachmentIndex]?.preview && (
                 <ImageAnnotator
-                    imageSrc={selectedFilePreview}
+                    imageSrc={attachments[editingAttachmentIndex].preview!}
                     onSave={handleAnnotateSave}
-                    onCancel={() => setAnnotatingFile(false)}
+                    onCancel={() => setEditingAttachmentIndex(null)}
                 />
             )}
 
