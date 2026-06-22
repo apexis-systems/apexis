@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, HelpCircle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus, MoreVertical } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, HelpCircle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus, MoreVertical, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUsage } from '@/contexts/UsageContext';
 import { createRFI, getRFIAssignees } from '@/services/rfiService';
@@ -17,7 +17,7 @@ import CreateFolderDialog from './CreateFolderDialog';
 import ShareDialog from '@/components/shared/ShareDialog';
 import CommentThread from '@/components/shared/CommentThread';
 import { getFolders, createFolder, toggleFolderVisibility, bulkUpdateFolders, updateFolder, deleteFolder } from '@/services/folderService';
-import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, toggleOnlyForReference, updateFile, archiveFile } from '@/services/fileService';
+import { getFiles, deleteFile, toggleFileVisibility, bulkUpdateFiles, toggleDoNotFollow, toggleOnlyForReference, updateFile, archiveFile, getFileVersions } from '@/services/fileService';
 import MoveToFolderDialog from './MoveToFolderDialog';
 import EditFolderDialog from './EditFolderDialog';
 import LinkedItemsTab from './LinkedItemsTab';
@@ -38,6 +38,19 @@ interface ProjectDocumentsProps {
 }
 
 const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
+  const isAssigneeSeen = (doc: any, assigneeId: number) => {
+    if (doc.seen_by && Array.isArray(doc.seen_by)) {
+      return doc.seen_by.includes(assigneeId);
+    }
+    if (doc.seen_at) {
+      const isSingleAssignee = (doc.assignees && doc.assignees.length === 1) || (doc.assignee && !doc.assignees);
+      if (isSingleAssignee) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,6 +74,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [initialOpenLinkModal, setInitialOpenLinkModal] = useState<boolean>(
     searchParams?.get('openLinkModal') === 'true'
   );
+  const [initialVersionFileId, setInitialVersionFileId] = useState<string | null>(null);
 
   const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
   const [showCreateRfiDialog, setShowCreateRfiDialog] = useState(false);
@@ -71,6 +85,42 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [rfiAssigneesList, setRfiAssigneesList] = useState<any[]>([]);
   const [submittingEntity, setSubmittingEntity] = useState(false);
   const [openDropdownDocId, setOpenDropdownDocId] = useState<string | number | null>(null);
+  // Version badge dropdown state
+  const [openVersionDocId, setOpenVersionDocId] = useState<string | number | null>(null);
+  const [versionCache, setVersionCache] = useState<Record<string, any[]>>({});
+  // Ref to track which file IDs we've already started fetching (avoids duplicate calls)
+  const versionFetchedRef = React.useRef<Set<string>>(new Set());
+
+  const fetchVersionsForDoc = async (docId: string | number) => {
+    const key = String(docId);
+    if (versionFetchedRef.current.has(key)) return; // already fetching / fetched
+    versionFetchedRef.current.add(key);
+    try {
+      const data = await getFileVersions(docId);
+      setVersionCache(prev => ({ ...prev, [key]: data.versions || [] }));
+    } catch (e) {
+      // remove from fetched set so it can retry on next click
+      versionFetchedRef.current.delete(key);
+      console.error('fetchVersionsForDoc error', e);
+    }
+  };
+
+  // Pre-fetch versions for all docs as soon as the list loads
+  useEffect(() => {
+    if (docs.length === 0) return;
+    docs.forEach(doc => fetchVersionsForDoc(doc.id));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs]);
+
+  const handleVersionBadgeClick = (e: React.MouseEvent, docId: string | number) => {
+    e.stopPropagation();
+    if (openVersionDocId === docId) {
+      setOpenVersionDocId(null);
+      return;
+    }
+    setOpenVersionDocId(docId);
+    fetchVersionsForDoc(docId); // no-op if already fetched
+  };
 
   useEffect(() => {
     if (showCreateRfiDialog && project?.id) {
@@ -243,8 +293,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('file-seen', (data: { fileId: string | number, seen_at: string }) => {
-      setDocs((prev) => prev.map((d) => String(d.id) === String(data.fileId) ? { ...d, seen_at: data.seen_at } : d));
+    socket.on('file-seen', (data: { fileId: string | number, seen_at: string, seen_by?: number[] }) => {
+      setDocs((prev) => prev.map((d) => String(d.id) === String(data.fileId) ? { ...d, seen_at: data.seen_at, seen_by: data.seen_by || d.seen_by } : d));
     });
 
     return () => {
@@ -836,13 +886,64 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       {formatFileSize(doc.file_size_mb)}
                     </span>
 
+                    {/* Version badge (grid view) */}
+                    {(versionCache[String(doc.id)] ? versionCache[String(doc.id)].length > 1 : (doc.version_count > 1)) && (
+                      <div className="relative mt-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => handleVersionBadgeClick(e, doc.id)}
+                          className="flex items-center gap-0.5 bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 rounded-full px-1.5 py-0.5 text-[8px] font-bold transition-colors"
+                          title="View versions"
+                        >
+                          <ChevronDown className="h-2 w-2" />
+                          {versionCache[String(doc.id)]
+                            ? `V${versionCache[String(doc.id)].length}`
+                            : `V${doc.version_count || 1}`}
+                        </button>
+                        {openVersionDocId === doc.id && (
+                          <>
+                            <div className="fixed inset-0 z-30" onClick={() => setOpenVersionDocId(null)} />
+                            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-40 min-w-[160px] rounded-xl border border-border bg-popover shadow-xl py-1 overflow-hidden">
+                              <p className="text-[9px] font-black tracking-widest uppercase text-muted-foreground px-3 py-1.5 border-b border-border">Versions</p>
+                              {!versionCache[String(doc.id)] ? (
+                                <p className="text-[10px] text-muted-foreground px-3 py-2 flex items-center gap-1.5">
+                                  <Loader2 className="h-3 w-3 animate-spin text-accent" /> Loading versions...
+                                </p>
+                              ) : versionCache[String(doc.id)].length <= 1 ? (
+                                <p className="text-[10px] text-muted-foreground px-3 py-2">Only 1 version</p>
+                              ) : (
+                                (versionCache[String(doc.id)] || []).map((v: any, idx: number) => (
+                                  <button
+                                    key={v.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenVersionDocId(null);
+                                      // Find the index of the current (root) doc and open viewer, but set the active version
+                                      const rootIdx = sortedDocs.findIndex(d => String(d.id) === String(doc.id));
+                                      setViewerState({ open: true, index: rootIdx >= 0 ? rootIdx : 0 });
+                                      // Store the version to jump to via a custom state
+                                      setInitialVersionFileId(String(v.id));
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-accent/10 transition-colors text-left"
+                                  >
+                                    <span className="text-[9px] font-black text-accent min-w-[24px]">V{(versionCache[String(doc.id)] || []).length - idx}</span>
+                                    <span className="text-[10px] text-foreground truncate flex-1">{v.file_name}</span>
+                                    {v.is_current && <span className="text-[8px] bg-green-500/15 text-green-600 dark:text-green-400 rounded-full px-1.5 py-0.5 font-bold">ACTIVE</span>}
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
                     {doc.assignees && doc.assignees.length > 0 ? (
                       <div className="flex flex-wrap gap-1 mt-1 max-w-[90%]">
                         {doc.assignees.map((assignee: any) => (
                           <div key={assignee.id} className="flex items-center gap-0.5 bg-secondary/50 px-1 py-0.5 rounded-full border border-border/50">
                             <UserIcon className="h-2 w-2 text-muted-foreground" />
                             <span className="text-[8px] font-medium truncate text-muted-foreground max-w-[50px]">{assignee.name}</span>
-                            {doc.seen_at && (
+                            {isAssigneeSeen(doc, assignee.id) && (
                               <CheckCheck className="h-2 w-2 text-orange-500 ml-0.5" />
                             )}
                           </div>
@@ -852,7 +953,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       <div className="flex items-center gap-1 mt-1 bg-secondary/50 px-1.5 py-0.5 rounded-full border border-border/50 max-w-[90%]">
                         <UserIcon className="h-2 w-2 text-muted-foreground" />
                         <span className="text-[8px] font-medium truncate text-muted-foreground">{doc.assignee.name}</span>
-                        {doc.seen_at && (
+                        {isAssigneeSeen(doc, doc.assignee.id) && (
                           <CheckCheck className="h-2.5 w-2.5 text-orange-500 ml-0.5" />
                         )}
                       </div>
@@ -988,13 +1089,61 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           {formatFileSize(doc.file_size_mb)}
                         </p>
                       </button>
+                      {/* Version badge (list view) */}
+                      {(versionCache[String(doc.id)] ? versionCache[String(doc.id)].length > 1 : (doc.version_count > 1)) && (
+                        <div className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={(e) => handleVersionBadgeClick(e, doc.id)}
+                            className="flex items-center gap-0.5 bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 rounded-full px-1.5 py-0.5 text-[8px] font-bold transition-colors"
+                            title="View versions"
+                          >
+                            <ChevronDown className="h-2 w-2" />
+                            {versionCache[String(doc.id)]
+                              ? `V${versionCache[String(doc.id)].length}`
+                              : `V${doc.version_count || 1}`}
+                          </button>
+                          {openVersionDocId === doc.id && (
+                            <>
+                              <div className="fixed inset-0 z-30" onClick={() => setOpenVersionDocId(null)} />
+                              <div className="absolute left-0 top-full mt-1 z-40 min-w-[180px] rounded-xl border border-border bg-popover shadow-xl py-1 overflow-hidden">
+                                <p className="text-[9px] font-black tracking-widest uppercase text-muted-foreground px-3 py-1.5 border-b border-border">Versions</p>
+                                {!versionCache[String(doc.id)] ? (
+                                  <p className="text-[10px] text-muted-foreground px-3 py-2 flex items-center gap-1.5">
+                                    <Loader2 className="h-3 w-3 animate-spin text-accent" /> Loading versions...
+                                  </p>
+                                ) : versionCache[String(doc.id)].length <= 1 ? (
+                                  <p className="text-[10px] text-muted-foreground px-3 py-2">Only 1 version</p>
+                                ) : (
+                                  (versionCache[String(doc.id)] || []).map((v: any, idx: number) => (
+                                    <button
+                                      key={v.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenVersionDocId(null);
+                                        const rootIdx = sortedDocs.findIndex(d => String(d.id) === String(doc.id));
+                                        setViewerState({ open: true, index: rootIdx >= 0 ? rootIdx : 0 });
+                                        setInitialVersionFileId(String(v.id));
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-accent/10 transition-colors text-left"
+                                    >
+                                      <span className="text-[9px] font-black text-accent min-w-[24px]">V{(versionCache[String(doc.id)] || []).length - idx}</span>
+                                      <span className="text-[10px] text-foreground truncate flex-1">{v.file_name}</span>
+                                      {v.is_current && <span className="text-[8px] bg-green-500/15 text-green-600 dark:text-green-400 rounded-full px-1.5 py-0.5 font-bold">ACTIVE</span>}
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
                       {doc.assignees && doc.assignees.length > 0 ? (
                         <div className="flex flex-wrap gap-1 max-w-[200px]">
                           {doc.assignees.map((assignee: any) => (
                             <div key={assignee.id} className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
                               <UserIcon className="h-2.5 w-2.5 text-muted-foreground" />
                               <span className="text-[9px] font-medium text-muted-foreground">{assignee.name}</span>
-                              {doc.seen_at && (
+                              {isAssigneeSeen(doc, assignee.id) && (
                                 <CheckCheck className="h-3 w-3 text-orange-500 ml-0.5" />
                               )}
                             </div>
@@ -1004,7 +1153,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                         <div className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
                           <UserIcon className="h-2.5 w-2.5 text-muted-foreground" />
                           <span className="text-[9px] font-medium text-muted-foreground">{doc.assignee.name}</span>
-                          {doc.seen_at && (
+                          {isAssigneeSeen(doc, doc.assignee.id) && (
                             <CheckCheck className="h-3 w-3 text-orange-500 ml-0.5" />
                           )}
                         </div>
@@ -1057,6 +1206,9 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                               <Archive className="h-3.5 w-3.5 text-amber-600" />
                             </button>
                           )}
+                          <button onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('create_rfi')}>
+                            <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
                           <button 
                             onClick={(e) => { 
                               e.stopPropagation(); 
@@ -1066,9 +1218,6 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                             className="rounded-md p-1 hover:bg-secondary" 
                             title={t('upload_new_version') || "Upload New Version"}
                           >
-                            <Upload className="h-3.5 w-3.5 text-muted-foreground" />
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }} className="rounded-md p-1 hover:bg-secondary" title="Create RFI">
                             <Plus className="h-3.5 w-3.5 text-muted-foreground" />
                           </button>
                         </>
@@ -1089,6 +1238,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 setViewerState(prev => ({ ...prev, open: false }));
                 setInitialViewerTab(null);
                 setInitialOpenLinkModal(false);
+                setInitialVersionFileId(null);
                 const returnTab = searchParams?.get('returnTab');
                 if (returnTab) {
                   const returnRfiId = searchParams?.get('returnRfiId');
@@ -1125,6 +1275,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             onCreateRfi={handleStartCreateRfi}
             initialTab={initialViewerTab}
             initialOpenLinkModal={initialOpenLinkModal}
+            initialVersionFileId={initialVersionFileId}
           />
 
           {

@@ -309,13 +309,30 @@ function UploadInner() {
                 description: `${files.length} new ${effectiveType === 'documents' ? 'documents' : 'site photos'} added`,
                 metadata: folderParam ? JSON.stringify({ folderId: folderParam, type: effectiveType }) : undefined
             });
+            // Build destination URL using the actual folder the user uploaded to,
+            // not just the returnUrl (which may point to root if they came from root).
+            const tab = effectiveType === 'photos' ? 'photos' : 'documents';
+            const uploadedFolderParam = selectedFolder ? `&folder=${selectedFolder}` : '';
             let projectUrl: string;
             if (returnUrl) {
-                projectUrl = returnUrl;
+                // Start from returnUrl but replace/add the folder param to reflect actual upload location
+                try {
+                    const base = new URL(returnUrl, window.location.origin);
+                    if (selectedFolder) {
+                        base.searchParams.set('folder', selectedFolder);
+                    } else {
+                        base.searchParams.delete('folder');
+                    }
+                    // Ensure the correct tab is set
+                    if (base.searchParams.has('tab')) {
+                        base.searchParams.set('tab', tab);
+                    }
+                    projectUrl = base.pathname + base.search;
+                } catch {
+                    projectUrl = `/${user.role}/project/${selectedProject}?tab=${tab}${uploadedFolderParam}`;
+                }
             } else {
-                const tab = effectiveType === 'photos' ? 'photos' : 'documents';
-                const folderParam = selectedFolder ? `&folder=${selectedFolder}` : '';
-                projectUrl = `/${user.role}/project/${selectedProject}?tab=${tab}${folderParam}`;
+                projectUrl = `/${user.role}/project/${selectedProject}?tab=${tab}${uploadedFolderParam}`;
             }
 
             setDoneType(effectiveType);
@@ -331,14 +348,32 @@ function UploadInner() {
     };
 
     if (done) {
-        // Build the go-to URL from selected state
+        // Build the go-to URL from selected state, always reflecting the actual uploaded folder
         const tab = doneType === 'photos' ? 'photos' : 'documents';
-        const folderParam = selectedFolder ? `&folder=${selectedFolder}` : '';
-        const goToUrl = returnUrl
-            ? returnUrl
-            : selectedProject
-                ? `/${user.role}/project/${selectedProject}?tab=${tab}${folderParam}`
+        const uploadedFolderParam = selectedFolder ? `&folder=${selectedFolder}` : '';
+        let goToUrl: string;
+        if (returnUrl) {
+            try {
+                const base = new URL(returnUrl, window.location.origin);
+                if (selectedFolder) {
+                    base.searchParams.set('folder', selectedFolder);
+                } else {
+                    base.searchParams.delete('folder');
+                }
+                if (base.searchParams.has('tab')) {
+                    base.searchParams.set('tab', tab);
+                }
+                goToUrl = base.pathname + base.search;
+            } catch {
+                goToUrl = selectedProject
+                    ? `/${user.role}/project/${selectedProject}?tab=${tab}${uploadedFolderParam}`
+                    : dashboardPath;
+            }
+        } else {
+            goToUrl = selectedProject
+                ? `/${user.role}/project/${selectedProject}?tab=${tab}${uploadedFolderParam}`
                 : dashboardPath;
+        }
 
         return (
             <div className="max-w-md mx-auto p-8 flex flex-col items-center py-20">
