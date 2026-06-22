@@ -10,6 +10,7 @@ import {
     organizations,
     project_member_folders,
     blocked_users,
+    folders,
     sequelize
 } from "../models/index.ts";
 import jwt from "jsonwebtoken";
@@ -125,9 +126,18 @@ export const inviteUser = async (req: Request, res: Response) => {
                     role: role
                 });
 
-                // If consultant/vendor, map allowed folders
+                // If consultant/vendor, map allowed folders (excluding Confidential folder)
                 if ((role === 'consultant' || role === 'vendor') && req.body.folders && Array.isArray(req.body.folders)) {
-                    const folderMappingTasks = req.body.folders.map((folderId: number) => {
+                    const allowedFoldersFromDb = await folders.findAll({
+                        where: {
+                            id: { [Op.in]: req.body.folders },
+                            name: { [Op.notILike]: 'Confidential' }
+                        },
+                        attributes: ['id']
+                    });
+                    const allowedFolderIds = allowedFoldersFromDb.map((f: any) => f.id);
+
+                    const folderMappingTasks = allowedFolderIds.map((folderId: number) => {
                         return project_member_folders.create({
                             project_member_id: newMember.id,
                             folder_id: folderId
