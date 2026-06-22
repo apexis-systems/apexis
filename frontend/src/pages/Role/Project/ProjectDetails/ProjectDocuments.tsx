@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus, MoreVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUsage } from '@/contexts/UsageContext';
 import { createRFI, getRFIAssignees } from '@/services/rfiService';
@@ -70,6 +70,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [rfiExpiryDate, setRfiExpiryDate] = useState('');
   const [rfiAssigneesList, setRfiAssigneesList] = useState<any[]>([]);
   const [submittingEntity, setSubmittingEntity] = useState(false);
+  const [openDropdownDocId, setOpenDropdownDocId] = useState<string | number | null>(null);
 
   useEffect(() => {
     if (showCreateRfiDialog && project?.id) {
@@ -857,39 +858,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       </div>
                     )}
 
-                    <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
+                    <div className={`absolute top-2 right-2 flex gap-0.5 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm ${openDropdownDocId === doc.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                       {!isSelectionMode && (
                         <>
                           <button onClick={(e) => { e.stopPropagation(); setShareItem(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('share_link_tip')}>
                             <Share2 className="h-2.5 w-2.5 text-muted-foreground" />
                           </button>
-                          {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
-                            <button onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('rename_file_tip')}>
-                              <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
-                            </button>
-                          )}
-                          {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)))) && (
-                            <>
-                              <button onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('toggle_visibility_tip')}>
-                                {doc.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('toggle_dnf_tip')}>
-                                <ShieldAlert className={`h-2.5 w-2.5 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
-                              </button>
-                              <button onClick={(e) => { e.stopPropagation(); toggleDocOnlyForReference(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('toggle_ofr_tip')}>
-                                <Info className={`h-3.5 w-3.5 ${doc.only_for_reference ? 'text-blue-500' : 'text-muted-foreground'}`} />
-                              </button>
-                            </>
-                          )}
-                          {(user.role === 'admin' || user.role === 'superadmin') && !currentFolder?.name.toLowerCase().includes('archive') && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }}
-                              className="rounded-full p-1 hover:bg-secondary transition-colors"
-                              title={t('move_file_tip')}
-                            >
-                              <Move className="h-2.5 w-2.5 text-muted-foreground" />
-                            </button>
-                          )}
                           {(user.role === 'admin' || user.role === 'superadmin' || String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)) && !currentFolder?.name.toLowerCase().includes('archive') && (
                             <button
                               onClick={(e) => { e.stopPropagation(); archiveDoc(doc.id); }}
@@ -900,12 +874,57 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                             </button>
                           )}
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }}
+                            onClick={(e) => { e.stopPropagation();}}
                             className="rounded-full p-1 hover:bg-secondary transition-colors"
                             title="Create RFI"
                           >
                             <Plus className="h-2.5 w-2.5 text-muted-foreground" />
                           </button>
+                          <DropdownMenu onOpenChange={(open) => setOpenDropdownDocId(open ? doc.id : null)}>
+                            <DropdownMenuTrigger asChild>
+                              <button onClick={(e) => e.stopPropagation()} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('more_options') || 'More Options'}>
+                                <MoreVertical className="h-2.5 w-2.5 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 bg-background border border-border text-foreground">
+                              {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditFile(doc); }} className="cursor-pointer">
+                                  <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
+                                  <span>{t('rename_btn')}</span>
+                                </DropdownMenuItem>
+                              )}
+                              {(user.role === 'admin' || user.role === 'superadmin' || (user.role === 'contributor' && (String(doc.created_by) === String(user.id) || String(doc.creator?.id) === String(user.id)))) && (
+                                <>
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleDocVisibility(doc); }} className="cursor-pointer">
+                                    {doc.client_visible !== false ? (
+                                      <EyeOff className="mr-2 h-4 w-4 text-muted-foreground" />
+                                    ) : (
+                                      <Eye className="mr-2 h-4 w-4 text-accent" />
+                                    )}
+                                    <span>{t('toggle_visibility_tip')}</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleDocDoNotFollow(doc); }} className="cursor-pointer">
+                                    <ShieldAlert className={`mr-2 h-4 w-4 ${doc.do_not_follow ? 'text-red-500' : 'text-muted-foreground'}`} />
+                                    <span>{t('toggle_dnf_tip')}</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleDocOnlyForReference(doc); }} className="cursor-pointer">
+                                    <Info className={`mr-2 h-4 w-4 ${doc.only_for_reference ? 'text-blue-500' : 'text-muted-foreground'}`} />
+                                    <span>{t('toggle_ofr_tip')}</span>
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {(user.role === 'admin' || user.role === 'superadmin') && !currentFolder?.name.toLowerCase().includes('archive') && (
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: doc.id }); setShowMoveDialog(true); }} className="cursor-pointer">
+                                  <Move className="mr-2 h-4 w-4 text-muted-foreground" />
+                                  <span>{t('move_file_tip')}</span>
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }} className="cursor-pointer">
+                                <Plus className="mr-2 h-4 w-4 text-muted-foreground" />
+                                <span>{t('create_rfi')}</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </>
                       )}
                     </div>
@@ -1071,6 +1090,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
               }
             }}
             user={user}
+            onUpdate={(updatedFile) => setDocs(prev => prev.map(d => d.id === updatedFile.id ? updatedFile : d))}
             targetType="document"
             projectId={project.id}
             onCreateRfi={handleStartCreateRfi}
