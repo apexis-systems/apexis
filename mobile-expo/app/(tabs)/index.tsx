@@ -238,17 +238,17 @@ export default function DashboardScreen() {
       if (projects.length === 0 && !refreshing) setLoading(true);
       const data = await getProjects(orgId || undefined, false, search);
       let sortedProjects = data.projects || [];
-      
+
       if (sortType === 'newest') {
         sortedProjects.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       } else if (sortType === 'oldest') {
         sortedProjects.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       } else {
-        sortedProjects.sort((a: any, b: any) => 
+        sortedProjects.sort((a: any, b: any) =>
           (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
         );
       }
-      
+
       setProjects([...sortedProjects]);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
@@ -643,7 +643,7 @@ export default function DashboardScreen() {
                 </View>
                 {/* Name */}
                 <Text
-                  numberOfLines={2}
+                  numberOfLines={3}
                   style={{
                     fontSize: 10,
                     fontWeight: '600',
@@ -757,7 +757,7 @@ export default function DashboardScreen() {
                     placeholder={t('dashboard.projectNamePlaceholder')}
                     placeholderTextColor={colors.textMuted}
                     value={newProject.name}
-                    maxLength={25}
+                    maxLength={35}
                     onChangeText={(text) => setNewProject({ ...newProject, name: text })}
                   />
 
@@ -895,9 +895,9 @@ export default function DashboardScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-      <DiagnosticPermissionModal 
-        visible={isDiagnosticModalOpen} 
-        onClose={() => setIsDiagnosticModalOpen(false)} 
+      <DiagnosticPermissionModal
+        visible={isDiagnosticModalOpen}
+        onClose={() => setIsDiagnosticModalOpen(false)}
       />
     </>
   );

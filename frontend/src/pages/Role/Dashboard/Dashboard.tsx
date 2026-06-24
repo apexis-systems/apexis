@@ -387,7 +387,7 @@ export default function Dashboard() {
                             <input
                                 required
                                 type="text"
-                                maxLength={25}
+                                maxLength={35}
                                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
                                 value={newProject.name}
                                 onChange={e => setNewProject({ ...newProject, name: e.target.value })}
