@@ -60,6 +60,7 @@ export const createProject = async (req: Request, res: Response) => {
             contributor_code,
             client_code,
             created_by: authUser.user_id,
+            restrict_onboarding: req.body.restrict_onboarding !== undefined ? req.body.restrict_onboarding : false,
         });
 
         // Create default folders (Photo & Doc types)
@@ -243,7 +244,7 @@ export const getProjects = async (req: Request, res: Response) => {
                 {
                     model: organizations,
                     as: 'organization',
-                    attributes: ['id', 'name'],
+                    attributes: ['id', 'name', 'restrict_onboarding'],
                 },
             ],
             order: [['createdAt', 'DESC']],
@@ -339,7 +340,7 @@ export const getProjectById = async (req: Request, res: Response) => {
         }
 
         let projectOutput = project.toJSON ? project.toJSON() : project;
-        const restrictOnboarding = !!projectOutput.organization?.restrict_onboarding;
+        const restrictOnboarding = !!projectOutput.restrict_onboarding || !!projectOutput.organization?.restrict_onboarding;
 
         // Strip sensitive codes by role:
         // - admin/superadmin: can see both codes
@@ -374,7 +375,7 @@ export const getProjectById = async (req: Request, res: Response) => {
 export const updateProject = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, description, start_date, end_date } = req.body;
+        const { name, description, start_date, end_date, restrict_onboarding } = req.body;
         const authUser = (req as any).user;
 
         if (!authUser || authUser.role !== "admin") {
@@ -400,6 +401,7 @@ export const updateProject = async (req: Request, res: Response) => {
             description: description || project.description,
             start_date: start_date || project.start_date,
             end_date: end_date || project.end_date,
+            restrict_onboarding: restrict_onboarding !== undefined ? restrict_onboarding : project.restrict_onboarding,
         });
 
         res.status(200).json({ message: "Project updated successfully", project });
@@ -491,7 +493,7 @@ export const getProjectShareLinks = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "Project not found or not authorized" });
         }
 
-        const restrictOnboarding = !!project.organization?.restrict_onboarding;
+        const restrictOnboarding = !!project.restrict_onboarding || !!project.organization?.restrict_onboarding;
 
         // Non-admin roles: each role can share their own type of link
         if (["client", "contributor", "consultant", "vendor"].includes(authUser.role)) {

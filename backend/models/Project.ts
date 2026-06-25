@@ -53,6 +53,11 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.DATE,
                 allowNull: true,
             },
+            restrict_onboarding: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
         },
         {
             tableName: "projects",

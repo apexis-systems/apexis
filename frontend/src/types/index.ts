@@ -40,6 +40,7 @@ export interface Project {
     sharedWith: string[];
     contributor_code: string;
     client_code: string;
+    restrict_onboarding?: boolean;
 }
 
 export interface Folder {
