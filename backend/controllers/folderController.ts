@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { folders, files, project_members, activities, users as UsersModel, projects, organizations, project_member_folders, sequelize } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
-import { Op } from "sequelize";
+import { Op, Transaction } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { logActivity } from "../utils/activityUtils.ts";
@@ -95,12 +95,24 @@ export const getFolders = async (req: Request, res: Response) => {
             });
             if (!confidentialExists) {
                 try {
-                    await folders.create({
-                        project_id,
-                        name: 'Confidential',
-                        client_visible: false,
-                        created_by: authUser?.user_id,
-                        folder_type: type
+                    await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (t) => {
+                        const existsInside = await folders.findOne({
+                            where: {
+                                project_id,
+                                name: { [Op.iLike]: 'Confidential' },
+                                folder_type: type
+                            },
+                            transaction: t
+                        });
+                        if (!existsInside) {
+                            await folders.create({
+                                project_id,
+                                name: 'Confidential',
+                                client_visible: false,
+                                created_by: authUser?.user_id,
+                                folder_type: type
+                            }, { transaction: t });
+                        }
                     });
                 } catch (err) {
                     console.error(`Error auto-creating Confidential folder:`, err);
