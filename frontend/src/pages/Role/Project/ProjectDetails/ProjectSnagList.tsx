@@ -94,6 +94,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showReassign, setShowReassign] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<'all' | SnagStatus>('all');
@@ -655,7 +656,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
               {/* Status circle */}
               <button
                 onClick={() => {
-                  if (String(snag.assigned_to) === String(user?.id)) {
+                  if (String(snag.assigned_to) === String(user?.id) || user?.role === 'admin' || user?.role === 'superadmin') {
                     // Pre-fill response when clicking status circle if needed? 
                     // Actually cycleStatus clears it anyway, so we just call it.
                     cycleStatus(snag);
@@ -666,9 +667,9 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                 className={cn(
                   'flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-0.5 transition-all',
                   cfg.bg,
-                  String(snag.assigned_to) !== String(user?.id) && "opacity-60 cursor-not-allowed"
+                  (String(snag.assigned_to) !== String(user?.id) && user?.role !== 'admin' && user?.role !== 'superadmin') && "opacity-60 cursor-not-allowed"
                 )}
-                title={String(snag.assigned_to) === String(user?.id) ? t('status_click_change_tip').replace('{label}', t(cfg.key)) : t('status_tip').replace('{label}', t(cfg.key))}
+                title={(String(snag.assigned_to) === String(user?.id) || user?.role === 'admin' || user?.role === 'superadmin') ? t('status_click_change_tip').replace('{label}', t(cfg.key)) : t('status_tip').replace('{label}', t(cfg.key))}
               >
                 <Icon className={cn('h-3.5 w-3.5', cfg.text)} />
               </button>
@@ -779,16 +780,18 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
               maxLength={500}
             />
 
-            <Select value={newAssignee} onValueChange={setNewAssignee}>
-              <SelectTrigger className="text-xs"><SelectValue placeholder={t('assign_to_placeholder')} /></SelectTrigger>
-              <SelectContent>
-                {assignees.map(a => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name} {a.role ? `(${a.role.charAt(0).toUpperCase() + a.role.slice(1)})` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {(!isEditing || (user?.role === 'admin' || user?.role === 'superadmin')) && (
+              <Select value={newAssignee} onValueChange={setNewAssignee}>
+                <SelectTrigger className="text-xs"><SelectValue placeholder={t('assign_to_placeholder')} /></SelectTrigger>
+                <SelectContent>
+                  {assignees.map(a => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.name} {a.role ? `(${a.role.charAt(0).toUpperCase() + a.role.slice(1)})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             <div className="space-y-2">
               <p className="text-[11px] font-medium text-muted-foreground">{t('voice_note_label')}</p>
@@ -877,39 +880,55 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                         </Button>
                       </>
                     )}
-                    {(user?.role === 'admin' || user?.role === 'superadmin' || String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) && !selectedSnag.response && (
-                      <>
+                    {(String(selectedSnag.created_by) === String(user?.id) || String(selectedSnag.creator?.id) === String(user?.id)) ? (
+                      !selectedSnag.response && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            onClick={() => {
+                              setNewTitle(selectedSnag.title);
+                              setNewDescription(selectedSnag.description || '');
+                              setNewAssignee(String(selectedSnag.assigned_to));
+                              setNewPhoto(null);
+                              setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
+                              setNewAudio(null);
+                              setAudioPreview(null);
+                              setRemoveExistingAudio(false);
+                              setIsEditing(true);
+                            }}
+                          >
+                            {t('edit_btn')}
+                          </Button>
+
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            onClick={() => {
+                              handleDelete(selectedSnag);
+                              handleCloseDetailDialog();
+                            }}
+                          >
+                            {t('delete_btn')}
+                          </Button>
+                        </>
+                      )
+                    ) : (
+                      (user?.role === 'admin' || user?.role === 'superadmin') && (
                         <Button
                           variant="outline"
                           size="sm"
                           className="h-7 text-[10px]"
                           onClick={() => {
-                            setNewTitle(selectedSnag.title);
-                            setNewDescription(selectedSnag.description || '');
                             setNewAssignee(String(selectedSnag.assigned_to));
-                            setNewPhoto(null);
-                            setPhotoPreview(selectedSnag.photoDownloadUrl || selectedSnag.photo_url || null);
-                            setNewAudio(null);
-                            setAudioPreview(null);
-                            setRemoveExistingAudio(false);
-                            setIsEditing(true);
+                            setShowReassign(true);
                           }}
                         >
-                          {t('edit_btn')}
+                          {t('reassign_btn') || 'Reassign'}
                         </Button>
-
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="h-7 text-[10px]"
-                          onClick={() => {
-                            handleDelete(selectedSnag);
-                            handleCloseDetailDialog();
-                          }}
-                        >
-                          {t('delete_btn')}
-                        </Button>
-                      </>
+                      )
                     )}
                   </div>
                 </div>
@@ -1197,7 +1216,7 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
                   </div>
                 )}
 
-                {isConversationParticipant && (
+                {(isConversationParticipant || user?.role === 'admin' || user?.role === 'superadmin') && (
                   <div className="pt-4 border-t border-border space-y-3">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('update_status_respond_title')}</p>
                     <div className="flex gap-2">
@@ -1256,6 +1275,56 @@ const ProjectSnagList = ({ project, compact = false }: ProjectSnagListProps) => 
           onlyPhotos={true}
         />
       )}
+
+      {/* Reassign Dialog */}
+      <Dialog open={showReassign} onOpenChange={(open) => { if (!open) { setShowReassign(false); setNewAssignee(''); } }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{t('reassign_snag_title') || 'Reassign Snag'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('assign_to_label')}</label>
+              <Select value={newAssignee} onValueChange={setNewAssignee}>
+                <SelectTrigger><SelectValue placeholder={t('select_assignee_placeholder') || 'Select Assignee'} /></SelectTrigger>
+                <SelectContent>
+                  {assignees.map(a => (
+                    <SelectItem key={a.id} value={String(a.id)}>{a.name} ({a.role})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setShowReassign(false); setNewAssignee(''); }} disabled={submitting}>{t('cancel')}</Button>
+            <Button 
+              onClick={async () => {
+                if (!selectedSnag || !newAssignee) return;
+                setSubmitting(true);
+                try {
+                  const form = new FormData();
+                  form.append('assigned_to', newAssignee);
+                  const updated = await updateSnag(selectedSnag.id, form);
+                  setSnags(prev => prev.map(s => s.id === selectedSnag.id ? updated : s));
+                  setSelectedSnag(updated);
+                  setShowReassign(false);
+                  setNewAssignee('');
+                  toast.success(t('snag_reassigned_msg') || 'Snag reassigned successfully');
+                } catch (err) {
+                  toast.error(t('failed_reassign_snag') || 'Failed to reassign Snag');
+                } finally {
+                  setSubmitting(false);
+                }
+              }} 
+              disabled={submitting || !newAssignee} 
+              className="bg-accent text-accent-foreground"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+              {t('reassign_btn') || 'Reassign'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
