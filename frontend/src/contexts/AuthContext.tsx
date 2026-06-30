@@ -57,10 +57,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (type === 'all' || type === 'project') {
             Cookies.remove('token_project');
+            if (!Cookies.get('token_superadmin')) {
+                Cookies.remove('token');
+            }
             setHasProjectSession(false);
         }
         if (type === 'all' || type === 'superadmin') {
             Cookies.remove('token_superadmin');
+            if (!Cookies.get('token_project')) {
+                Cookies.remove('token');
+            }
             setHasSuperadminSession(false);
         }
 

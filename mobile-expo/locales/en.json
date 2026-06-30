@@ -46,7 +46,7 @@
             "projectLimitMessage": "You have reached your project limit. Please upgrade your plan to create more projects.",
             "upgrade": "Upgrade",
             "createNewProject": "Create New Project",
-            "projectNameLabel": "Project Name (max 25)",
+            "projectNameLabel": "Project Name (max 35)",
             "projectNamePlaceholder": "E.g. Alpha Tower",
             "companyNameLabel": "Company Name/Client Name (max 50)",
             "companyNamePlaceholder": "Enter Company/Client Name",
@@ -97,6 +97,29 @@
             "signOutConfirmMessage": "Are you sure you want to sign out?",
             "cancel": "Cancel"
         },
+        "user_mgmt": "User Management",
+        "user_mgmt_subtitle": "Manage organization members and roles.",
+        "add_member": "Add Member",
+        "email_address": "Email Address",
+        "role": "Role",
+        "assign_project": "Assign Project",
+        "choose_project": "Choose Project",
+        "no_projects_found": "No projects found",
+        "invite": "Invite",
+        "project_access_links": "Project Access Links",
+        "active_members": "Active Members",
+        "blocked_users": "Blocked Users",
+        "no_permission": "You do not have permission to view this page.",
+        "load_users_error": "Failed to load users",
+        "invalid_email": "Please enter a valid email",
+        "select_project_role": "Please select a project for this role",
+        "invite_success": "Invitation sent successfully",
+        "invite_error": "Failed to send invitation",
+        "remove_access_success": "Project access removed successfully",
+        "remove_access_error": "Failed to remove project access",
+        "link_copied": "link copied to clipboard",
+        "unblock_success": "User unblocked successfully",
+        "unblock_error": "Failed to unblock user",
         "companySettings": {
             "title": "Company Settings",
             "accessDenied": "Access Denied",
@@ -413,7 +436,10 @@
             "viewLinkedAttachments": "View Linked Attachments",
             "sendMessage": "Send message",
             "failedToSendMessage": "Failed to send message",
-            "linkedFolders": "Linked Folders"
+            "linkedFolders": "Linked Folders",
+            "reassignSnag": "Reassign Snag",
+            "reassignedSnagSuccess": "Snag reassigned successfully",
+            "failedToReassignSnag": "Failed to reassign Snag"
         },
         "months": {
             "january": "January",
@@ -516,7 +542,10 @@
                 "open": "Open",
                 "closed": "Closed",
                 "overdue": "Overdue"
-            }
+            },
+            "reassignRfi": "Reassign RFI",
+            "reassignedSuccess": "RFI reassigned successfully",
+            "failedToReassign": "Failed to reassign RFI"
         },
         "projectReports": {
             "weekly": {

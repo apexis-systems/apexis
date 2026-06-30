@@ -369,6 +369,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [showFilePicker, setShowFilePicker] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
   const [activeTab, setActiveTab] = useState<'photos' | 'documents'>('photos');
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [reassigningToId, setReassigningToId] = useState<number | null>(null);
 
   const handleLinkFile = async (targetFileId: string | number) => {
     if (!selectedRFI) return;
@@ -1516,27 +1518,38 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </TouchableOpacity>
                     </>
                   )}
-                  {selectedRFI && (String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id)) && !selectedRFI.response && !selectedRFI?.response_photos && (
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {selectedRFI && ((String(selectedRFI.created_by) === String(user.id) || String(selectedRFI.creator?.id) === String(user.id)) ? (
+                    (!selectedRFI.response && !selectedRFI?.response_photos) && (
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <TouchableOpacity onPress={() => {
+                          setTitle(selectedRFI.title);
+                          setDescription(selectedRFI.description || '');
+                          setAssignedToId(selectedRFI.assigned_to);
+                          setExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date) : null);
+                          setSelectedFolderIds(selectedRFI.folder_ids || []);
+                          setSelectedImages(getLinkedImages(selectedRFI, docMetadata));
+                          setSelectedAudio(getLinkedAudios(selectedRFI, docMetadata)[0] || null);
+                          setRemovedPhotos([]);
+                          setIsEditing(true);
+                          setCreateModalVisible(true);
+                        }}>
+                          <Feather name="edit" size={20} color={colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDeleteRFI(selectedRFI.id)}>
+                          <Feather name="trash-2" size={20} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  ) : (
+                    (user?.role === 'admin' || user?.role === 'superadmin') && (
                       <TouchableOpacity onPress={() => {
-                        setTitle(selectedRFI.title);
-                        setDescription(selectedRFI.description || '');
                         setAssignedToId(selectedRFI.assigned_to);
-                        setExpiryDate(selectedRFI.expiry_date ? new Date(selectedRFI.expiry_date) : null);
-                        setSelectedFolderIds(selectedRFI.folder_ids || []);
-                        setSelectedImages(getLinkedImages(selectedRFI, docMetadata));
-                        setSelectedAudio(getLinkedAudios(selectedRFI, docMetadata)[0] || null);
-                        setRemovedPhotos([]);
-                        setIsEditing(true);
-                        setCreateModalVisible(true);
+                        setShowReassignModal(true);
                       }}>
-                        <Feather name="edit" size={20} color={colors.primary} />
+                        <Feather name="user-check" size={20} color={colors.primary} />
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDeleteRFI(selectedRFI.id)}>
-                        <Feather name="trash-2" size={20} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                    )
+                  ))}
                   <TouchableOpacity onPress={handleCloseDetailModal}>
                     <Feather name="x" size={24} color={colors.text} />
                   </TouchableOpacity>
@@ -1998,7 +2011,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       </View>
                     )}
 
-                    {isConversationParticipant && (
+                    {(isConversationParticipant || user?.role === 'admin' || user?.role === 'superadmin') && (
                       <View style={{ gap: 12 }}>
                         <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>{t('projectRfi.updateStatus')}</Text>
                         <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -2112,30 +2125,32 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                       />
                     </View>
 
-                    <View>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.assignToLabel')}</Text>
-                      <TouchableOpacity
-                        onPress={() => setShowAssigneeDropdown(true)}
-                        style={{
-                          height: 48,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor: assignedToId ? colors.primary : colors.border,
-                          paddingHorizontal: 16,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          backgroundColor: colors.surface,
-                        }}
-                      >
-                        <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
-                          {assignedToId
-                            ? assignees.find(a => a.id === assignedToId)?.name || t('projectRfi.selectAssignee')
-                            : t('projectRfi.selectAssigneePlaceholder')}
-                        </Text>
-                        <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
-                      </TouchableOpacity>
-                    </View>
+                    {(!isEditing || (user?.role === 'admin' || user?.role === 'superadmin')) && (
+                      <View>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.assignToLabel')}</Text>
+                        <TouchableOpacity
+                          onPress={() => setShowAssigneeDropdown(true)}
+                          style={{
+                            height: 48,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: assignedToId ? colors.primary : colors.border,
+                            paddingHorizontal: 16,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            backgroundColor: colors.surface,
+                          }}
+                        >
+                          <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
+                            {assignedToId
+                              ? assignees.find(a => a.id === assignedToId)?.name || t('projectRfi.selectAssignee')
+                              : t('projectRfi.selectAssigneePlaceholder')}
+                          </Text>
+                          <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                    )}
 
                     <View>
                       <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.expiryDate')}</Text>
@@ -2737,6 +2752,104 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
           />
         )}
 
+        {/* Reassign Modal */}
+        {showReassignModal && (
+          <Modal
+            visible={showReassignModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowReassignModal(false)}
+          >
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 20 }}
+              activeOpacity={1}
+              onPress={() => setShowReassignModal(false)}
+            >
+              <TouchableOpacity activeOpacity={1} onPress={() => { }}>
+                <View style={{
+                  backgroundColor: colors.background,
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}>
+                  <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>{t('projectRfi.reassignRfi') || 'Reassign RFI'}</Text>
+                    <TouchableOpacity onPress={() => setShowReassignModal(false)}>
+                      <Feather name="x" size={18} color={colors.text} />
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={{ maxHeight: 320 }}>
+                    {assignees.map((a) => {
+                      const isThisUserReassigning = reassigningToId === a.id;
+                      const isAnyUserReassigning = reassigningToId !== null;
+                      return (
+                        <TouchableOpacity
+                          key={a.id}
+                          disabled={isAnyUserReassigning}
+                          onPress={async () => {
+                            if (!selectedRFI) return;
+                            setReassigningToId(a.id);
+                            try {
+                              const formData = new FormData();
+                              formData.append('assigned_to', String(a.id));
+                              const updated = await updateRFI(selectedRFI.id, formData);
+                              setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
+                              setSelectedRFI(updated);
+                              setShowReassignModal(false);
+                              Alert.alert(t('projectRfi.success'), t('projectRfi.reassignedSuccess') || 'RFI reassigned successfully');
+                            } catch (err) {
+                              console.error('Reassign RFI error', err);
+                              const { message: errMsg } = parseApiError(err, t('projectRfi.failedToReassign') || 'Failed to reassign RFI');
+                              Alert.alert(t('projectRfi.error'), errMsg);
+                            } finally {
+                              setReassigningToId(null);
+                            }
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 16,
+                            paddingVertical: 14,
+                            borderBottomWidth: 1,
+                            borderBottomColor: colors.border,
+                            backgroundColor: assignedToId === a.id ? colors.primary + '10' : 'transparent',
+                            opacity: isAnyUserReassigning && !isThisUserReassigning ? 0.4 : 1,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: 15,
+                              backgroundColor: colors.primary + '20',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                                {a.name?.charAt(0)?.toUpperCase() || '?'}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 14, color: assignedToId === a.id ? colors.primary : colors.text, fontWeight: assignedToId === a.id ? '700' : '400' }}>
+                              {a.name}
+                            </Text>
+                          </View>
+                          {isThisUserReassigning ? (
+                            <ActivityIndicator size="small" color={colors.primary} />
+                          ) : (
+                            assignedToId === a.id && <Feather name="check" size={16} color={colors.primary} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
+        )}
+
       </Modal>
 
       {/* ── PDF Viewer Modal ── */}
@@ -3034,30 +3147,32 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                         />
                       </View>
 
-                      <View>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.assignToLabel')}</Text>
-                        <TouchableOpacity
-                          onPress={() => setShowAssigneeDropdown(true)}
-                          style={{
-                            height: 48,
-                            borderRadius: 12,
-                            borderWidth: 1,
-                            borderColor: assignedToId ? colors.primary : colors.border,
-                            paddingHorizontal: 16,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            backgroundColor: colors.surface,
-                          }}
-                        >
-                          <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
-                            {assignedToId
-                              ? assignees.find(a => a.id === assignedToId)?.name || t('projectRfi.selectAssignee')
-                              : t('projectRfi.selectAssigneePlaceholder')}
-                          </Text>
-                          <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
-                        </TouchableOpacity>
-                      </View>
+                      {(!isEditing || (user?.role === 'admin' || user?.role === 'superadmin')) && (
+                        <View>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.assignToLabel')}</Text>
+                          <TouchableOpacity
+                            onPress={() => setShowAssigneeDropdown(true)}
+                            style={{
+                              height: 48,
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: assignedToId ? colors.primary : colors.border,
+                              paddingHorizontal: 16,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              backgroundColor: colors.surface,
+                            }}
+                          >
+                            <Text style={{ fontSize: 14, color: assignedToId ? colors.text : colors.textMuted }}>
+                              {assignedToId
+                                ? assignees.find(a => a.id === assignedToId)?.name || t('projectRfi.selectAssignee')
+                                : t('projectRfi.selectAssigneePlaceholder')}
+                            </Text>
+                            <Feather name="chevron-down" size={18} color={assignedToId ? colors.primary : colors.textMuted} />
+                          </TouchableOpacity>
+                        </View>
+                      )}
 
                       <View>
                         <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>{t('projectRfi.expiryDate')}</Text>

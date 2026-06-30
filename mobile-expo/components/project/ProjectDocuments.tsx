@@ -76,6 +76,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         }
     }, [selectedFolder, onFolderChange]);
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            breadcrumbsScrollRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [selectedFolder]);
+
     // Sync selectedFolder whenever the deep-link prop changes.
     // useState(initialFolderId) only runs on first mount — this effect handles
     // subsequent navigations while the component stays mounted in the FlatList.
@@ -300,6 +307,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
     const mainScrollRef = useRef<ScrollView>(null);
+    const breadcrumbsScrollRef = useRef<ScrollView>(null);
 
     const [showRenameFile, setShowRenameFile] = useState(false);
     const [renamingFileId, setRenamingFileId] = useState<number | null>(null);
@@ -314,6 +322,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     // Version sheet state
     const [versionSheetDoc, setVersionSheetDoc] = useState<any | null>(null);
+    const [assigneeSheetDoc, setAssigneeSheetDoc] = useState<any | null>(null);
     const [versionSheetVersions, setVersionSheetVersions] = useState<any[]>([]);
     const [versionSheetLoading, setVersionSheetLoading] = useState(false);
     const [versionCache, setVersionCache] = useState<Record<string, any[]>>({});
@@ -332,6 +341,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             versionFetchedRef.current.delete(key);
             console.error('fetchVersionsForDoc error', e);
         }
+    };
+
+    const getActiveVersionNumber = (doc: any) => {
+        const versions = versionCache[String(doc.id)];
+        if (!versions) return doc.version_count || 1;
+        const activeIdx = versions.findIndex((v: any) => v.id === doc.id);
+        if (activeIdx === -1) return versions.length;
+        return versions.length - activeIdx;
     };
 
     useEffect(() => {
@@ -1051,7 +1068,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     key={doc.id}
                     style={{
                         width: '23.8%',
-                        minHeight: 90,
+                        height: 112,
                         backgroundColor: isSelected ? 'rgba(249,115,22,0.1)' : colors.surface,
                         borderRadius: 10,
                         borderWidth: 1,
@@ -1101,31 +1118,74 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         >
                             <Feather name="chevron-down" size={8} color={colors.primary} />
                             <Text style={{ fontSize: 8, fontWeight: '800', color: colors.primary }}>
-                                {versionCache[String(doc.id)] ? `V${versionCache[String(doc.id)].length}` : `V${doc.version_count || 1}`}
+                                {`V${getActiveVersionNumber(doc)}`}
                             </Text>
                         </TouchableOpacity>
                     )}
-                    {doc.assignees && doc.assignees.length > 0 ? (
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 3, marginTop: 2, maxWidth: '100%' }}>
-                            {doc.assignees.map((a: any) => (
-                                <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 6 }}>
-                                    <Feather name="user" size={6} color={colors.textMuted} />
-                                    <Text style={{ fontSize: 7, color: colors.textMuted }}>{a.name}</Text>
-                                    {isAssigneeSeen(doc, a.id) && (
-                                        <Feather name="check-circle" size={7} color="#f97316" />
+                    {(() => {
+                        const assigneesList = doc.assignees && doc.assignees.length > 0
+                            ? doc.assignees
+                            : (doc.assignee ? [doc.assignee] : []);
+                        if (assigneesList.length === 0) return null;
+                        if (assigneesList.length > 1) {
+                            return (
+                                <TouchableOpacity
+                                    onPress={(e) => {
+                                        const { pageX, pageY } = e.nativeEvent;
+                                        setDropdownPosition({ x: pageX, y: pageY });
+                                        setAssigneeSheetDoc(doc);
+                                    }}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 2,
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        borderRadius: 10,
+                                        paddingHorizontal: 5,
+                                        paddingVertical: 2,
+                                        marginTop: 3,
+                                        maxWidth: '100%',
+                                    }}
+                                >
+                                    <Feather name="chevron-down" size={8} color={colors.textMuted} />
+                                    <Feather name="user" size={8} color={colors.textMuted} />
+                                    <Text numberOfLines={1} style={{ fontSize: 8, fontWeight: '700', color: colors.textMuted, flexShrink: 1 }}>
+                                        {`${assigneesList[0].name} +${assigneesList.length - 1}`}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        } else {
+                            const singleA = assigneesList[0];
+                            const seen = isAssigneeSeen(doc, singleA.id);
+                            return (
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 2,
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        borderRadius: 10,
+                                        paddingHorizontal: 5,
+                                        paddingVertical: 2,
+                                        marginTop: 3,
+                                        maxWidth: '100%',
+                                    }}
+                                >
+                                    <Feather name="user" size={8} color={colors.textMuted} />
+                                    <Text numberOfLines={1} style={{ fontSize: 8, fontWeight: '700', color: colors.textMuted, flexShrink: 1 }}>
+                                        {singleA.name}
+                                    </Text>
+                                    {seen && (
+                                        <Feather name="check-circle" size={8} color="#f97316" />
                                     )}
                                 </View>
-                            ))}
-                        </View>
-                    ) : doc.assignee && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 6 }}>
-                            <Feather name="user" size={6} color={colors.textMuted} />
-                            <Text numberOfLines={1} style={{ fontSize: 7, color: colors.textMuted }}>{doc.assignee.name}</Text>
-                            {isAssigneeSeen(doc, doc.assignee.id) && (
-                                <Feather name="check-circle" size={7} color="#f97316" />
-                            )}
-                        </View>
-                    )}
+                            );
+                        }
+                    })()}
                     {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                         <View style={{ position: 'absolute', top: 4, right: 4, zIndex: 30 }}>
                             <TouchableOpacity
@@ -1271,33 +1331,72 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         >
                             <Feather name="chevron-down" size={8} color={colors.primary} />
                             <Text style={{ fontSize: 8, fontWeight: '800', color: colors.primary }}>
-                                {versionCache[String(doc.id)] ? `V${versionCache[String(doc.id)].length}` : `V${doc.version_count || 1}`}
+                                {`V${getActiveVersionNumber(doc)}`}
                             </Text>
                         </TouchableOpacity>
                     )}
 
                     {/* Sibling element: Assignees */}
-                    {doc.assignees && doc.assignees.length > 0 ? (
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
-                            {doc.assignees.map((a: any) => (
-                                <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
+                    {(() => {
+                        const assigneesList = doc.assignees && doc.assignees.length > 0
+                            ? doc.assignees
+                            : (doc.assignee ? [doc.assignee] : []);
+                        if (assigneesList.length === 0) return null;
+                        if (assigneesList.length > 1) {
+                            return (
+                                <TouchableOpacity
+                                    onPress={(e) => {
+                                        const { pageX, pageY } = e.nativeEvent;
+                                        setDropdownPosition({ x: pageX, y: pageY });
+                                        setAssigneeSheetDoc(doc);
+                                    }}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        backgroundColor: colors.surface,
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 1.5,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                    }}
+                                >
+                                    <Feather name="chevron-down" size={8} color={colors.textMuted} />
                                     <Feather name="user" size={8} color={colors.textMuted} />
-                                    <Text style={{ fontSize: 8, color: colors.textMuted }}>{a.name}</Text>
-                                    {isAssigneeSeen(doc, a.id) && (
-                                        <Feather name="check-circle" size={9} color="#f97316" />
+                                    <Text style={{ fontSize: 8, color: colors.textMuted }}>
+                                        {`${assigneesList[0].name} +${assigneesList.length - 1}`}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        } else {
+                            const singleA = assigneesList[0];
+                            const seen = isAssigneeSeen(doc, singleA.id);
+                            return (
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        backgroundColor: colors.surface,
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 1.5,
+                                        borderRadius: 10,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                    }}
+                                >
+                                    <Feather name="user" size={8} color={colors.textMuted} />
+                                    <Text style={{ fontSize: 8, color: colors.textMuted }}>
+                                        {singleA.name}
+                                    </Text>
+                                    {seen && (
+                                        <Feather name="check-circle" size={9} color="#f97316" style={{ marginLeft: 2 }} />
                                     )}
                                 </View>
-                            ))}
-                        </View>
-                    ) : doc.assignee && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 10, borderWidth: 1, borderColor: colors.border }}>
-                            <Feather name="user" size={8} color={colors.textMuted} />
-                            <Text style={{ fontSize: 8, color: colors.textMuted }}>{doc.assignee.name}</Text>
-                            {isAssigneeSeen(doc, doc.assignee.id) && (
-                                <Feather name="check-circle" size={9} color="#f97316" />
-                            )}
-                        </View>
-                    )}
+                            );
+                        }
+                    })()}
 
                     {/* Sibling element: Action menu */}
                     <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }}>
@@ -2172,7 +2271,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         </TouchableOpacity>
                     )}
                     <Feather name="folder" size={16} color={colors.primary} />
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                    <ScrollView
+                        ref={breadcrumbsScrollRef}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={{ flex: 1 }}
+                        onContentSizeChange={() => {
+                            breadcrumbsScrollRef.current?.scrollToEnd({ animated: true });
+                        }}
+                    >
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <TouchableOpacity onPress={(() => setSelectedFolder(null))}>
                                 <View style={{ paddingVertical: 4 }}>
@@ -2517,7 +2624,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 zIndex: 5,
                                             }}
                                         />
-                                        <View style={{ marginBottom: 8 }}>
+                                        <View style={{ marginBottom: 6 }}>
                                             <Feather
                                                 name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : isConfidentialFolder ? "shield" : "folder"}
                                                 size={(isConfirmationFolder || isConfidentialFolder) ? 32 : 36}
@@ -2529,7 +2636,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
-                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : (isConfirmationFolder ? "Confirmations" : folder.name)}</Text>
+                                        <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : (isConfirmationFolder ? "Confirmations" : folder.name)}</Text>
                                         <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                             {subcount > 0
                                                 ? t('projectDocuments.filesFoldersCount', { fileCount: count, folderCount: subcount })
@@ -3160,6 +3267,78 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                     );
                                 })
                             )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal visible={assigneeSheetDoc !== null} transparent animationType="fade">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onTouchStart={() => setAssigneeSheetDoc(null)}>
+                    <View style={{
+                        position: 'absolute',
+                        top: Math.min(dropdownPosition.y + 10, Dimensions.get('window').height - 240),
+                        left: Math.max(10, Math.min(Dimensions.get('window').width - 190, dropdownPosition.x - 90)),
+                        width: 180,
+                        backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 8,
+                        elevation: 5,
+                        paddingVertical: 4,
+                    }}>
+                        <Text style={{
+                            fontSize: 9,
+                            fontWeight: '900',
+                            letterSpacing: 1,
+                            textTransform: 'uppercase',
+                            color: colors.textMuted,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderBottomWidth: 1,
+                            borderBottomColor: colors.border
+                        }}>
+                            Assignees
+                        </Text>
+                        <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled">
+                            {(() => {
+                                const list = [];
+                                if (assigneeSheetDoc) {
+                                    if (assigneeSheetDoc.assignees && assigneeSheetDoc.assignees.length > 0) {
+                                        list.push(...assigneeSheetDoc.assignees);
+                                    } else if (assigneeSheetDoc.assignee) {
+                                        list.push(assigneeSheetDoc.assignee);
+                                    }
+                                }
+                                if (list.length === 0) {
+                                    return <Text style={{ color: colors.textMuted, fontSize: 10, padding: 12, textAlign: 'center' }}>No assignees</Text>;
+                                }
+                                return list.map((a: any, idx: number) => (
+                                    <View
+                                        key={a.id}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 12,
+                                            borderBottomWidth: idx < list.length - 1 ? 0.5 : 0,
+                                            borderBottomColor: colors.border,
+                                            gap: 8,
+                                        }}
+                                    >
+                                        <Feather name="user" size={12} color={colors.textMuted} />
+                                        <Text numberOfLines={1} style={{ fontSize: 10, color: colors.text, flex: 1 }}>
+                                            {a.name}
+                                        </Text>
+                                        {isAssigneeSeen(assigneeSheetDoc, a.id) && (
+                                            <Feather name="check-circle" size={10} color="#f97316" />
+                                        )}
+                                    </View>
+                                ));
+                            })()}
                         </ScrollView>
                     </View>
                 </View>

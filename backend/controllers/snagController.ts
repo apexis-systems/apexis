@@ -383,12 +383,14 @@ export const updateSnagStatus = async (req: Request | any, res: Response) => {
     const snag = await snags.findByPk(id);
     if (!snag) return res.status(404).json({ error: "Snag not found" });
 
-    // Only the assigned user or creator can change the status
+    // Only the assigned user, creator, or an admin can change the status
     if (
       Number(snag.assigned_to) !== Number(authUser.user_id) &&
-      Number(snag.created_by) !== Number(authUser.user_id)
+      Number(snag.created_by) !== Number(authUser.user_id) &&
+      authUser.role !== 'admin' &&
+      authUser.role !== 'superadmin'
     ) {
-      return res.status(403).json({ error: "Only the assignee or creator can update the status" });
+      return res.status(403).json({ error: "Only the assignee, creator, or an admin can update the status" });
     }
 
     (snag as any).status = status;
@@ -697,20 +699,38 @@ export const updateSnag = async (req: Request | any, res: Response) => {
     const snag = await snags.findByPk(id);
     if (!snag) return res.status(404).json({ error: "Snag not found" });
 
-    const isCreatorOrAdmin = authUser.role === "admin" || authUser.role === "superadmin" || Number(snag.created_by) === Number(authUser.user_id);
+    const isCreator = Number(snag.created_by) === Number(authUser.user_id);
     const isAssignee = Number(snag.assigned_to) === Number(authUser.user_id);
+    const isAdmin = authUser.role === "admin" || authUser.role === "superadmin";
 
-    if (!isCreatorOrAdmin && !isAssignee) {
+    if (!isCreator && !isAssignee && !isAdmin) {
       return res.status(403).json({ error: "Forbidden" });
+    }
+
+    if (assigned_to && Number(assigned_to) !== Number(snag.assigned_to)) {
+      if (!isAdmin) {
+        return res.status(403).json({ error: "Forbidden: Only admins can reassign this snag to someone else" });
+      }
     }
 
     const hasPhoto = req.files && req.files.photo && req.files.photo.length > 0;
     const hasAudio = req.files && req.files.audio && req.files.audio.length > 0;
     const isCoreUpdate = title || (description !== undefined) || assigned_to || hasPhoto || hasAudio || remove_audio;
+    const isCoreEditExceptAssignment = title || (description !== undefined) || hasPhoto || hasAudio || remove_audio;
 
-    // If they are only the assignee (not creator/admin), they can only update folder links
-    if (isAssignee && !isCreatorOrAdmin && isCoreUpdate) {
-      return res.status(403).json({ error: "Forbidden: Assignee can only update folder links" });
+    // If they are not the creator:
+    if (!isCreator) {
+      if (isAssignee && !isAdmin) {
+        // Assignee can only update folder links
+        if (isCoreUpdate) {
+          return res.status(403).json({ error: "Forbidden: Assignee can only update folder links" });
+        }
+      } else if (isAdmin) {
+        // Admin (non-creator) can only update assignee and folder links
+        if (isCoreEditExceptAssignment) {
+          return res.status(403).json({ error: "Forbidden: Admins who are not the creator can only reassign or update folder links" });
+        }
+      }
     }
 
     const hasResponse = snag.response || (snag.response_photos && snag.response_photos.length > 0);

@@ -371,9 +371,11 @@ export const updateRFIStatus = async (req: Request, res: Response) => {
         if (!authUser) return res.status(401).json({ error: 'Unauthorized' });
         if (
             Number(rfi.assigned_to) !== Number(authUser.user_id) &&
-            Number(rfi.created_by) !== Number(authUser.user_id)
+            Number(rfi.created_by) !== Number(authUser.user_id) &&
+            authUser.role !== 'admin' &&
+            authUser.role !== 'superadmin'
         ) {
-            return res.status(403).json({ error: 'Only the assignee or creator can update RFI status' });
+            return res.status(403).json({ error: 'Only the assignee, creator, or an admin can update RFI status' });
         }
 
         (rfi as any).status = status;
@@ -572,9 +574,11 @@ export const updateRFIResponse = async (req: Request | any, res: Response) => {
 
         if (
             Number(rfi.assigned_to) !== Number(authUser.user_id) &&
-            Number(rfi.created_by) !== Number(authUser.user_id)
+            Number(rfi.created_by) !== Number(authUser.user_id) &&
+            authUser.role !== 'admin' &&
+            authUser.role !== 'superadmin'
         ) {
-            return res.status(403).json({ error: 'Only the assignee or creator can update the response' });
+            return res.status(403).json({ error: 'Only the assignee, creator, or an admin can update the response' });
         }
 
         // Handle response photo uploads: Smart Replace (one image, one audio)
@@ -763,16 +767,34 @@ export const updateRFI = async (req: Request | any, res: Response) => {
 
         const isCreator = Number(rfi.created_by) === Number(authUser.user_id);
         const isAssignee = Number(rfi.assigned_to) === Number(authUser.user_id);
+        const isAdmin = authUser.role === 'admin' || authUser.role === 'superadmin';
 
-        if (!isCreator && !isAssignee) {
-            return res.status(403).json({ error: 'Only the creator or assignee can edit this RFI' });
+        if (!isCreator && !isAssignee && !isAdmin) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        if (assigned_to && Number(assigned_to) !== Number(rfi.assigned_to)) {
+            if (!isAdmin) {
+                return res.status(403).json({ error: 'Forbidden: Only admins can reassign this RFI to someone else' });
+            }
         }
 
         const isCoreUpdate = title || (description !== undefined) || assigned_to || expiry_date || (req.files && req.files.length > 0) || removedPhotos;
+        const isCoreEditExceptAssignment = title || (description !== undefined) || expiry_date || (req.files && req.files.length > 0) || removedPhotos;
 
-        // If they are only the assignee (not creator), they can only update folder links
-        if (isAssignee && !isCreator && isCoreUpdate) {
-            return res.status(403).json({ error: 'Assignee can only update folder links' });
+        // If they are not the creator:
+        if (!isCreator) {
+            if (isAssignee && !isAdmin) {
+                // Assignee can only update folder links
+                if (isCoreUpdate) {
+                    return res.status(403).json({ error: 'Assignee can only update folder links' });
+                }
+            } else if (isAdmin) {
+                // Admin (non-creator) can only update assignee and folder links
+                if (isCoreEditExceptAssignment) {
+                    return res.status(403).json({ error: 'Admins who are not the creator can only reassign or update folder links' });
+                }
+            }
         }
         const hasResponse = rfi.response || (rfi.response_photos && rfi.response_photos.length > 0);
         if (hasResponse && isCoreUpdate) {

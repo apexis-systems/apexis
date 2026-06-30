@@ -1,4 +1,4 @@
-import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking, Share, Modal, SafeAreaView, Image, RefreshControl } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert, Platform, ScrollView, BackHandler, Linking, Share, Modal, SafeAreaView, Image, RefreshControl, Switch } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Text, TextInput } from '@/components/ui/AppText';
@@ -20,7 +20,7 @@ import { getSnags } from '@/services/snagService';
 import { getSecureFileUrl } from '@/services/fileService';
 
 import { useSocket } from '@/contexts/SocketContext';
-import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember } from '@/services/projectService';
+import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember, updateProject } from '@/services/projectService';
 import { parseApiError } from '@/helpers/apiError';
 import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
 
@@ -192,18 +192,47 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {
                     text: t('projectOverview.blockAndRemove') as string,
                     style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            setRemovingMemberId(member.user.id);
-                            await removeProjectMember(projectId, member.user.id, true);
-                            await refreshMembers();
-                            Alert.alert(t('projectOverview.success') as string, t('projectOverview.accessRemoved') as string);
-                        } catch (e) {
-                            const { message } = parseApiError(e, t('projectOverview.failedRemoveAccess') as string);
-                            Alert.alert(t('projectOverview.error') as string, message);
-                        } finally {
-                            setRemovingMemberId(null);
-                        }
+                    onPress: () => {
+                        Alert.alert(
+                            "Block Scope Selection",
+                            "Do you want to block this user from this project only, or from the whole organization?",
+                            [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                    text: "This Project Only",
+                                    onPress: async () => {
+                                        try {
+                                            setRemovingMemberId(member.user.id);
+                                            await removeProjectMember(projectId, member.user.id, true, 'project');
+                                            await refreshMembers();
+                                            Alert.alert(t('projectOverview.success') as string, t('projectOverview.accessRemoved') as string);
+                                        } catch (e) {
+                                            const { message } = parseApiError(e, t('projectOverview.failedRemoveAccess') as string);
+                                            Alert.alert(t('projectOverview.error') as string, message);
+                                        } finally {
+                                            setRemovingMemberId(null);
+                                        }
+                                    }
+                                },
+                                {
+                                    text: "Whole Org",
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            setRemovingMemberId(member.user.id);
+                                            await removeProjectMember(projectId, member.user.id, true, 'org');
+                                            await refreshMembers();
+                                            Alert.alert(t('projectOverview.success') as string, t('projectOverview.accessRemoved') as string);
+                                        } catch (e) {
+                                            const { message } = parseApiError(e, t('projectOverview.failedRemoveAccess') as string);
+                                            Alert.alert(t('projectOverview.error') as string, message);
+                                        } finally {
+                                            setRemovingMemberId(null);
+                                        }
+                                    }
+                                }
+                            ]
+                        );
                     }
                 }
             ]
@@ -803,6 +832,38 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                         {t('projectOverview.inviteVendor')}
                                     </Text>
                                 </TouchableOpacity>
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        marginTop: 12,
+                                        paddingTop: 12,
+                                        borderTopWidth: 1,
+                                        borderTopColor: colors.border,
+                                    }}
+                                >
+                                    <View style={{ flex: 1, paddingRight: 8 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>Restrict Onboarding</Text>
+                                        <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>Only admins can invite contributors/clients to this project</Text>
+                                    </View>
+                                    <Switch
+                                        value={!!project.restrict_onboarding}
+                                        onValueChange={async (value) => {
+                                            try {
+                                                await updateProject(projectId, { restrict_onboarding: value });
+                                                if (onUpdate) {
+                                                    onUpdate({ ...project, restrict_onboarding: value });
+                                                }
+                                                Alert.alert('Success', value ? 'Onboarding restricted to Admins for this project' : 'Onboarding restriction removed for this project');
+                                            } catch (error) {
+                                                Alert.alert('Error', 'Failed to update onboarding preference');
+                                            }
+                                        }}
+                                        trackColor={{ false: colors.border, true: colors.primary }}
+                                        thumbColor={Platform.OS === 'ios' ? undefined : (project.restrict_onboarding ? '#fff' : '#f4f3f4')}
+                                    />
+                                </View>
                             </View>
                         )}
 

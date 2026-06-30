@@ -87,6 +87,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   const [openDropdownDocId, setOpenDropdownDocId] = useState<string | number | null>(null);
   // Version badge dropdown state
   const [openVersionDocId, setOpenVersionDocId] = useState<string | number | null>(null);
+  const [openAssigneeDocId, setOpenAssigneeDocId] = useState<string | number | null>(null);
   const [versionCache, setVersionCache] = useState<Record<string, any[]>>({});
   // Ref to track which file IDs we've already started fetching (avoids duplicate calls)
   const versionFetchedRef = React.useRef<Set<string>>(new Set());
@@ -105,11 +106,19 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
     }
   };
 
+  const getActiveVersionNumber = (doc: any) => {
+    const versions = versionCache[String(doc.id)];
+    if (!versions) return doc.version_count || 1;
+    const activeIdx = versions.findIndex((v: any) => v.id === doc.id);
+    if (activeIdx === -1) return versions.length;
+    return versions.length - activeIdx;
+  };
+
   // Pre-fetch versions for all docs as soon as the list loads
   useEffect(() => {
     if (docs.length === 0) return;
     docs.forEach(doc => fetchVersionsForDoc(doc.id));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docs]);
 
   const handleVersionBadgeClick = (e: React.MouseEvent, docId: string | number) => {
@@ -376,7 +385,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
       if (returnSnagId) params.set('snagId', returnSnagId);
       if (returnFolderId) params.set('folder', returnFolderId);
       if (returnFileId) params.set('fileId', returnFileId);
-      
+
       setTimeout(() => {
         router.push(window.location.pathname + `?${params.toString()}`);
       }, 300);
@@ -865,7 +874,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 return (
                   <div
                     key={doc.id}
-                    className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-colors cursor-pointer group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
+                    className={`relative flex flex-col items-center gap-1 p-3 min-h-[160px] h-auto rounded-lg bg-card border transition-colors cursor-pointer group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
                     onClick={() => {
                       if (isSelectionMode) toggleSelection('file', doc.id);
                       else setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
@@ -876,28 +885,26 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                         <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} />
                       </div>
                     )}
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950/30' : 'bg-blue-50 dark:bg-blue-950/30'}`}>
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950/30' : 'bg-blue-50 dark:bg-blue-950/30'}`}>
                       <FileText className={`h-6 w-6 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
                     </div>
-                    <span className="text-[10px] font-semibold text-center leading-tight line-clamp-2 px-1 mt-1">
+                    <span className="text-[10px] font-semibold text-center leading-normal line-clamp-2 px-1 mt-1 break-all shrink-0">
                       {doc.file_name}
                     </span>
-                    <span className="text-[9px] text-muted-foreground mt-0.5">
+                    <span className="text-[9px] text-muted-foreground mt-0.5 shrink-0">
                       {formatFileSize(doc.file_size_mb)}
                     </span>
 
                     {/* Version badge (grid view) */}
                     {(versionCache[String(doc.id)] ? versionCache[String(doc.id)].length > 1 : (doc.version_count > 1)) && (
-                      <div className="relative mt-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="relative mt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={(e) => handleVersionBadgeClick(e, doc.id)}
                           className="flex items-center gap-0.5 bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 rounded-full px-1.5 py-0.5 text-[8px] font-bold transition-colors"
                           title="View versions"
                         >
                           <ChevronDown className="h-2 w-2" />
-                          {versionCache[String(doc.id)]
-                            ? `V${versionCache[String(doc.id)].length}`
-                            : `V${doc.version_count || 1}`}
+                          {`V${getActiveVersionNumber(doc)}`}
                         </button>
                         {openVersionDocId === doc.id && (
                           <>
@@ -937,27 +944,61 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       </div>
                     )}
 
-                    {doc.assignees && doc.assignees.length > 0 ? (
-                      <div className="flex flex-wrap gap-1 mt-1 max-w-[90%]">
-                        {doc.assignees.map((assignee: any) => (
-                          <div key={assignee.id} className="flex items-center gap-0.5 bg-secondary/50 px-1 py-0.5 rounded-full border border-border/50">
-                            <UserIcon className="h-2 w-2 text-muted-foreground" />
-                            <span className="text-[8px] font-medium truncate text-muted-foreground max-w-[50px]">{assignee.name}</span>
-                            {isAssigneeSeen(doc, assignee.id) && (
-                              <CheckCheck className="h-2 w-2 text-orange-500 ml-0.5" />
+                    {(() => {
+                      const assigneesList = doc.assignees && doc.assignees.length > 0
+                        ? doc.assignees
+                        : (doc.assignee ? [doc.assignee] : []);
+                      if (assigneesList.length === 0) return null;
+                      if (assigneesList.length > 1) {
+                        return (
+                          <div className="relative mt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => setOpenAssigneeDocId(openAssigneeDocId === doc.id ? null : doc.id)}
+                              className="flex items-center gap-1 bg-secondary/50 hover:bg-secondary border border-border/50 rounded-full px-2 py-0.5 text-[8px] font-semibold text-muted-foreground transition-colors max-w-full"
+                              title="View assignees"
+                            >
+                              <ChevronDown className="h-2.5 w-2.5" />
+                              <UserIcon className="h-2.5 w-2.5" />
+                              <span className="truncate">{`${assigneesList[0].name} +${assigneesList.length - 1}`}</span>
+                            </button>
+                            {openAssigneeDocId === doc.id && (
+                              <>
+                                <div className="fixed inset-0 z-30" onClick={() => setOpenAssigneeDocId(null)} />
+                                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-40 min-w-[160px] rounded-xl border border-border bg-popover shadow-xl py-1 overflow-hidden">
+                                  <p className="text-[9px] font-black tracking-widest uppercase text-muted-foreground px-3 py-1.5 border-b border-border">Assignees</p>
+                                  <div className="max-h-48 overflow-y-auto">
+                                    {assigneesList.map((a: any) => (
+                                      <div
+                                        key={a.id}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-left border-b border-border last:border-b-0"
+                                      >
+                                        <UserIcon className="h-3 w-3 text-muted-foreground" />
+                                        <span className="text-[10px] text-foreground truncate flex-1">{a.name}</span>
+                                        {isAssigneeSeen(doc, a.id) && (
+                                          <CheckCheck className="h-3 w-3 text-orange-500" />
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </>
                             )}
                           </div>
-                        ))}
-                      </div>
-                    ) : doc.assignee && (
-                      <div className="flex items-center gap-1 mt-1 bg-secondary/50 px-1.5 py-0.5 rounded-full border border-border/50 max-w-[90%]">
-                        <UserIcon className="h-2 w-2 text-muted-foreground" />
-                        <span className="text-[8px] font-medium truncate text-muted-foreground">{doc.assignee.name}</span>
-                        {isAssigneeSeen(doc, doc.assignee.id) && (
-                          <CheckCheck className="h-2.5 w-2.5 text-orange-500 ml-0.5" />
-                        )}
-                      </div>
-                    )}
+                        );
+                      } else {
+                        const singleA = assigneesList[0];
+                        const seen = isAssigneeSeen(doc, singleA.id);
+                        return (
+                          <div className="flex items-center gap-1 mt-1 bg-secondary/50 px-1.5 py-0.5 rounded-full border border-border/50 max-w-[90%] shrink-0">
+                            <UserIcon className="h-2 w-2 text-muted-foreground" />
+                            <span className="text-[8px] font-medium truncate text-muted-foreground">{singleA.name}</span>
+                            {seen && (
+                              <CheckCheck className="h-2.5 w-2.5 text-orange-500 ml-0.5" />
+                            )}
+                          </div>
+                        );
+                      }
+                    })()}
 
                     <div className={`absolute top-2 right-2 flex gap-0.5 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm ${openDropdownDocId === doc.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                       {!isSelectionMode && (
@@ -975,8 +1016,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                             </button>
                           )}
                           <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
+                            onClick={(e) => {
+                              e.stopPropagation();
                               const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
                               router.push(`/${user.role}/upload?projectId=${project.id}&type=documents&folderId=${doc.folder_id || ''}&parentFileId=${doc.id}&returnUrl=${returnUrl}`);
                             }}
@@ -999,8 +1040,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                                 </DropdownMenuItem>
                               )}
                               {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && !currentFolder?.name.toLowerCase().includes('archive') && (
-                                <DropdownMenuItem onClick={(e) => { 
-                                  e.stopPropagation(); 
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
                                   const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
                                   router.push(`/${user.role}/upload?projectId=${project.id}&type=documents&folderId=${doc.folder_id || ''}&parentFileId=${doc.id}&returnUrl=${returnUrl}`);
                                 }} className="cursor-pointer">
@@ -1098,9 +1139,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                             title="View versions"
                           >
                             <ChevronDown className="h-2 w-2" />
-                            {versionCache[String(doc.id)]
-                              ? `V${versionCache[String(doc.id)].length}`
-                              : `V${doc.version_count || 1}`}
+                            {`V${getActiveVersionNumber(doc)}`}
                           </button>
                           {openVersionDocId === doc.id && (
                             <>
@@ -1129,6 +1168,8 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                                       <span className="text-[9px] font-black text-accent min-w-[24px]">V{(versionCache[String(doc.id)] || []).length - idx}</span>
                                       <span className="text-[10px] text-foreground truncate flex-1">{v.file_name}</span>
                                       {v.is_current && <span className="text-[8px] bg-green-500/15 text-green-600 dark:text-green-400 rounded-full px-1.5 py-0.5 font-bold">ACTIVE</span>}
+                                      {v.do_not_follow && <span className="text-[8px] bg-red-500/15 text-red-600 dark:text-red-400 rounded-full px-1.5 py-0.5 font-bold">{t('dnf_tag') || 'DNF'}</span>}
+                                      {v.only_for_reference && <span className="text-[8px] bg-blue-500/15 text-blue-600 dark:text-blue-400 rounded-full px-1.5 py-0.5 font-bold">{t('ofr_tag') || 'ORF'}</span>}
                                     </button>
                                   ))
                                 )}
@@ -1137,27 +1178,61 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           )}
                         </div>
                       )}
-                      {doc.assignees && doc.assignees.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 max-w-[200px]">
-                          {doc.assignees.map((assignee: any) => (
-                            <div key={assignee.id} className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
+                      {(() => {
+                        const assigneesList = doc.assignees && doc.assignees.length > 0
+                          ? doc.assignees
+                          : (doc.assignee ? [doc.assignee] : []);
+                        if (assigneesList.length === 0) return null;
+                        if (assigneesList.length > 1) {
+                          return (
+                            <div className="relative" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => setOpenAssigneeDocId(openAssigneeDocId === doc.id ? null : doc.id)}
+                                className="flex items-center gap-1 bg-secondary/50 hover:bg-secondary border border-border/50 rounded-full px-2 py-0.5 text-[9px] font-semibold text-muted-foreground transition-colors max-w-[200px]"
+                                title="View assignees"
+                              >
+                                <ChevronDown className="h-2.5 w-2.5" />
+                                <UserIcon className="h-2.5 w-2.5" />
+                                <span className="truncate">{`${assigneesList[0].name} +${assigneesList.length - 1}`}</span>
+                              </button>
+                              {openAssigneeDocId === doc.id && (
+                                <>
+                                  <div className="fixed inset-0 z-30" onClick={() => setOpenAssigneeDocId(null)} />
+                                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 z-40 min-w-[160px] rounded-xl border border-border bg-popover shadow-xl py-1 overflow-hidden">
+                                    <p className="text-[9px] font-black tracking-widest uppercase text-muted-foreground px-3 py-1.5 border-b border-border">Assignees</p>
+                                    <div className="max-h-48 overflow-y-auto">
+                                      {assigneesList.map((a: any) => (
+                                        <div
+                                          key={a.id}
+                                          className="w-full flex items-center gap-2 px-3 py-2 text-left border-b border-border last:border-b-0"
+                                        >
+                                          <UserIcon className="h-3 w-3 text-muted-foreground" />
+                                          <span className="text-[10px] text-foreground truncate flex-1">{a.name}</span>
+                                          {isAssigneeSeen(doc, a.id) && (
+                                            <CheckCheck className="h-3 w-3 text-orange-500" />
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          );
+                        } else {
+                          const singleA = assigneesList[0];
+                          const seen = isAssigneeSeen(doc, singleA.id);
+                          return (
+                            <div className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
                               <UserIcon className="h-2.5 w-2.5 text-muted-foreground" />
-                              <span className="text-[9px] font-medium text-muted-foreground">{assignee.name}</span>
-                              {isAssigneeSeen(doc, assignee.id) && (
+                              <span className="text-[9px] font-medium text-muted-foreground">{singleA.name}</span>
+                              {seen && (
                                 <CheckCheck className="h-3 w-3 text-orange-500 ml-0.5" />
                               )}
                             </div>
-                          ))}
-                        </div>
-                      ) : doc.assignee && (
-                        <div className="flex items-center gap-1 bg-secondary/50 px-2 py-0.5 rounded-full border border-border/50">
-                          <UserIcon className="h-2.5 w-2.5 text-muted-foreground" />
-                          <span className="text-[9px] font-medium text-muted-foreground">{doc.assignee.name}</span>
-                          {isAssigneeSeen(doc, doc.assignee.id) && (
-                            <CheckCheck className="h-3 w-3 text-orange-500 ml-0.5" />
-                          )}
-                        </div>
-                      )}
+                          );
+                        }
+                      })()}
                       {doc.do_not_follow && (
                         <div className="flex-shrink-0 flex items-center gap-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-sm shadow-sm uppercase tracking-tighter border border-white/20">
                           <ShieldAlert className="h-2.5 w-2.5" /> {t('do_not_follow_tag')}
@@ -1209,13 +1284,13 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                           <button onClick={(e) => { e.stopPropagation(); handleStartCreateRfi(doc); }} className="rounded-md p-1 hover:bg-secondary" title={t('create_rfi')}>
                             <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
                           </button>
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
                               router.push(`/${user.role}/upload?projectId=${project.id}&type=documents&folderId=${doc.folder_id || ''}&parentFileId=${doc.id}&returnUrl=${returnUrl}`);
-                            }} 
-                            className="rounded-md p-1 hover:bg-secondary" 
+                            }}
+                            className="rounded-md p-1 hover:bg-secondary"
                             title={t('upload_new_version') || "Upload New Version"}
                           >
                             <Plus className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1268,7 +1343,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             onUpdate={(updatedFile) => setDocs(prev => prev.map(d => {
               const dRoot = d.parent_file_id || d.id;
               const uRoot = updatedFile.parent_file_id || updatedFile.id;
-              return dRoot === uRoot ? updatedFile : d;
+              if (dRoot === uRoot) {
+                if (updatedFile.id === d.id || updatedFile.is_current) {
+                  return updatedFile;
+                }
+              }
+              return d;
             }))}
             targetType="document"
             projectId={project.id}

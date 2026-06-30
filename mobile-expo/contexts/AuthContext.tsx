@@ -62,6 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await SecureStore.deleteItemAsync('token');
         await SecureStore.deleteItemAsync('subscriptionLocked');
         await SecureStore.deleteItemAsync('is_screen_capture_protected_v2');
+        await AsyncStorage.removeItem('user_profile').catch(() => {});
         setIsScreenCaptureProtected(true);
     }, []);
 
@@ -73,6 +74,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (showLoading) setIsLoading(false);
                 return;
             }
+
+            // Restore cached user profile first to ensure immediate responsiveness and offline support
+            try {
+                const cachedUserStr = await AsyncStorage.getItem('user_profile');
+                if (cachedUserStr) {
+                    const cachedUser = JSON.parse(cachedUserStr);
+                    setUser(cachedUser);
+                }
+            } catch (cacheErr) {
+                console.warn("Failed to load cached user profile from AsyncStorage:", cacheErr);
+            }
+
             const res = await getMe();
             if (res?.user) {
                 const isLocked = !!res?.organization?.subscription_locked;
@@ -81,13 +94,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 } else {
                     await SecureStore.deleteItemAsync('subscriptionLocked');
                 }
-                setUser({ ...res.user, organization: res.organization, project_id: res.project_id });
+                const fullUser = { ...res.user, organization: res.organization, project_id: res.project_id };
+                setUser(fullUser);
+                await AsyncStorage.setItem('user_profile', JSON.stringify(fullUser)).catch(() => {});
             }
         } catch (e: any) {
-            if (e?.response?.status !== 401) {
-                console.error("Failed to fetch user context", e?.response?.data || e.message);
+            const status = e?.response?.status;
+            // Only perform automatic logout if we get an explicit authentication/session invalidation error (401 or 404).
+            // A 401 indicates the token is invalid or expired.
+            // A 404 indicates the user object no longer exists in the database.
+            // 5xx (Server Error), 408 (Timeout), or network errors (no status, e.g. offline) should NOT trigger a logout.
+            if (status === 401 || status === 404) {
+                console.warn(`User session is invalid (status ${status}). Logging out...`);
+                logout();
+            } else {
+                console.error("Failed to fetch user context (non-auth error):", e?.response?.data || e.message);
             }
-            logout();
         } finally {
             if (showLoading) setIsLoading(false);
         }
@@ -166,6 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 const fullUser = { ...res.user, organization: res.organization, project_id: res.project_id };
                 setUser(fullUser);  // isPendingName derives from this automatically
+                await AsyncStorage.setItem('user_profile', JSON.stringify(fullUser)).catch(() => {});
                 return fullUser as User;
             }
         } catch (e) {
@@ -177,14 +200,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const switchRole = useCallback((role: UserRole) => {
         if (user) {
-            setUser({ ...user, role });
+            const updatedUser = { ...user, role };
+            setUser(updatedUser);
+            AsyncStorage.setItem('user_profile', JSON.stringify(updatedUser)).catch(e => {
+                console.error("Failed to update cached user profile", e);
+            });
         }
     }, [user]);
 
     const updateUser = useCallback((userData: Partial<User>) => {
         if (user) {
-            setUser({ ...user, ...userData });
+            const updatedUser = { ...user, ...userData };
+            setUser(updatedUser);
             // isPendingName derives from user automatically — no extra setState needed
+            AsyncStorage.setItem('user_profile', JSON.stringify(updatedUser)).catch(e => {
+                console.error("Failed to update cached user profile", e);
+            });
         }
     }, [user]);
 

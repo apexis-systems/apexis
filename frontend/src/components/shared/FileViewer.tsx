@@ -7,7 +7,7 @@ import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalL
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
-import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink, toggleDoNotFollow, toggleOnlyForReference, getFileVersions, promoteFile, deleteFile } from '@/services/fileService';
+import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink, toggleDoNotFollow, toggleOnlyForReference, getFileVersions, promoteFile, deleteFile, getFileFlagHistory } from '@/services/fileService';
 import LinkFileModal from './LinkFileModal';
 import ShareDialog from './ShareDialog';
 import RenameFileDialog from '@/pages/Role/Project/ProjectDetails/RenameFileDialog';
@@ -52,6 +52,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const [promotingVersionId, setPromotingVersionId] = useState<number | string | null>(null);
   const [deletingVersionId, setDeletingVersionId] = useState<number | string | null>(null);
 
+  const parentFile = files[currentIndex];
+  const currentFile = localActiveFile || parentFile;
+  const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
+    ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
+  const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') ||
+    currentFile?.file_name?.toLowerCase().endsWith('.pdf');
+
   // Reset zoom, pan and rotation when changing files
   useEffect(() => {
     setZoom(1);
@@ -80,7 +87,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
       }
     };
     jumpToVersion();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialVersionFileId]);
 
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -104,35 +111,65 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
       const targetState = !currentFile.do_not_follow;
       await toggleDoNotFollow(currentFile.id, targetState);
       toast.success(t(targetState ? 'doc_marked_dnf' : 'doc_unmarked_dnf'));
+
+      const updatedFile = { ...currentFile, do_not_follow: targetState };
+      setLocalActiveFile(updatedFile);
+      setVersions(prev => prev.map(v => v.id === currentFile.id ? { ...v, do_not_follow: targetState } : v));
+
       if (onUpdate) {
-        onUpdate({ ...currentFile, do_not_follow: targetState });
+        onUpdate(updatedFile);
       }
+      fetchVersions();
+      fetchFlagHistory();
     } catch (e: any) {
       toast.error(t('failed_toggle_dnf') || 'Failed to toggle Do Not Follow');
     }
   };
-
+  
   const handleToggleOnlyForReference = async () => {
     try {
       const targetState = !currentFile.only_for_reference;
       await toggleOnlyForReference(currentFile.id, targetState);
       toast.success(t(targetState ? 'doc_marked_ofr' : 'doc_unmarked_ofr'));
+
+      const updatedFile = { ...currentFile, only_for_reference: targetState };
+      setLocalActiveFile(updatedFile);
+      setVersions(prev => prev.map(v => v.id === currentFile.id ? { ...v, only_for_reference: targetState } : v));
+
       if (onUpdate) {
-        onUpdate({ ...currentFile, only_for_reference: targetState });
+        onUpdate(updatedFile);
       }
+      fetchVersions();
+      fetchFlagHistory();
     } catch (e: any) {
       toast.error(t('failed_toggle_ofr') || 'Failed to toggle Only for Reference');
     }
   };
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'discussion' | 'links' | 'versions'>('discussion');
+  const [activeTab, setActiveTab] = useState<'discussion' | 'links' | 'versions' | 'history'>('discussion');
   const [linksSubTab, setLinksSubTab] = useState<'rfi' | 'snag' | 'photo' | 'doc'>('rfi');
+
+  const [flagHistory, setFlagHistory] = useState<any[]>([]);
+  const [loadingFlagHistory, setLoadingFlagHistory] = useState(false);
+
+  const fetchFlagHistory = useCallback(async () => {
+    if (!currentFile?.id) return;
+    setLoadingFlagHistory(true);
+    try {
+      const data = await getFileFlagHistory(currentFile.id);
+      setFlagHistory(data.history || []);
+    } catch (e) {
+      console.error('fetchFlagHistory error', e);
+    } finally {
+      setLoadingFlagHistory(false);
+    }
+  }, [currentFile?.id]);
 
   const isFilePhoto = (item: any) => {
     const name = (item.title || item.file_name || item.name || '').toLowerCase();
     return item.file_type?.startsWith('image/') ||
-        name.endsWith('.jpg') || name.endsWith('.jpeg') ||
-        name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
+      name.endsWith('.jpg') || name.endsWith('.jpeg') ||
+      name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
   };
 
   const linkedDocs = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && !isFilePhoto(i));
@@ -150,13 +187,6 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const activeLinksSubTab = linkedSubTabs.find(s => s.key === linksSubTab)
     ? linksSubTab
     : (linkedSubTabs[0]?.key || 'rfi');
-
-  const parentFile = files[currentIndex];
-  const currentFile = localActiveFile || parentFile;
-  const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
-    ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
-  const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') ||
-    currentFile?.file_name?.toLowerCase().endsWith('.pdf');
 
   const fetchLinks = useCallback(async () => {
     if (currentFile?.id) {
@@ -536,7 +566,6 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                   </Button>
                 </div>
               </div>
-
               {/* Comments Section (Fills remaining height) */}
               <div className="flex-1 flex flex-col min-h-0 border-t border-border/50">
                 <div className="px-6 py-4 flex flex-col h-full overflow-hidden">
@@ -564,6 +593,15 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                         {t('versions') || 'Versions'} ({versions.length})
                       </button>
                     )}
+                    {targetType === 'document' && (
+                      <button
+                        onClick={() => { setActiveTab('history'); fetchFlagHistory(); }}
+                        className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative whitespace-nowrap", activeTab === 'history' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
+                      >
+                        {activeTab === 'history' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
+                        {'Flag History'}
+                      </button>
+                    )}
                   </div>
                   <div className="flex-1 min-h-0 flex flex-col">
                     {activeTab === 'discussion' ? (
@@ -582,13 +620,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                               const isActiveVersion = currentFile.id === v.id;
                               const isCurrentVersion = v.is_current;
                               return (
-                                <div 
-                                  key={v.id} 
+                                <div
+                                  key={v.id}
                                   onClick={() => setLocalActiveFile(v)}
                                   className={cn(
                                     "flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer",
-                                    isActiveVersion 
-                                      ? "bg-accent/10 border-accent shadow-sm" 
+                                    isActiveVersion
+                                      ? "bg-accent/10 border-accent shadow-sm"
                                       : "bg-secondary/50 border-border/50 hover:bg-secondary"
                                   )}
                                 >
@@ -602,6 +640,16 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                           {t('current_version') || 'Active'}
                                         </span>
                                       )}
+                                      {v.do_not_follow && (
+                                        <span className="bg-red-500/10 text-red-600 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-red-500/20 uppercase tracking-wider">
+                                          {t('dnf_tag') || 'DNF'}
+                                        </span>
+                                      )}
+                                      {v.only_for_reference && (
+                                        <span className="bg-blue-500/10 text-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wider">
+                                          {t('ofr_tag') || 'ORF'}
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="text-sm font-semibold truncate text-foreground">{v.file_name}</div>
                                     <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -610,9 +658,9 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                                     {!isCurrentVersion && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                      <Button 
-                                        size="sm" 
-                                        variant="ghost" 
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
                                         className="h-7 text-[10px] font-black uppercase text-accent hover:bg-accent/10 px-2"
                                         onClick={() => handlePromoteVersion(v.id)}
                                         disabled={promotingVersionId !== null || deletingVersionId !== null}
@@ -624,7 +672,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                         )}
                                       </Button>
                                     )}
-                                    {(user.role === 'admin' || user.role === 'superadmin' || String(v.created_by) === String(user.id)) && (
+                                    {/* {(user.role === 'admin' || user.role === 'superadmin' || String(v.created_by) === String(user.id)) && (
                                       <Button 
                                         size="icon" 
                                         variant="ghost" 
@@ -639,7 +687,50 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                           <Trash2 className="h-3.5 w-3.5" />
                                         )}
                                       </Button>
+                                    )} */}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ) : activeTab === 'history' ? (
+                      <div className="flex flex-col h-full min-h-0">
+                        {loadingFlagHistory ? (
+                          <div className="text-center py-8 text-xs text-muted-foreground">Loading history...</div>
+                        ) : flagHistory.length === 0 ? (
+                          <div className="text-center py-8 text-xs text-muted-foreground">No flag changes recorded yet.</div>
+                        ) : (
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
+                            {flagHistory.map((entry: any, idx: number) => {
+                              const isDnf = entry.flag === 'do_not_follow';
+                              const isOn = entry.value === true;
+                              const accentColor = isDnf ? 'text-red-500' : 'text-blue-500';
+                              const bgColor = isDnf ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-500/10 border-blue-500/20';
+                              const dotColor = isDnf ? 'bg-red-500' : 'bg-blue-500';
+                              const label = isDnf ? 'DO NOT FOLLOW' : 'ONLY FOR REFERENCE';
+                              const action = isOn ? 'Enabled' : 'Disabled';
+                              const date = new Date(entry.createdAt);
+                              const formattedDate = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+                              const formattedTime = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                              return (
+                                <div key={idx} className="flex gap-3 items-start">
+                                  <div className="flex flex-col items-center shrink-0 pt-1">
+                                    <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${dotColor}`} />
+                                    {idx < flagHistory.length - 1 && (
+                                      <div className="w-px flex-1 mt-1.5 bg-border/50 min-h-[24px]" />
                                     )}
+                                  </div>
+                                  <div className={`flex-1 p-3 rounded-xl border ${bgColor} mb-1`}>
+                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                                      <span className={`text-[9px] font-black uppercase tracking-wider ${accentColor}`}>{label}</span>
+                                      <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${isOn ? (isDnf ? 'bg-red-500/20 border-red-500/30 text-red-500' : 'bg-blue-500/20 border-blue-500/30 text-blue-500') : 'bg-muted/50 border-border/50 text-muted-foreground'}`}>
+                                        {isOn ? '▲ ON' : '▼ OFF'}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] font-semibold text-foreground">{action} by {entry.changer?.name || 'Unknown'}</div>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">{formattedDate} · {formattedTime}</div>
                                   </div>
                                 </div>
                               );
@@ -663,8 +754,8 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                       onClick={() => setLinksSubTab(st.key)}
                                       className={cn(
                                         "flex-1 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider transition-all rounded-md whitespace-nowrap",
-                                        isActive 
-                                          ? `${st.color} ${st.bg} shadow-sm border border-border/40 font-black` 
+                                        isActive
+                                          ? `${st.color} ${st.bg} shadow-sm border border-border/40 font-black`
                                           : "text-muted-foreground hover:text-foreground hover:bg-muted/10 border border-transparent"
                                       )}
                                     >

@@ -18,7 +18,7 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatFileSize } from '@/helpers/format';
 import { useAuth } from '@/contexts/AuthContext';
-import { getFileVersions, promoteFile, deleteFile } from '../../services/fileService';
+import { getFileVersions, promoteFile, deleteFile, getFileFlagHistory } from '../../services/fileService';
 
 interface FileInformationModalProps {
     visible: boolean;
@@ -46,6 +46,8 @@ export default function FileInformationModal({
     const [loading, setLoading] = useState(false);
     const [promotingVersionId, setPromotingVersionId] = useState<number | null>(null);
     const [deletingVersionId, setDeletingVersionId] = useState<number | null>(null);
+    const [flagHistory, setFlagHistory] = useState<any[]>([]);
+    const [loadingFlagHistory, setLoadingFlagHistory] = useState(false);
 
     const fetchVersions = useCallback(async () => {
         if (file?.id) {
@@ -61,11 +63,30 @@ export default function FileInformationModal({
         }
     }, [file?.id]);
 
-    useEffect(() => {
-        if (visible) {
-            fetchVersions();
+    const fetchFlagHistory = useCallback(async () => {
+        if (file?.id) {
+            setLoadingFlagHistory(true);
+            try {
+                const data = await getFileFlagHistory(file.id);
+                setFlagHistory(data.history || []);
+            } catch (err) {
+                console.error("fetchFlagHistory mobile Error", err);
+            } finally {
+                setLoadingFlagHistory(false);
+            }
         }
-    }, [visible, fetchVersions]);
+    }, [file?.id]);
+
+    useEffect(() => {
+        if (visible && file?.id) {
+            fetchVersions();
+            fetchFlagHistory();
+        }
+        return () => {
+            setVersions([]);
+            setFlagHistory([]);
+        };
+    }, [visible, file?.id, fetchVersions, fetchFlagHistory]);
 
     const handlePromote = async (versionId: number) => {
         try {
@@ -193,159 +214,222 @@ export default function FileInformationModal({
             animationType="slide"
             onRequestClose={onClose}
         >
-            <TouchableWithoutFeedback onPress={onClose}>
-                <View style={styles.backdrop}>
-                    <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-                        <View
-                            style={[
-                                styles.sheetContainer,
-                                {
-                                    backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
-                                    borderTopColor: colors.border,
-                                    paddingBottom: Math.max(insets.bottom + 16, 24)
-                                }
-                            ]}
-                        >
-                            {/* Drag Indicator */}
-                            <View style={[styles.dragIndicator, { backgroundColor: isDark ? '#3a3a3c' : '#e5e5ea' }]} />
+            <View style={styles.backdrop}>
+                <TouchableWithoutFeedback onPress={onClose}>
+                    <View style={StyleSheet.absoluteFillObject} />
+                </TouchableWithoutFeedback>
+                <View
+                    style={[
+                        styles.sheetContainer,
+                        {
+                            backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+                            borderTopColor: colors.border,
+                            paddingBottom: Platform.OS === 'ios' ? 0 : Math.max(insets.bottom + 16, 24)
+                        }
+                    ]}
+                >
+                    {/* Drag Indicator */}
+                    <View style={[styles.dragIndicator, { backgroundColor: isDark ? '#3a3a3c' : '#e5e5ea' }]} />
 
-                            {/* Header */}
-                            <View style={styles.header}>
-                                <Text style={[styles.title, { color: colors.text }]}>
-                                    File Details
-                                </Text>
-                                <TouchableOpacity onPress={onClose} style={[styles.closeButton, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
-                                    <Feather name="x" size={18} color={colors.text} />
-                                </TouchableOpacity>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <Text style={[styles.title, { color: colors.text }]}>
+                            File Details
+                        </Text>
+                        <TouchableOpacity onPress={onClose} style={[styles.closeButton, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
+                            <Feather name="x" size={18} color={colors.text} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Scrollable Content */}
+                    <ScrollView 
+                        showsVerticalScrollIndicator={false} 
+                        style={{ maxHeight: Dimensions.get('window').height * 0.65 }}
+                        contentContainerStyle={{ paddingBottom: 50 }}
+                    >
+                        <View style={styles.content}>
+                            {/* Date and Time */}
+                            <Text style={[styles.dateText, { color: colors.text }]}>
+                                {uploadedDateStr || 'Unknown date'}
+                            </Text>
+
+                            {/* File Name */}
+                            <Text style={[styles.fileNameText, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>
+                                {file.file_name}
+                            </Text>
+
+                            {/* Size and Format Details */}
+                            <View style={[styles.detailsRow, { borderColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
+                                <View style={styles.detailItem}>
+                                    <Text style={[styles.detailLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Format</Text>
+                                    <Text style={[styles.detailValue, { color: colors.text }]}>{fileFormatStr}</Text>
+                                </View>
+                                <View style={[styles.verticalDivider, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]} />
+                                <View style={styles.detailItem}>
+                                    <Text style={[styles.detailLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Size</Text>
+                                    <Text style={[styles.detailValue, { color: colors.text }]}>{fileSizeStr || '—'}</Text>
+                                </View>
                             </View>
 
-                            {/* Scrollable Content */}
-                            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: Dimensions.get('window').height * 0.65 }}>
-                                <View style={styles.content}>
-                                    {/* Date and Time */}
-                                    <Text style={[styles.dateText, { color: colors.text }]}>
-                                        {uploadedDateStr || 'Unknown date'}
+                            {/* Location/Folder Path */}
+                            <View style={styles.pathContainer}>
+                                <View style={[styles.iconContainer, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
+                                    <Feather name="folder" size={18} color={colors.primary} />
+                                </View>
+                                <View style={styles.pathTextContainer}>
+                                    <Text style={[styles.pathLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Folder Path</Text>
+                                    <Text style={[styles.pathValue, { color: colors.text }]} numberOfLines={2}>
+                                        {folderPathStr}
                                     </Text>
+                                </View>
+                            </View>
 
-                                    {/* File Name */}
-                                    <Text style={[styles.fileNameText, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>
-                                        {file.file_name}
-                                    </Text>
-
-                                    {/* Size and Format Details */}
-                                    <View style={[styles.detailsRow, { borderColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
-                                        <View style={styles.detailItem}>
-                                            <Text style={[styles.detailLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Format</Text>
-                                            <Text style={[styles.detailValue, { color: colors.text }]}>{fileFormatStr}</Text>
-                                        </View>
-                                        <View style={[styles.verticalDivider, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]} />
-                                        <View style={styles.detailItem}>
-                                            <Text style={[styles.detailLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Size</Text>
-                                            <Text style={[styles.detailValue, { color: colors.text }]}>{fileSizeStr || '—'}</Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Location/Folder Path */}
-                                    <View style={styles.pathContainer}>
-                                        <View style={[styles.iconContainer, { backgroundColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
-                                            <Feather name="folder" size={18} color={colors.primary} />
-                                        </View>
-                                        <View style={styles.pathTextContainer}>
-                                            <Text style={[styles.pathLabel, { color: isDark ? '#a2a2a7' : '#8e8e93' }]}>Folder Path</Text>
-                                            <Text style={[styles.pathValue, { color: colors.text }]} numberOfLines={2}>
-                                                {folderPathStr}
-                                            </Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Version History Section */}
-                                    {file.file_type && !file.file_type.startsWith('image/') && (
-                                        <View style={[styles.versionsSection, { borderTopColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
-                                            <Text style={[styles.sectionTitle, { color: colors.text }]}>Version History</Text>
-                                            {loading ? (
-                                                <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 10 }} />
-                                            ) : versions.length === 0 ? (
-                                                <Text style={{ color: colors.textMuted, fontSize: 13, marginVertical: 10 }}>No other versions found</Text>
-                                            ) : (
-                                                <View style={styles.versionsList}>
-                                                    {versions.map((v, idx) => {
-                                                        const isActive = file.id === v.id;
-                                                        const isCurrent = v.is_current;
-                                                        return (
-                                                            <View 
-                                                                key={v.id} 
-                                                                style={[
-                                                                    styles.versionItem, 
-                                                                    { 
-                                                                        borderColor: isActive ? colors.primary : (isDark ? '#2c2c2e' : '#f2f2f7'),
-                                                                        backgroundColor: isActive ? (isDark ? 'rgba(0,122,255,0.15)' : 'rgba(0,122,255,0.05)') : 'transparent'
-                                                                    }
-                                                                ]}
-                                                            >
-                                                                <View style={{ flex: 1 }}>
-                                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                                                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
-                                                                            V{versions.length - idx}
-                                                                        </Text>
-                                                                        {isCurrent && (
-                                                                            <View style={{ backgroundColor: isDark ? 'rgba(52, 199, 89, 0.2)' : 'rgba(52, 199, 89, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                                                <Text style={{ color: '#34c759', fontSize: 9, fontWeight: '700' }}>ACTIVE</Text>
-                                                                            </View>
-                                                                        )}
+                            {/* Version History Section */}
+                            {file.file_type && !file.file_type.startsWith('image/') && (
+                                <View style={[styles.versionsSection, { borderTopColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
+                                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Version History</Text>
+                                    {loading ? (
+                                        <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 10 }} />
+                                    ) : versions.length === 0 ? (
+                                        <Text style={{ color: colors.textMuted, fontSize: 13, marginVertical: 10 }}>No other versions found</Text>
+                                    ) : (
+                                        <View style={styles.versionsList}>
+                                            {versions.map((v, idx) => {
+                                                const isActive = file.id === v.id;
+                                                const isCurrent = v.is_current;
+                                                return (
+                                                    <View 
+                                                        key={v.id} 
+                                                        style={[
+                                                            styles.versionItem, 
+                                                            { 
+                                                                borderColor: isActive ? colors.primary : (isDark ? '#2c2c2e' : '#f2f2f7'),
+                                                                backgroundColor: isActive ? (isDark ? 'rgba(0,122,255,0.15)' : 'rgba(0,122,255,0.05)') : 'transparent'
+                                                            }
+                                                        ]}
+                                                    >
+                                                        <View style={{ flex: 1 }}>
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                                                                    V{versions.length - idx}
+                                                                </Text>
+                                                                {isCurrent && (
+                                                                    <View style={{ backgroundColor: isDark ? 'rgba(52, 199, 89, 0.2)' : 'rgba(52, 199, 89, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                                        <Text style={{ color: '#34c759', fontSize: 9, fontWeight: '700' }}>ACTIVE</Text>
                                                                     </View>
-                                                                    <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 2 }}>{v.file_name}</Text>
-                                                                    <Text style={{ fontSize: 10, color: colors.textMuted }}>
-                                                                        {formatUploadedDate(v.createdAt)}
-                                                                    </Text>
-                                                                </View>
-                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                                                    {!isActive && (
-                                                                        <TouchableOpacity onPress={() => onUpdate && onUpdate(v)} style={{ padding: 6 }}>
-                                                                            <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>VIEW</Text>
-                                                                        </TouchableOpacity>
-                                                                    )}
-                                                                    {!isCurrent && (user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'contributor') && (
-                                                                        <TouchableOpacity 
-                                                                            onPress={() => handlePromote(v.id)} 
-                                                                            style={{ padding: 6 }}
-                                                                            disabled={promotingVersionId !== null || deletingVersionId !== null}
-                                                                        >
-                                                                            {promotingVersionId === v.id ? (
-                                                                                <ActivityIndicator size="small" color={colors.primary} />
-                                                                            ) : (
-                                                                                <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>
-                                                                                    {t('projectDocuments.makeActive') || 'ACTIVATE'}
-                                                                                </Text>
-                                                                            )}
-                                                                        </TouchableOpacity>
-                                                                    )}
-                                                                    {(user?.role === 'admin' || user?.role === 'superadmin' || String(v.created_by) === String(user?.id)) && (
-                                                                        <TouchableOpacity 
-                                                                            onPress={() => handleDelete(v.id)} 
-                                                                            style={{ padding: 6 }}
-                                                                            disabled={promotingVersionId !== null || deletingVersionId !== null}
-                                                                        >
-                                                                            {deletingVersionId === v.id ? (
-                                                                                <ActivityIndicator size="small" color="#ef4444" />
-                                                                            ) : (
-                                                                                <Feather name="trash-2" size={16} color="#ef4444" />
-                                                                            )}
-                                                                        </TouchableOpacity>
-                                                                    )}
-                                                                </View>
+                                                                )}
+                                                                {v.do_not_follow && (
+                                                                    <View style={{ backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                                        <Text style={{ color: '#ef4444', fontSize: 9, fontWeight: '700' }}>DNF</Text>
+                                                                    </View>
+                                                                )}
+                                                                {v.only_for_reference && (
+                                                                    <View style={{ backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                                        <Text style={{ color: '#3b82f6', fontSize: 9, fontWeight: '700' }}>OFR</Text>
+                                                                    </View>
+                                                                )}
                                                             </View>
-                                                        );
-                                                    })}
-                                                </View>
-                                            )}
+                                                            <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 2 }}>{v.file_name}</Text>
+                                                            <Text style={{ fontSize: 10, color: colors.textMuted }}>
+                                                                {formatUploadedDate(v.createdAt)}
+                                                            </Text>
+                                                        </View>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                            {!isActive && (
+                                                                <TouchableOpacity onPress={() => onUpdate && onUpdate(v)} style={{ padding: 6 }}>
+                                                                    <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>VIEW</Text>
+                                                                </TouchableOpacity>
+                                                            )}
+                                                            {!isCurrent && (user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'contributor') && (
+                                                                <TouchableOpacity 
+                                                                    onPress={() => handlePromote(v.id)} 
+                                                                    style={{ padding: 6 }}
+                                                                    disabled={promotingVersionId !== null || deletingVersionId !== null}
+                                                                >
+                                                                    {promotingVersionId === v.id ? (
+                                                                        <ActivityIndicator size="small" color={colors.primary} />
+                                                                    ) : (
+                                                                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>
+                                                                            {t('projectDocuments.makeActive') || 'ACTIVATE'}
+                                                                        </Text>
+                                                                    )}
+                                                                </TouchableOpacity>
+                                                            )}
+                                                            {/* {(user?.role === 'admin' || user?.role === 'superadmin' || String(v.created_by) === String(user?.id)) && (
+                                                                <TouchableOpacity 
+                                                                    onPress={() => handleDelete(v.id)} 
+                                                                    style={{ padding: 6 }}
+                                                                    disabled={promotingVersionId !== null || deletingVersionId !== null}
+                                                                >
+                                                                    {deletingVersionId === v.id ? (
+                                                                        <ActivityIndicator size="small" color="#ef4444" />
+                                                                    ) : (
+                                                                        <Feather name="trash-2" size={16} color="#ef4444" />
+                                                                    )}
+                                                                </TouchableOpacity>
+                                                            )} */}
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })}
                                         </View>
                                     )}
                                 </View>
-                            </ScrollView>
+                            )}
+
+                            {/* DNF / OFR Flag History Section */}
+                            {(file.file_type && !file.file_type.startsWith('image/')) && (
+                                <View style={[styles.versionsSection, { borderTopColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
+                                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Flag History</Text>
+                                    {loadingFlagHistory ? (
+                                        <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 10 }} />
+                                    ) : flagHistory.length === 0 ? (
+                                        <Text style={{ color: colors.textMuted, fontSize: 13, marginVertical: 10 }}>No flag changes recorded yet.</Text>
+                                    ) : (
+                                        <View style={{ gap: 10 }}>
+                                            {flagHistory.map((entry: any, idx: number) => {
+                                                const isDnf = entry.flag === 'do_not_follow';
+                                                const isOn = entry.value === true;
+                                                const dotColor = isDnf ? '#ef4444' : '#3b82f6';
+                                                const cardBg = isDnf
+                                                    ? (isDark ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.07)')
+                                                    : (isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.07)');
+                                                const cardBorder = isDnf ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)';
+                                                const flagLabel = isDnf ? 'DO NOT FOLLOW' : 'ONLY FOR REFERENCE';
+                                                const actionLabel = isOn ? 'Enabled' : 'Disabled';
+                                                const date = new Date(entry.createdAt);
+                                                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                                const dateStr = `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+                                                const timeStr = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+                                                return (
+                                                    <View key={idx} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                                                        <View style={{ alignItems: 'center', paddingTop: 4 }}>
+                                                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dotColor }} />
+                                                            {idx < flagHistory.length - 1 && (
+                                                                <View style={{ width: 1, flex: 1, backgroundColor: isDark ? '#3a3a3c' : '#e5e5ea', marginTop: 4, minHeight: 24 }} />
+                                                            )}
+                                                        </View>
+                                                        <View style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 2, backgroundColor: cardBg, borderColor: cardBorder }}>
+                                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                                                                <Text style={{ fontSize: 9, fontWeight: '800', color: dotColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>{flagLabel}</Text>
+                                                                <View style={{ backgroundColor: isOn ? dotColor + '33' : (isDark ? '#2c2c2e' : '#f2f2f7'), paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: isOn ? dotColor + '55' : (isDark ? '#3a3a3c' : '#e5e5ea') }}>
+                                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: isOn ? dotColor : colors.textMuted, textTransform: 'uppercase' }}>{isOn ? '▲ ON' : '▼ OFF'}</Text>
+                                                                </View>
+                                                            </View>
+                                                            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{actionLabel} by {entry.changer?.name || 'Unknown'}</Text>
+                                                            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{dateStr} at {timeStr}</Text>
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })}
+                                        </View>
+                                    )}
+                                </View>
+                            )}
                         </View>
-                    </TouchableWithoutFeedback>
+                    </ScrollView>
                 </View>
-            </TouchableWithoutFeedback>
+            </View>
         </Modal>
     );
 }

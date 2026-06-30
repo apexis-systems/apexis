@@ -58,6 +58,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     }, [selectedFolder, onFolderChange]);
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            breadcrumbsScrollRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [selectedFolder]);
+
     // Sync selectedFolder whenever the deep-link prop changes.
     // useState(initialFolderId) only runs on first mount — this effect handles
     // subsequent navigations while the component stays mounted in the FlatList.
@@ -104,6 +111,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [sharing, setSharing] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     const isUserScrollingRef = useRef(false);
+    const breadcrumbsScrollRef = useRef<ScrollView>(null);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [showInfoModal, setShowInfoModal] = useState(false);
@@ -958,7 +966,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         <Text style={{ color: '#888', fontSize: 8 }}>{formatCommentTime(c.createdAt)}</Text>
                         {c.is_edited && <Text style={{ color: colors.primary, fontSize: 8, opacity: 0.7 }}>({t('projectPhotos.edited', 'Edited')})</Text>}
                     </View>
-                    
+
                     {/* Buttons / Actions */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         {!isReply && !c.is_deleted && (
@@ -1741,7 +1749,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 </TouchableOpacity>
                             )}
                             <Feather name="folder" size={16} color={colors.primary} />
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                            <ScrollView
+                                ref={breadcrumbsScrollRef}
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                style={{ flex: 1 }}
+                                onContentSizeChange={() => {
+                                    breadcrumbsScrollRef.current?.scrollToEnd({ animated: true });
+                                }}
+                            >
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     <TouchableOpacity onPress={() => setSelectedFolder(null)}>
                                         <View style={{ paddingVertical: 4 }}>
@@ -2086,7 +2102,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         zIndex: 5,
                                                     }}
                                                 />
-                                                <View style={{ marginBottom: 8 }}>
+                                                <View style={{ marginBottom: 6 }}>
                                                     <Feather
                                                         name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : isConfidentialFolder ? "shield" : "folder"}
                                                         size={(isConfirmationFolder || isConfidentialFolder) ? 32 : 36}
@@ -2098,7 +2114,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         <Feather name="check" size={10} color="#fff" />
                                                     </View>
                                                 )}
-                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{isConfirmationFolder ? "Confirmations" : folder.name}</Text>
+                                                <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{isConfirmationFolder ? "Confirmations" : folder.name}</Text>
                                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                                     {subcount > 0
                                                         ? t('projectPhotos.photosFoldersCount', { photoCount: count, folderCount: subcount })

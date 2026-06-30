@@ -46,7 +46,7 @@
             "projectLimitMessage": "आप अपनी प्रोजेक्ट सीमा तक पहुँच गए हैं। अधिक प्रोजेक्ट बनाने के लिए कृपया अपना प्लान अपग्रेड करें।",
             "upgrade": "अपग्रेड करें",
             "createNewProject": "नया प्रोजेक्ट बनाएं",
-            "projectNameLabel": "प्रोजेक्ट का नाम (अधिकतम 25)",
+            "projectNameLabel": "प्रोजेक्ट का नाम (अधिकतम 35)",
             "projectNamePlaceholder": "जैसे: अल्फा टॉवर",
             "companyNameLabel": "कंपनी का नाम/क्लाइंट का नाम (अधिकतम 50)",
             "companyNamePlaceholder": "कंपनी/क्लाइंट का नाम दर्ज करें",
@@ -97,6 +97,29 @@
             "signOutConfirmMessage": "क्या आप वाकई साइन आउट करना चाहते हैं?",
             "cancel": "रद्द करें"
         },
+        "user_mgmt": "यूजर मैनेजमेंट",
+        "user_mgmt_subtitle": "संगठन के सदस्यों और भूमिकाओं को प्रबंधित करें।",
+        "add_member": "सदस्य जोड़ें",
+        "email_address": "ईमेल पता",
+        "role": "भूमिका",
+        "assign_project": "प्रोजेक्ट असाइन करें",
+        "choose_project": "प्रोजेक्ट चुनें",
+        "no_projects_found": "कोई प्रोजेक्ट नहीं मिला",
+        "invite": "आमंत्रित करें",
+        "project_access_links": "प्रोजेक्ट एक्सेस लिंक",
+        "active_members": "सक्रिय सदस्य",
+        "blocked_users": "ब्लॉक किए गए यूजर",
+        "no_permission": "आपको इस पृष्ठ को देखने की अनुमति नहीं है।",
+        "load_users_error": "उपयोगकर्ताओं को लोड करने में विफल",
+        "invalid_email": "कृपया एक वैध ईमेल दर्ज करें",
+        "select_project_role": "कृपया इस भूमिका के लिए एक प्रोजेक्ट चुनें",
+        "invite_success": "आमंत्रण सफलतापूर्वक भेजा गया",
+        "invite_error": "आमंत्रण भेजने में विफल",
+        "remove_access_success": "प्रोजेक्ट एक्सेस सफलतापूर्वक हटा दिया गया",
+        "remove_access_error": "प्रोजेक्ट एक्सेस हटाने में विफल",
+        "link_copied": "लिंक क्लिपबोर्ड पर कॉपी हो गया",
+        "unblock_success": "यूज़र सफलतापूर्वक अनब्लॉक हो गया",
+        "unblock_error": "यूज़र को अनब्लॉक करने में विफल",
         "companySettings": {
             "title": "कंपनी सेटिंग्स",
             "accessDenied": "पहुंच अस्वीकृत",
@@ -412,7 +435,10 @@
             "noMessagesYet": "अभी तक कोई संदेश नहीं है",
             "sendMessage": "संदेश भेजें",
             "failedToSendMessage": "संदेश भेजने में विफल",
-            "linkedFolders": "लिंक्ड फोल्डर"
+            "linkedFolders": "लिंक्ड फोल्डर",
+            "reassignSnag": "कमी फिर से सौंपें",
+            "reassignedSnagSuccess": "कमी सफलतापूर्वक फिर से सौंपी गई",
+            "failedToReassignSnag": "कमी फिर से सौंपने में विफल"
         },
         "te": "తెలుగు",
         "months": {
@@ -515,7 +541,10 @@
                 "open": "खुला",
                 "closed": "बंद",
                 "overdue": "विलंबित"
-            }
+            },
+            "reassignRfi": "RFI फिर से सौंपें",
+            "reassignedSuccess": "RFI सफलतापूर्वक फिर से सौंपा गया",
+            "failedToReassign": "RFI फिर से सौंपने में विफल"
         },
         "projectReports": {
             "weekly": {
