@@ -53,6 +53,10 @@ db.organizations.hasMany(db.users, { foreignKey: 'organization_id' });
 db.blocked_users.belongsTo(db.organizations, { foreignKey: 'organization_id' });
 db.organizations.hasMany(db.blocked_users, { foreignKey: 'organization_id' });
 
+// Project <-> BlockedUser
+db.blocked_users.belongsTo(db.projects, { foreignKey: 'project_id' });
+db.projects.hasMany(db.blocked_users, { foreignKey: 'project_id' });
+
 // Organization <-> Project
 db.projects.belongsTo(db.organizations, { foreignKey: 'organization_id' });
 db.organizations.hasMany(db.projects, { foreignKey: 'organization_id' });

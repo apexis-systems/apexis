@@ -198,14 +198,24 @@ export const projectLogin = async (req: Request, res: Response) => {
             const isBlocked = await blocked_users.findOne({
                 where: {
                     organization_id: project.organization_id,
-                    [Op.or]: [
-                        normalizedEmail ? { email: normalizedEmail } : null,
-                        normalizedPhone ? { phone_number: normalizedPhone } : null
-                    ].filter(Boolean) as any[]
+                    [Op.and]: [
+                        {
+                            [Op.or]: [
+                                { project_id: null },
+                                { project_id: project.id }
+                            ]
+                        },
+                        {
+                            [Op.or]: [
+                                normalizedEmail ? { email: normalizedEmail } : null,
+                                normalizedPhone ? { phone_number: normalizedPhone } : null
+                            ].filter(Boolean) as any[]
+                        }
+                    ]
                 }
             });
             if (isBlocked) {
-                return res.status(403).json({ error: "Access denied: This account is blocked from joining projects in this organization." });
+                return res.status(403).json({ error: isBlocked.project_id ? "Access denied: This account is blocked from joining this project." : "Access denied: This account is blocked from joining projects in this organization." });
             }
         }
 

@@ -23,6 +23,10 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.STRING,
                 allowNull: true,
             },
+            project_id: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+            },
         },
         {
             tableName: "blocked_users",
