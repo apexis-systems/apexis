@@ -186,3 +186,13 @@ export const promoteFile = async (fileId: string | number) => {
         throw error;
     }
 };
+
+export const getFileFlagHistory = async (fileId: string | number) => {
+    try {
+        const response = await PrivateAxios.get(`/files/${fileId}/flag-history`);
+        return response.data;
+    } catch (error) {
+        console.error("getFileFlagHistory Error", error);
+        throw error;
+    }
+};

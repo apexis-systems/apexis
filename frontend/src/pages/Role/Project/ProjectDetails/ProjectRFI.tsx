@@ -311,6 +311,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
 
     // Modals
     const [showAdd, setShowAdd] = useState(false);
+    const [showReassign, setShowReassign] = useState(false);
     const [selectedRFI, setSelectedRFI] = useState<RFI | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
@@ -1040,17 +1041,19 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                             <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('description_label')}</label>
                             <Textarea value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder={t('rfi_context_placeholder')} className="min-h-[100px]" />
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('assign_to_label')}</label>
-                            <Select value={newAssignee} onValueChange={setNewAssignee}>
-                                <SelectTrigger><SelectValue placeholder={t('select_assignee_placeholder')} /></SelectTrigger>
-                                <SelectContent>
-                                    {assignees.map(a => (
-                                        <SelectItem key={a.id} value={String(a.id)}>{a.name} ({a.role})</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {(!isEditing || (user?.role === 'admin' || user?.role === 'superadmin')) && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('assign_to_label')}</label>
+                                <Select value={newAssignee} onValueChange={setNewAssignee}>
+                                    <SelectTrigger><SelectValue placeholder={t('select_assignee_placeholder')} /></SelectTrigger>
+                                    <SelectContent>
+                                        {assignees.map(a => (
+                                            <SelectItem key={a.id} value={String(a.id)}>{a.name} ({a.role})</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('expiry_date_label')}</label>
                             <Input type="datetime-local" value={newExpiryDate} onChange={e => setNewExpiryDate(e.target.value)} />
@@ -1185,7 +1188,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                 </Button>
                                             </>
                                         )}
-                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) && (
+                                        {(String(selectedRFI.created_by) === String(user?.id) || String(selectedRFI.creator?.id) === String(user?.id)) ? (
                                             <>
                                                 <Button 
                                                     variant="outline" 
@@ -1230,6 +1233,20 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                                     {t('delete_btn')}
                                                 </Button>
                                             </>
+                                        ) : (
+                                            (user?.role === 'admin' || user?.role === 'superadmin') && (
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-7 text-[10px]"
+                                                    onClick={() => {
+                                                        setNewAssignee(String(selectedRFI.assigned_to));
+                                                        setShowReassign(true);
+                                                    }}
+                                                >
+                                                    {t('reassign_btn') || 'Reassign'}
+                                                </Button>
+                                            )
                                         )}
                                     </div>
                                 </div>
@@ -1559,7 +1576,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                                     </div>
                                 )}
 
-                                {isConversationParticipant && (
+                                {(isConversationParticipant || user?.role === 'admin' || user?.role === 'superadmin') && (
                                     <div className="pt-4 border-t border-border space-y-3">
                                         <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{t('update_status_title')}</p>
                                         <div className="flex gap-2">
@@ -1627,6 +1644,56 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                 handleLinkItemClick={handleLinkItemClick}
             />
         )}
+
+        {/* Reassign Dialog */}
+        <Dialog open={showReassign} onOpenChange={(open) => { if (!open) { setShowReassign(false); resetForm(); } }}>
+            <DialogContent className="sm:max-w-[400px]">
+                <DialogHeader>
+                    <DialogTitle>{t('reassign_rfi_title') || 'Reassign RFI'}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('assign_to_label')}</label>
+                        <Select value={newAssignee} onValueChange={setNewAssignee} disabled={submitting}>
+                            <SelectTrigger><SelectValue placeholder={t('select_assignee_placeholder')} /></SelectTrigger>
+                            <SelectContent>
+                                {assignees.map(a => (
+                                    <SelectItem key={a.id} value={String(a.id)}>{a.name} ({a.role})</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => { setShowReassign(false); resetForm(); }} disabled={submitting}>{t('cancel')}</Button>
+                    <Button 
+                        onClick={async () => {
+                            if (!selectedRFI || !newAssignee) return;
+                            setSubmitting(true);
+                            try {
+                                const form = new FormData();
+                                form.append('assigned_to', newAssignee);
+                                const updated = await updateRFI(selectedRFI.id, form);
+                                setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
+                                setSelectedRFI(updated);
+                                setShowReassign(false);
+                                resetForm();
+                                toast.success(t('rfi_reassigned_msg') || 'RFI reassigned successfully');
+                            } catch (err) {
+                                toast.error(t('failed_reassign_rfi') || 'Failed to reassign RFI');
+                            } finally {
+                                setSubmitting(false);
+                            }
+                        }} 
+                        disabled={submitting || !newAssignee} 
+                        className="bg-accent text-accent-foreground"
+                    >
+                        {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                        {t('reassign_btn') || 'Reassign'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
     );
 }

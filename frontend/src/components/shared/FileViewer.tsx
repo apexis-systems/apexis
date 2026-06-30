@@ -7,7 +7,7 @@ import { Tag as TagIcon, Plus, X, ChevronLeft, ChevronRight, Download, ExternalL
 import CommentThread from './CommentThread';
 import { cn } from '@/lib/utils';
 import { formatFileSize } from '@/lib/format';
-import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink, toggleDoNotFollow, toggleOnlyForReference, getFileVersions, promoteFile, deleteFile } from '@/services/fileService';
+import { updateFile, downloadFile, markFileSeen, linkFiles, getLinkedItems, deleteLink, toggleDoNotFollow, toggleOnlyForReference, getFileVersions, promoteFile, deleteFile, getFileFlagHistory } from '@/services/fileService';
 import LinkFileModal from './LinkFileModal';
 import ShareDialog from './ShareDialog';
 import RenameFileDialog from '@/pages/Role/Project/ProjectDetails/RenameFileDialog';
@@ -137,8 +137,24 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
     }
   };
   const [linkedItems, setLinkedItems] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'discussion' | 'links' | 'versions'>('discussion');
+  const [activeTab, setActiveTab] = useState<'discussion' | 'links' | 'versions' | 'history'>('discussion');
   const [linksSubTab, setLinksSubTab] = useState<'rfi' | 'snag' | 'photo' | 'doc'>('rfi');
+
+  const [flagHistory, setFlagHistory] = useState<any[]>([]);
+  const [loadingFlagHistory, setLoadingFlagHistory] = useState(false);
+
+  const fetchFlagHistory = useCallback(async () => {
+    if (!currentFile?.id) return;
+    setLoadingFlagHistory(true);
+    try {
+      const data = await getFileFlagHistory(currentFile.id);
+      setFlagHistory(data.history || []);
+    } catch (e) {
+      console.error('fetchFlagHistory error', e);
+    } finally {
+      setLoadingFlagHistory(false);
+    }
+  }, [currentFile?.id]);
 
   const isFilePhoto = (item: any) => {
     const name = (item.title || item.file_name || item.name || '').toLowerCase();
@@ -547,8 +563,6 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     <Download className="h-4 w-4 mr-2" /> {downloading ? t('downloading_label') : t('download_file')}
                   </Button>
                 </div>
-              </div>
-
               {/* Comments Section (Fills remaining height) */}
               <div className="flex-1 flex flex-col min-h-0 border-t border-border/50">
                 <div className="px-6 py-4 flex flex-col h-full overflow-hidden">
@@ -574,6 +588,15 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                       >
                         {activeTab === 'versions' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
                         {t('versions') || 'Versions'} ({versions.length})
+                      </button>
+                    )}
+                    {targetType === 'document' && (
+                      <button
+                        onClick={() => { setActiveTab('history'); fetchFlagHistory(); }}
+                        className={cn("flex items-center gap-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors relative whitespace-nowrap", activeTab === 'history' ? "text-accent" : "text-muted-foreground hover:text-foreground")}
+                      >
+                        {activeTab === 'history' && <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
+                        {'Flag History'}
                       </button>
                     )}
                   </div>
@@ -662,6 +685,49 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                         )}
                                       </Button>
                                     )} */}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ) : activeTab === 'history' ? (
+                      <div className="flex flex-col h-full min-h-0">
+                        {loadingFlagHistory ? (
+                          <div className="text-center py-8 text-xs text-muted-foreground">Loading history...</div>
+                        ) : flagHistory.length === 0 ? (
+                          <div className="text-center py-8 text-xs text-muted-foreground">No flag changes recorded yet.</div>
+                        ) : (
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
+                            {flagHistory.map((entry: any, idx: number) => {
+                              const isDnf = entry.flag === 'do_not_follow';
+                              const isOn = entry.value === true;
+                              const accentColor = isDnf ? 'text-red-500' : 'text-blue-500';
+                              const bgColor = isDnf ? 'bg-red-500/10 border-red-500/20' : 'bg-blue-500/10 border-blue-500/20';
+                              const dotColor = isDnf ? 'bg-red-500' : 'bg-blue-500';
+                              const label = isDnf ? 'DO NOT FOLLOW' : 'ONLY FOR REFERENCE';
+                              const action = isOn ? 'Enabled' : 'Disabled';
+                              const date = new Date(entry.createdAt);
+                              const formattedDate = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+                              const formattedTime = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                              return (
+                                <div key={idx} className="flex gap-3 items-start">
+                                  <div className="flex flex-col items-center shrink-0 pt-1">
+                                    <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${dotColor}`} />
+                                    {idx < flagHistory.length - 1 && (
+                                      <div className="w-px flex-1 mt-1.5 bg-border/50 min-h-[24px]" />
+                                    )}
+                                  </div>
+                                  <div className={`flex-1 p-3 rounded-xl border ${bgColor} mb-1`}>
+                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                                      <span className={`text-[9px] font-black uppercase tracking-wider ${accentColor}`}>{label}</span>
+                                      <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${isOn ? (isDnf ? 'bg-red-500/20 border-red-500/30 text-red-500' : 'bg-blue-500/20 border-blue-500/30 text-blue-500') : 'bg-muted/50 border-border/50 text-muted-foreground'}`}>
+                                        {isOn ? '▲ ON' : '▼ OFF'}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] font-semibold text-foreground">{action} by {entry.changer?.name || 'Unknown'}</div>
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">{formattedDate} · {formattedTime}</div>
                                   </div>
                                 </div>
                               );

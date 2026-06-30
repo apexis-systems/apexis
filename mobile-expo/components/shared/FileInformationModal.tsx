@@ -18,7 +18,7 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatFileSize } from '@/helpers/format';
 import { useAuth } from '@/contexts/AuthContext';
-import { getFileVersions, promoteFile, deleteFile } from '../../services/fileService';
+import { getFileVersions, promoteFile, deleteFile, getFileFlagHistory } from '../../services/fileService';
 
 interface FileInformationModalProps {
     visible: boolean;
@@ -46,6 +46,8 @@ export default function FileInformationModal({
     const [loading, setLoading] = useState(false);
     const [promotingVersionId, setPromotingVersionId] = useState<number | null>(null);
     const [deletingVersionId, setDeletingVersionId] = useState<number | null>(null);
+    const [flagHistory, setFlagHistory] = useState<any[]>([]);
+    const [loadingFlagHistory, setLoadingFlagHistory] = useState(false);
 
     const fetchVersions = useCallback(async () => {
         if (file?.id) {
@@ -61,11 +63,30 @@ export default function FileInformationModal({
         }
     }, [file?.id]);
 
-    useEffect(() => {
-        if (visible) {
-            fetchVersions();
+    const fetchFlagHistory = useCallback(async () => {
+        if (file?.id) {
+            setLoadingFlagHistory(true);
+            try {
+                const data = await getFileFlagHistory(file.id);
+                setFlagHistory(data.history || []);
+            } catch (err) {
+                console.error("fetchFlagHistory mobile Error", err);
+            } finally {
+                setLoadingFlagHistory(false);
+            }
         }
-    }, [visible, fetchVersions]);
+    }, [file?.id]);
+
+    useEffect(() => {
+        if (visible && file?.id) {
+            fetchVersions();
+            fetchFlagHistory();
+        }
+        return () => {
+            setVersions([]);
+            setFlagHistory([]);
+        };
+    }, [visible, file?.id, fetchVersions, fetchFlagHistory]);
 
     const handlePromote = async (versionId: number) => {
         try {
@@ -220,7 +241,11 @@ export default function FileInformationModal({
                             </View>
 
                             {/* Scrollable Content */}
-                            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: Dimensions.get('window').height * 0.65 }}>
+                            <ScrollView 
+                                showsVerticalScrollIndicator={false} 
+                                style={{ maxHeight: Dimensions.get('window').height * 0.65 }}
+                                contentContainerStyle={{ paddingBottom: 50 }}
+                            >
                                 <View style={styles.content}>
                                     {/* Date and Time */}
                                     <Text style={[styles.dateText, { color: colors.text }]}>
@@ -342,6 +367,56 @@ export default function FileInformationModal({
                                                                             )}
                                                                         </TouchableOpacity>
                                                                     )} */}
+                                                                </View>
+                                                            </View>
+                                                        );
+                                                    })}
+                                                </View>
+                                            )}
+                                        </View>
+                                    )}
+
+                                    {/* DNF / OFR Flag History Section */}
+                                    {(file.file_type && !file.file_type.startsWith('image/')) && (
+                                        <View style={[styles.versionsSection, { borderTopColor: isDark ? '#2c2c2e' : '#f2f2f7' }]}>
+                                            <Text style={[styles.sectionTitle, { color: colors.text }]}>Flag History</Text>
+                                            {loadingFlagHistory ? (
+                                                <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 10 }} />
+                                            ) : flagHistory.length === 0 ? (
+                                                <Text style={{ color: colors.textMuted, fontSize: 13, marginVertical: 10 }}>No flag changes recorded yet.</Text>
+                                            ) : (
+                                                <View style={{ gap: 10 }}>
+                                                    {flagHistory.map((entry: any, idx: number) => {
+                                                        const isDnf = entry.flag === 'do_not_follow';
+                                                        const isOn = entry.value === true;
+                                                        const dotColor = isDnf ? '#ef4444' : '#3b82f6';
+                                                        const cardBg = isDnf
+                                                            ? (isDark ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.07)')
+                                                            : (isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.07)');
+                                                        const cardBorder = isDnf ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)';
+                                                        const flagLabel = isDnf ? 'DO NOT FOLLOW' : 'ONLY FOR REFERENCE';
+                                                        const actionLabel = isOn ? 'Enabled' : 'Disabled';
+                                                        const date = new Date(entry.createdAt);
+                                                        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                                        const dateStr = `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+                                                        const timeStr = `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+                                                        return (
+                                                            <View key={idx} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                                                                <View style={{ alignItems: 'center', paddingTop: 4 }}>
+                                                                    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dotColor }} />
+                                                                    {idx < flagHistory.length - 1 && (
+                                                                        <View style={{ width: 1, flex: 1, backgroundColor: isDark ? '#3a3a3c' : '#e5e5ea', marginTop: 4, minHeight: 24 }} />
+                                                                    )}
+                                                                </View>
+                                                                <View style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 2, backgroundColor: cardBg, borderColor: cardBorder }}>
+                                                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                                                                        <Text style={{ fontSize: 9, fontWeight: '800', color: dotColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>{flagLabel}</Text>
+                                                                        <View style={{ backgroundColor: isOn ? dotColor + '33' : (isDark ? '#2c2c2e' : '#f2f2f7'), paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: isOn ? dotColor + '55' : (isDark ? '#3a3a3c' : '#e5e5ea') }}>
+                                                                            <Text style={{ fontSize: 9, fontWeight: '800', color: isOn ? dotColor : colors.textMuted, textTransform: 'uppercase' }}>{isOn ? '▲ ON' : '▼ OFF'}</Text>
+                                                                        </View>
+                                                                    </View>
+                                                                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{actionLabel} by {entry.changer?.name || 'Unknown'}</Text>
+                                                                    <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{dateStr} at {timeStr}</Text>
                                                                 </View>
                                                             </View>
                                                         );

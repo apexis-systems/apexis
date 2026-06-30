@@ -413,7 +413,10 @@
             "viewLinkedAttachments": "View Linked Attachments",
             "sendMessage": "Send message",
             "failedToSendMessage": "Failed to send message",
-            "linkedFolders": "Linked Folders"
+            "linkedFolders": "Linked Folders",
+            "reassignSnag": "Reassign Snag",
+            "reassignedSnagSuccess": "Snag reassigned successfully",
+            "failedToReassignSnag": "Failed to reassign Snag"
         },
         "months": {
             "january": "January",
@@ -516,7 +519,10 @@
                 "open": "Open",
                 "closed": "Closed",
                 "overdue": "Overdue"
-            }
+            },
+            "reassignRfi": "Reassign RFI",
+            "reassignedSuccess": "RFI reassigned successfully",
+            "failedToReassign": "Failed to reassign RFI"
         },
         "projectReports": {
             "weekly": {

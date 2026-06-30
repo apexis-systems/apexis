@@ -124,6 +124,14 @@ db.file_snag_links.belongsTo(db.files, { foreignKey: 'file_id' });
 db.snags.hasMany(db.file_snag_links, { foreignKey: 'snag_id' });
 db.file_snag_links.belongsTo(db.snags, { foreignKey: 'snag_id' });
 
+// File <-> FileFlagHistory
+db.files.hasMany(db.file_flag_history, { foreignKey: 'file_id', as: 'flagHistory' });
+db.file_flag_history.belongsTo(db.files, { foreignKey: 'file_id' });
+
+// User <-> FileFlagHistory (who changed the flag)
+db.file_flag_history.belongsTo(db.users, { foreignKey: 'changed_by', as: 'changer' });
+db.users.hasMany(db.file_flag_history, { foreignKey: 'changed_by' });
+
 // File <-> Comment
 db.comments.belongsTo(db.files, { foreignKey: 'file_id' });
 db.files.hasMany(db.comments, { foreignKey: 'file_id' });
@@ -247,6 +255,7 @@ export const file_rfi_links = db.file_rfi_links;
 export const file_snag_links = db.file_snag_links;
 export const project_member_folders = db.project_member_folders;
 export const blocked_users = db.blocked_users;
+export const file_flag_history = db.file_flag_history;
 
 export { sequelize, Sequelize };
 export default db;
