@@ -52,6 +52,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const [promotingVersionId, setPromotingVersionId] = useState<number | string | null>(null);
   const [deletingVersionId, setDeletingVersionId] = useState<number | string | null>(null);
 
+  const parentFile = files[currentIndex];
+  const currentFile = localActiveFile || parentFile;
+  const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
+    ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
+  const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') ||
+    currentFile?.file_name?.toLowerCase().endsWith('.pdf');
+
   // Reset zoom, pan and rotation when changing files
   useEffect(() => {
     setZoom(1);
@@ -113,11 +120,12 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
         onUpdate(updatedFile);
       }
       fetchVersions();
+      fetchFlagHistory();
     } catch (e: any) {
       toast.error(t('failed_toggle_dnf') || 'Failed to toggle Do Not Follow');
     }
   };
-
+  
   const handleToggleOnlyForReference = async () => {
     try {
       const targetState = !currentFile.only_for_reference;
@@ -132,6 +140,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
         onUpdate(updatedFile);
       }
       fetchVersions();
+      fetchFlagHistory();
     } catch (e: any) {
       toast.error(t('failed_toggle_ofr') || 'Failed to toggle Only for Reference');
     }
@@ -178,13 +187,6 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const activeLinksSubTab = linkedSubTabs.find(s => s.key === linksSubTab)
     ? linksSubTab
     : (linkedSubTabs[0]?.key || 'rfi');
-
-  const parentFile = files[currentIndex];
-  const currentFile = localActiveFile || parentFile;
-  const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
-    ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
-  const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') ||
-    currentFile?.file_name?.toLowerCase().endsWith('.pdf');
 
   const fetchLinks = useCallback(async () => {
     if (currentFile?.id) {
@@ -563,6 +565,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     <Download className="h-4 w-4 mr-2" /> {downloading ? t('downloading_label') : t('download_file')}
                   </Button>
                 </div>
+              </div>
               {/* Comments Section (Fills remaining height) */}
               <div className="flex-1 flex flex-col min-h-0 border-t border-border/50">
                 <div className="px-6 py-4 flex flex-col h-full overflow-hidden">
