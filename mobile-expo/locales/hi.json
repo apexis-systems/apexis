@@ -412,7 +412,10 @@
             "noMessagesYet": "अभी तक कोई संदेश नहीं है",
             "sendMessage": "संदेश भेजें",
             "failedToSendMessage": "संदेश भेजने में विफल",
-            "linkedFolders": "लिंक्ड फोल्डर"
+            "linkedFolders": "लिंक्ड फोल्डर",
+            "reassignSnag": "कमी फिर से सौंपें",
+            "reassignedSnagSuccess": "कमी सफलतापूर्वक फिर से सौंपी गई",
+            "failedToReassignSnag": "कमी फिर से सौंपने में विफल"
         },
         "te": "తెలుగు",
         "months": {
@@ -515,7 +518,10 @@
                 "open": "खुला",
                 "closed": "बंद",
                 "overdue": "विलंबित"
-            }
+            },
+            "reassignRfi": "RFI फिर से सौंपें",
+            "reassignedSuccess": "RFI सफलतापूर्वक फिर से सौंपा गया",
+            "failedToReassign": "RFI फिर से सौंपने में विफल"
         },
         "projectReports": {
             "weekly": {

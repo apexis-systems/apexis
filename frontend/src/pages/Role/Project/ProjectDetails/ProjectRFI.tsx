@@ -1654,7 +1654,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t('assign_to_label')}</label>
-                        <Select value={newAssignee} onValueChange={setNewAssignee}>
+                        <Select value={newAssignee} onValueChange={setNewAssignee} disabled={submitting}>
                             <SelectTrigger><SelectValue placeholder={t('select_assignee_placeholder')} /></SelectTrigger>
                             <SelectContent>
                                 {assignees.map(a => (

@@ -412,7 +412,10 @@
             "noMessagesYet": "ఇంకా సందేశాలు లేవు",
             "sendMessage": "సందేశాన్ని పంపండి",
             "failedToSendMessage": "సందేశాన్ని పంపడం విఫలమైంది",
-            "linkedFolders": "లింక్ చేయబడిన ఫోల్డర్‌లు"
+            "linkedFolders": "లింక్ చేయబడిన ఫోల్డర్‌లు",
+            "reassignSnag": "స్నాగ్‌ని మళ్లీ కేటాయించు",
+            "reassignedSnagSuccess": "స్నాగ్ విజయవంతంగా మళ్లీ కేటాయించబడింది",
+            "failedToReassignSnag": "స్నాగ్‌ని మళ్లీ కేటాయించడం విఫలమైంది"
         },
         "te": "తెలుగు",
         "months": {
@@ -515,7 +518,10 @@
                 "open": "ఓపెన్",
                 "closed": "క్లోజ్డ్",
                 "overdue": "ఓవర్‌డ్యూ"
-            }
+            },
+            "reassignRfi": "RFIని మళ్లీ కేటాయించు",
+            "reassignedSuccess": "RFI విజయవంతంగా మళ్లీ కేటాయించబడింది",
+            "failedToReassign": "RFIని మళ్లీ కేటాయించడం విఫలమైంది"
         },
         "projectReports": {
             "weekly": {

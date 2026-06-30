@@ -78,11 +78,15 @@ export default function FileInformationModal({
     }, [file?.id]);
 
     useEffect(() => {
-        if (visible) {
+        if (visible && file?.id) {
             fetchVersions();
             fetchFlagHistory();
         }
-    }, [visible, fetchVersions, fetchFlagHistory]);
+        return () => {
+            setVersions([]);
+            setFlagHistory([]);
+        };
+    }, [visible, file?.id, fetchVersions, fetchFlagHistory]);
 
     const handlePromote = async (versionId: number) => {
         try {
@@ -237,7 +241,11 @@ export default function FileInformationModal({
                             </View>
 
                             {/* Scrollable Content */}
-                            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: Dimensions.get('window').height * 0.65 }}>
+                            <ScrollView 
+                                showsVerticalScrollIndicator={false} 
+                                style={{ maxHeight: Dimensions.get('window').height * 0.65 }}
+                                contentContainerStyle={{ paddingBottom: 50 }}
+                            >
                                 <View style={styles.content}>
                                     {/* Date and Time */}
                                     <Text style={[styles.dateText, { color: colors.text }]}>

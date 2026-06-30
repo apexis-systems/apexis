@@ -205,6 +205,7 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const [removeEditAudio, setRemoveEditAudio] = useState(false);
     const [assignees, setAssignees] = useState<Assignee[]>([]);
     const [showReassignModal, setShowReassignModal] = useState(false);
+    const [reassigningToId, setReassigningToId] = useState<number | null>(null);
 
     const [responseComment, setResponseComment] = useState("");
     const [responsePhotos, setResponsePhotos] = useState<string[]>([]);
@@ -2020,58 +2021,68 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
                                                     </TouchableOpacity>
                                                 </View>
                                                 <ScrollView style={{ maxHeight: 320 }}>
-                                                    {assignees.map((a) => (
-                                                        <TouchableOpacity
-                                                            key={a.id}
-                                                            onPress={async () => {
-                                                                if (!selectedSnag) return;
-                                                                setSubmitting(true);
-                                                                try {
-                                                                    const formData = new FormData();
-                                                                    formData.append('assigned_to', String(a.id));
-                                                                    const updated = await updateSnag(selectedSnag.id, formData);
-                                                                    setSnags(prev => prev.map(s => s.id === selectedSnag.id ? updated : s));
-                                                                    setSelectedSnag(updated);
-                                                                    setShowReassignModal(false);
-                                                                    Alert.alert(t('projectSnags.successTitle') || 'Success', t('projectSnags.successUpdate') || 'Snag reassigned successfully');
-                                                                } catch (err) {
-                                                                    console.error('Reassign Snag error', err);
-                                                                    Alert.alert(t('projectSnags.errorTitle') || 'Error', 'Failed to reassign Snag');
-                                                                } finally {
-                                                                    setSubmitting(false);
-                                                                }
-                                                            }}
-                                                            style={{
-                                                                flexDirection: 'row',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'space-between',
-                                                                paddingHorizontal: 16,
-                                                                paddingVertical: 14,
-                                                                borderBottomWidth: 1,
-                                                                borderBottomColor: colors.border,
-                                                                backgroundColor: editAssignedTo === a.id ? colors.primary + '10' : 'transparent',
-                                                            }}
-                                                        >
-                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                                                <View style={{
-                                                                    width: 30,
-                                                                    height: 30,
-                                                                    borderRadius: 15,
-                                                                    backgroundColor: colors.primary + '20',
+                                                    {assignees.map((a) => {
+                                                        const isThisUserReassigning = reassigningToId === a.id;
+                                                        const isAnyUserReassigning = reassigningToId !== null;
+                                                        return (
+                                                            <TouchableOpacity
+                                                                key={a.id}
+                                                                disabled={isAnyUserReassigning}
+                                                                onPress={async () => {
+                                                                    if (!selectedSnag) return;
+                                                                    setReassigningToId(a.id);
+                                                                    try {
+                                                                        const formData = new FormData();
+                                                                        formData.append('assigned_to', String(a.id));
+                                                                        const updated = await updateSnag(selectedSnag.id, formData);
+                                                                        setSnags(prev => prev.map(s => s.id === selectedSnag.id ? updated : s));
+                                                                        setSelectedSnag(updated);
+                                                                        setShowReassignModal(false);
+                                                                        Alert.alert(t('projectSnags.successTitle') || 'Success', t('projectSnags.successUpdate') || 'Snag reassigned successfully');
+                                                                    } catch (err) {
+                                                                        console.error('Reassign Snag error', err);
+                                                                        Alert.alert(t('projectSnags.errorTitle') || 'Error', 'Failed to reassign Snag');
+                                                                    } finally {
+                                                                        setReassigningToId(null);
+                                                                    }
+                                                                }}
+                                                                style={{
+                                                                    flexDirection: 'row',
                                                                     alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                }}>
-                                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
-                                                                        {a.name?.charAt(0)?.toUpperCase() || '?'}
+                                                                    justifyContent: 'space-between',
+                                                                    paddingHorizontal: 16,
+                                                                    paddingVertical: 14,
+                                                                    borderBottomWidth: 1,
+                                                                    borderBottomColor: colors.border,
+                                                                    backgroundColor: editAssignedTo === a.id ? colors.primary + '10' : 'transparent',
+                                                                    opacity: isAnyUserReassigning && !isThisUserReassigning ? 0.4 : 1,
+                                                                }}
+                                                            >
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                                    <View style={{
+                                                                        width: 30,
+                                                                        height: 30,
+                                                                        borderRadius: 15,
+                                                                        backgroundColor: colors.primary + '20',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                    }}>
+                                                                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                                                                            {a.name?.charAt(0)?.toUpperCase() || '?'}
+                                                                        </Text>
+                                                                    </View>
+                                                                    <Text style={{ fontSize: 14, color: editAssignedTo === a.id ? colors.primary : colors.text, fontWeight: editAssignedTo === a.id ? '700' : '400' }}>
+                                                                        {a.name}
                                                                     </Text>
                                                                 </View>
-                                                                <Text style={{ fontSize: 14, color: editAssignedTo === a.id ? colors.primary : colors.text, fontWeight: editAssignedTo === a.id ? '700' : '400' }}>
-                                                                    {a.name}
-                                                                </Text>
-                                                            </View>
-                                                            {editAssignedTo === a.id && <Feather name="check" size={16} color={colors.primary} />}
-                                                        </TouchableOpacity>
-                                                    ))}
+                                                                {isThisUserReassigning ? (
+                                                                    <ActivityIndicator size="small" color={colors.primary} />
+                                                                ) : (
+                                                                    editAssignedTo === a.id && <Feather name="check" size={16} color={colors.primary} />
+                                                                )}
+                                                            </TouchableOpacity>
+                                                        );
+                                                    })}
                                                 </ScrollView>
                                             </View>
                                         </TouchableOpacity>

@@ -370,6 +370,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
   const [activeTab, setActiveTab] = useState<'photos' | 'documents'>('photos');
   const [showReassignModal, setShowReassignModal] = useState(false);
+  const [reassigningToId, setReassigningToId] = useState<number | null>(null);
 
   const handleLinkFile = async (targetFileId: string | number) => {
     if (!selectedRFI) return;
@@ -2779,59 +2780,69 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                     </TouchableOpacity>
                   </View>
                   <ScrollView style={{ maxHeight: 320 }}>
-                    {assignees.map((a) => (
-                      <TouchableOpacity
-                        key={a.id}
-                        onPress={async () => {
-                          if (!selectedRFI) return;
-                          setSubmitting(true);
-                          try {
-                            const formData = new FormData();
-                            formData.append('assigned_to', String(a.id));
-                            const updated = await updateRFI(selectedRFI.id, formData);
-                            setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
-                            setSelectedRFI(updated);
-                            setShowReassignModal(false);
-                            Alert.alert(t('projectRfi.success'), t('projectRfi.reassignedSuccess') || 'RFI reassigned successfully');
-                          } catch (err) {
-                            console.error('Reassign RFI error', err);
-                            const { message: errMsg } = parseApiError(err, t('projectRfi.failedToReassign') || 'Failed to reassign RFI');
-                            Alert.alert(t('projectRfi.error'), errMsg);
-                          } finally {
-                            setSubmitting(false);
-                          }
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          paddingHorizontal: 16,
-                          paddingVertical: 14,
-                          borderBottomWidth: 1,
-                          borderBottomColor: colors.border,
-                          backgroundColor: assignedToId === a.id ? colors.primary + '10' : 'transparent',
-                        }}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <View style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: 15,
-                            backgroundColor: colors.primary + '20',
+                    {assignees.map((a) => {
+                      const isThisUserReassigning = reassigningToId === a.id;
+                      const isAnyUserReassigning = reassigningToId !== null;
+                      return (
+                        <TouchableOpacity
+                          key={a.id}
+                          disabled={isAnyUserReassigning}
+                          onPress={async () => {
+                            if (!selectedRFI) return;
+                            setReassigningToId(a.id);
+                            try {
+                              const formData = new FormData();
+                              formData.append('assigned_to', String(a.id));
+                              const updated = await updateRFI(selectedRFI.id, formData);
+                              setRfis(prev => prev.map(r => r.id === selectedRFI.id ? updated : r));
+                              setSelectedRFI(updated);
+                              setShowReassignModal(false);
+                              Alert.alert(t('projectRfi.success'), t('projectRfi.reassignedSuccess') || 'RFI reassigned successfully');
+                            } catch (err) {
+                              console.error('Reassign RFI error', err);
+                              const { message: errMsg } = parseApiError(err, t('projectRfi.failedToReassign') || 'Failed to reassign RFI');
+                              Alert.alert(t('projectRfi.error'), errMsg);
+                            } finally {
+                              setReassigningToId(null);
+                            }
+                          }}
+                          style={{
+                            flexDirection: 'row',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                          }}>
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
-                              {a.name?.charAt(0)?.toUpperCase() || '?'}
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 16,
+                            paddingVertical: 14,
+                            borderBottomWidth: 1,
+                            borderBottomColor: colors.border,
+                            backgroundColor: assignedToId === a.id ? colors.primary + '10' : 'transparent',
+                            opacity: isAnyUserReassigning && !isThisUserReassigning ? 0.4 : 1,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: 15,
+                              backgroundColor: colors.primary + '20',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                                {a.name?.charAt(0)?.toUpperCase() || '?'}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 14, color: assignedToId === a.id ? colors.primary : colors.text, fontWeight: assignedToId === a.id ? '700' : '400' }}>
+                              {a.name}
                             </Text>
                           </View>
-                          <Text style={{ fontSize: 14, color: assignedToId === a.id ? colors.primary : colors.text, fontWeight: assignedToId === a.id ? '700' : '400' }}>
-                            {a.name}
-                          </Text>
-                        </View>
-                        {assignedToId === a.id && <Feather name="check" size={16} color={colors.primary} />}
-                      </TouchableOpacity>
-                    ))}
+                          {isThisUserReassigning ? (
+                            <ActivityIndicator size="small" color={colors.primary} />
+                          ) : (
+                            assignedToId === a.id && <Feather name="check" size={16} color={colors.primary} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
                   </ScrollView>
                 </View>
               </TouchableOpacity>
