@@ -80,7 +80,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
       }
     };
     jumpToVersion();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialVersionFileId]);
 
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -104,9 +104,15 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
       const targetState = !currentFile.do_not_follow;
       await toggleDoNotFollow(currentFile.id, targetState);
       toast.success(t(targetState ? 'doc_marked_dnf' : 'doc_unmarked_dnf'));
+
+      const updatedFile = { ...currentFile, do_not_follow: targetState };
+      setLocalActiveFile(updatedFile);
+      setVersions(prev => prev.map(v => v.id === currentFile.id ? { ...v, do_not_follow: targetState } : v));
+
       if (onUpdate) {
-        onUpdate({ ...currentFile, do_not_follow: targetState });
+        onUpdate(updatedFile);
       }
+      fetchVersions();
     } catch (e: any) {
       toast.error(t('failed_toggle_dnf') || 'Failed to toggle Do Not Follow');
     }
@@ -117,9 +123,15 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
       const targetState = !currentFile.only_for_reference;
       await toggleOnlyForReference(currentFile.id, targetState);
       toast.success(t(targetState ? 'doc_marked_ofr' : 'doc_unmarked_ofr'));
+
+      const updatedFile = { ...currentFile, only_for_reference: targetState };
+      setLocalActiveFile(updatedFile);
+      setVersions(prev => prev.map(v => v.id === currentFile.id ? { ...v, only_for_reference: targetState } : v));
+
       if (onUpdate) {
-        onUpdate({ ...currentFile, only_for_reference: targetState });
+        onUpdate(updatedFile);
       }
+      fetchVersions();
     } catch (e: any) {
       toast.error(t('failed_toggle_ofr') || 'Failed to toggle Only for Reference');
     }
@@ -131,8 +143,8 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const isFilePhoto = (item: any) => {
     const name = (item.title || item.file_name || item.name || '').toLowerCase();
     return item.file_type?.startsWith('image/') ||
-        name.endsWith('.jpg') || name.endsWith('.jpeg') ||
-        name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
+      name.endsWith('.jpg') || name.endsWith('.jpeg') ||
+      name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
   };
 
   const linkedDocs = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && !isFilePhoto(i));
@@ -582,13 +594,13 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                               const isActiveVersion = currentFile.id === v.id;
                               const isCurrentVersion = v.is_current;
                               return (
-                                <div 
-                                  key={v.id} 
+                                <div
+                                  key={v.id}
                                   onClick={() => setLocalActiveFile(v)}
                                   className={cn(
                                     "flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer",
-                                    isActiveVersion 
-                                      ? "bg-accent/10 border-accent shadow-sm" 
+                                    isActiveVersion
+                                      ? "bg-accent/10 border-accent shadow-sm"
                                       : "bg-secondary/50 border-border/50 hover:bg-secondary"
                                   )}
                                 >
@@ -602,6 +614,16 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                           {t('current_version') || 'Active'}
                                         </span>
                                       )}
+                                      {v.do_not_follow && (
+                                        <span className="bg-red-500/10 text-red-600 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-red-500/20 uppercase tracking-wider">
+                                          {t('dnf_tag') || 'DNF'}
+                                        </span>
+                                      )}
+                                      {v.only_for_reference && (
+                                        <span className="bg-blue-500/10 text-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-blue-500/20 uppercase tracking-wider">
+                                          {t('ofr_tag') || 'ORF'}
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="text-sm font-semibold truncate text-foreground">{v.file_name}</div>
                                     <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -610,9 +632,9 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                                     {!isCurrentVersion && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
-                                      <Button 
-                                        size="sm" 
-                                        variant="ghost" 
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
                                         className="h-7 text-[10px] font-black uppercase text-accent hover:bg-accent/10 px-2"
                                         onClick={() => handlePromoteVersion(v.id)}
                                         disabled={promotingVersionId !== null || deletingVersionId !== null}
@@ -624,7 +646,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                         )}
                                       </Button>
                                     )}
-                                    {(user.role === 'admin' || user.role === 'superadmin' || String(v.created_by) === String(user.id)) && (
+                                    {/* {(user.role === 'admin' || user.role === 'superadmin' || String(v.created_by) === String(user.id)) && (
                                       <Button 
                                         size="icon" 
                                         variant="ghost" 
@@ -639,7 +661,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                           <Trash2 className="h-3.5 w-3.5" />
                                         )}
                                       </Button>
-                                    )}
+                                    )} */}
                                   </div>
                                 </div>
                               );
@@ -663,8 +685,8 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                                       onClick={() => setLinksSubTab(st.key)}
                                       className={cn(
                                         "flex-1 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider transition-all rounded-md whitespace-nowrap",
-                                        isActive 
-                                          ? `${st.color} ${st.bg} shadow-sm border border-border/40 font-black` 
+                                        isActive
+                                          ? `${st.color} ${st.bg} shadow-sm border border-border/40 font-black`
                                           : "text-muted-foreground hover:text-foreground hover:bg-muted/10 border border-transparent"
                                       )}
                                     >

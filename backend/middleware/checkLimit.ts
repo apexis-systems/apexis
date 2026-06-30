@@ -46,7 +46,8 @@ export const checkLimit = (type: LimitType) => {
           let projectId =
             req.body?.project_id ||
             req.query?.project_id ||
-            req.body?.projectId;
+            req.body?.projectId ||
+            req.params.project_id;
 
           // Special case for handover exports where project ID is in the URL path
           if (!projectId && type === "export_handover") {
@@ -158,9 +159,9 @@ export const checkLimit = (type: LimitType) => {
           const requestedRole = req.body?.role;
           if (["contributor", "consultant", "vendor"].includes(requestedRole)) {
             currentUsage = await users.count({
-              where: { 
-                organization_id: org.id, 
-                role: { [Op.in]: ["contributor", "consultant", "vendor"] } 
+              where: {
+                organization_id: org.id,
+                role: { [Op.in]: ["contributor", "consultant", "vendor"] }
               },
             });
             limit = plan.contributor_limit;

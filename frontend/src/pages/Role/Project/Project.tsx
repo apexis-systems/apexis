@@ -182,9 +182,9 @@ export default function Project({ id }: ProjectProps) {
         { key: 'overview' as TabKey, label: t('project_overview'), icon: LayoutDashboard, hideForConsultantVendor: true },
         { key: 'documents' as TabKey, label: t('documents'), icon: FileText },
         { key: 'photos' as TabKey, label: t('photos'), icon: Camera },
-        { key: 'reports' as TabKey, label: t('reports_label'), icon: ClipboardList, adminOnly: true, hideForConsultantVendor: true },
+        { key: 'reports' as TabKey, label: t('reports_label'), icon: ClipboardList, adminOnly: false, hideForConsultantVendor: true },
         { key: 'snags' as TabKey, label: t('snag_list'), icon: AlertTriangle, hideForConsultantVendor: true },
-        { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle, adminOnly: true, hideForConsultantVendor: true },
+        { key: 'rfi' as TabKey, label: 'RFI', icon: HelpCircle, adminOnly: false, hideForConsultantVendor: true },
         { key: 'manuals' as TabKey, label: t('manuals'), icon: BookOpen },
     ];
 
@@ -195,7 +195,7 @@ export default function Project({ id }: ProjectProps) {
     
     let visibleNav = navItems.filter((item) => {
         if (item.adminOnly && isClient) return false;
-        if (item.key === 'rfi' && (isConsultantVendor || isContributor)) return true;
+        if (item.key === 'rfi' && (isConsultantVendor || isContributor || isClient)) return true;
         if (item.hideForConsultantVendor && isConsultantVendor) return false;
         if (item.adminOnly && !['admin', 'superadmin'].includes(user?.role || '')) return false;
         return true;

@@ -292,6 +292,16 @@ export default function FileInformationModal({
                                                                                 <Text style={{ color: '#34c759', fontSize: 9, fontWeight: '700' }}>ACTIVE</Text>
                                                                             </View>
                                                                         )}
+                                                                        {v.do_not_follow && (
+                                                                            <View style={{ backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                                                <Text style={{ color: '#ef4444', fontSize: 9, fontWeight: '700' }}>DNF</Text>
+                                                                            </View>
+                                                                        )}
+                                                                        {v.only_for_reference && (
+                                                                            <View style={{ backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                                                <Text style={{ color: '#3b82f6', fontSize: 9, fontWeight: '700' }}>OFR</Text>
+                                                                            </View>
+                                                                        )}
                                                                     </View>
                                                                     <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 2 }}>{v.file_name}</Text>
                                                                     <Text style={{ fontSize: 10, color: colors.textMuted }}>
@@ -319,7 +329,7 @@ export default function FileInformationModal({
                                                                             )}
                                                                         </TouchableOpacity>
                                                                     )}
-                                                                    {(user?.role === 'admin' || user?.role === 'superadmin' || String(v.created_by) === String(user?.id)) && (
+                                                                    {/* {(user?.role === 'admin' || user?.role === 'superadmin' || String(v.created_by) === String(user?.id)) && (
                                                                         <TouchableOpacity 
                                                                             onPress={() => handleDelete(v.id)} 
                                                                             style={{ padding: 6 }}
@@ -331,7 +341,7 @@ export default function FileInformationModal({
                                                                                 <Feather name="trash-2" size={16} color="#ef4444" />
                                                                             )}
                                                                         </TouchableOpacity>
-                                                                    )}
+                                                                    )} */}
                                                                 </View>
                                                             </View>
                                                         );

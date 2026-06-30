@@ -188,7 +188,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
         })}
       </div>
 
-      {userRole !== 'client' && (
+      {/* {userRole !== 'client' && ( */}
         <button
           onClick={handleGenerate}
           disabled={generating}
@@ -197,7 +197,7 @@ const ProjectReports = ({ project, userRole }: Props) => {
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <IconForKey type={activeType} />}
           {generating ? t('generating_label') : t('generate_report_btn').replace('{type}', t(activeType + '_label'))}
         </button>
-      )}
+      {/* )} */}
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-accent" /></div>

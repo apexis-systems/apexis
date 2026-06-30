@@ -101,7 +101,7 @@ export default function EditProjectModal({
                             id="name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            maxLength={25}
+                            maxLength={35}
                             required
                         />
                     </div>
