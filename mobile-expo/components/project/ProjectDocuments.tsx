@@ -76,6 +76,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         }
     }, [selectedFolder, onFolderChange]);
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            breadcrumbsScrollRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [selectedFolder]);
+
     // Sync selectedFolder whenever the deep-link prop changes.
     // useState(initialFolderId) only runs on first mount — this effect handles
     // subsequent navigations while the component stays mounted in the FlatList.
@@ -300,6 +307,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
     const mainScrollRef = useRef<ScrollView>(null);
+    const breadcrumbsScrollRef = useRef<ScrollView>(null);
 
     const [showRenameFile, setShowRenameFile] = useState(false);
     const [renamingFileId, setRenamingFileId] = useState<number | null>(null);
@@ -2263,7 +2271,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         </TouchableOpacity>
                     )}
                     <Feather name="folder" size={16} color={colors.primary} />
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                    <ScrollView
+                        ref={breadcrumbsScrollRef}
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={{ flex: 1 }}
+                        onContentSizeChange={() => {
+                            breadcrumbsScrollRef.current?.scrollToEnd({ animated: true });
+                        }}
+                    >
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <TouchableOpacity onPress={(() => setSelectedFolder(null))}>
                                 <View style={{ paddingVertical: 4 }}>
