@@ -209,7 +209,7 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
 
     return (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
-            {userRole !== 'client' && (
+            {/* {userRole !== 'client' && ( */}
                 <TouchableOpacity
                     onPress={handleGenerate}
                     disabled={generating}
@@ -224,7 +224,7 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
                     </Text>
                 </TouchableOpacity>
 
-            )}
+            {/* )} */}
 
             <View style={{ gap: 8 }}>
                 {reports.map((report) => (

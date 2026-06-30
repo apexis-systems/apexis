@@ -958,7 +958,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         <Text style={{ color: '#888', fontSize: 8 }}>{formatCommentTime(c.createdAt)}</Text>
                         {c.is_edited && <Text style={{ color: colors.primary, fontSize: 8, opacity: 0.7 }}>({t('projectPhotos.edited', 'Edited')})</Text>}
                     </View>
-                    
+
                     {/* Buttons / Actions */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         {!isReply && !c.is_deleted && (
@@ -2086,7 +2086,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         zIndex: 5,
                                                     }}
                                                 />
-                                                <View style={{ marginBottom: 8 }}>
+                                                <View style={{ marginBottom: 6 }}>
                                                     <Feather
                                                         name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : isConfidentialFolder ? "shield" : "folder"}
                                                         size={(isConfirmationFolder || isConfidentialFolder) ? 32 : 36}
@@ -2098,7 +2098,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         <Feather name="check" size={10} color="#fff" />
                                                     </View>
                                                 )}
-                                                <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{isConfirmationFolder ? "Confirmations" : folder.name}</Text>
+                                                <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{isConfirmationFolder ? "Confirmations" : folder.name}</Text>
                                                 <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                                     {subcount > 0
                                                         ? t('projectPhotos.photosFoldersCount', { photoCount: count, folderCount: subcount })

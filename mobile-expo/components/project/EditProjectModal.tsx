@@ -107,12 +107,12 @@ export default function EditProjectModal({ isOpen, onClose, project, onUpdate, i
                     >
                         <ScrollView style={styles.content}>
                             <View style={styles.inputGroup}>
-                                <Text style={[styles.label, { color: colors.textMuted }]}>Project Name (max 25)</Text>
+                                <Text style={[styles.label, { color: colors.textMuted }]}>Project Name (max 35)</Text>
                                 <TextInput
                                     style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
                                     value={name}
                                     onChangeText={setName}
-                                    maxLength={25}
+                                    maxLength={35}
                                     placeholder="Enter project name"
                                     placeholderTextColor="#888"
                                 />

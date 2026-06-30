@@ -46,7 +46,7 @@
             "projectLimitMessage": "आप अपनी प्रोजेक्ट सीमा तक पहुँच गए हैं। अधिक प्रोजेक्ट बनाने के लिए कृपया अपना प्लान अपग्रेड करें।",
             "upgrade": "अपग्रेड करें",
             "createNewProject": "नया प्रोजेक्ट बनाएं",
-            "projectNameLabel": "प्रोजेक्ट का नाम (अधिकतम 25)",
+            "projectNameLabel": "प्रोजेक्ट का नाम (अधिकतम 35)",
             "projectNamePlaceholder": "जैसे: अल्फा टॉवर",
             "companyNameLabel": "कंपनी का नाम/क्लाइंट का नाम (अधिकतम 50)",
             "companyNamePlaceholder": "कंपनी/क्लाइंट का नाम दर्ज करें",

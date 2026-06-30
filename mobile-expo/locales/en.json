@@ -46,7 +46,7 @@
             "projectLimitMessage": "You have reached your project limit. Please upgrade your plan to create more projects.",
             "upgrade": "Upgrade",
             "createNewProject": "Create New Project",
-            "projectNameLabel": "Project Name (max 25)",
+            "projectNameLabel": "Project Name (max 35)",
             "projectNamePlaceholder": "E.g. Alpha Tower",
             "companyNameLabel": "Company Name/Client Name (max 50)",
             "companyNamePlaceholder": "Enter Company/Client Name",

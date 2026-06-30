@@ -209,7 +209,7 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
     return (
         <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
             <View style={{ padding: 16 }}>
-                {userRole !== 'client' && (
+                {/* {userRole !== 'client' && ( */}
                     <TouchableOpacity
                         onPress={handleGenerate}
                         disabled={generating}
@@ -230,7 +230,7 @@ export default function ProjectMonthlyReports({ project, userRole }: Props) {
                         </Text>
                     </TouchableOpacity>
 
-                )}
+                {/* )} */}
 
                 {reports.map((report) => (
                     <View key={report.id} style={{ marginBottom: 12, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' }}>
