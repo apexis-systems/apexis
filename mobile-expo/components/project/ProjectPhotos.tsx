@@ -58,6 +58,13 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     }, [selectedFolder, onFolderChange]);
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            breadcrumbsScrollRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [selectedFolder]);
+
     // Sync selectedFolder whenever the deep-link prop changes.
     // useState(initialFolderId) only runs on first mount — this effect handles
     // subsequent navigations while the component stays mounted in the FlatList.
@@ -104,6 +111,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [sharing, setSharing] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     const isUserScrollingRef = useRef(false);
+    const breadcrumbsScrollRef = useRef<ScrollView>(null);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [showInfoModal, setShowInfoModal] = useState(false);
@@ -1741,7 +1749,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                 </TouchableOpacity>
                             )}
                             <Feather name="folder" size={16} color={colors.primary} />
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                            <ScrollView
+                                ref={breadcrumbsScrollRef}
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                style={{ flex: 1 }}
+                                onContentSizeChange={() => {
+                                    breadcrumbsScrollRef.current?.scrollToEnd({ animated: true });
+                                }}
+                            >
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     <TouchableOpacity onPress={() => setSelectedFolder(null)}>
                                         <View style={{ paddingVertical: 4 }}>

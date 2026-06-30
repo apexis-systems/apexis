@@ -874,7 +874,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                 return (
                   <div
                     key={doc.id}
-                    className={`relative flex flex-col items-center gap-1 p-3 h-[160px] rounded-lg bg-card border transition-colors cursor-pointer group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
+                    className={`relative flex flex-col items-center gap-1 p-3 min-h-[160px] h-auto rounded-lg bg-card border transition-colors cursor-pointer group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
                     onClick={() => {
                       if (isSelectionMode) toggleSelection('file', doc.id);
                       else setViewerState({ open: true, index: sortedDocs.indexOf(doc) });
@@ -885,19 +885,19 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                         <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', doc.id)} />
                       </div>
                     )}
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950/30' : 'bg-blue-50 dark:bg-blue-950/30'}`}>
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${doc.file_type.includes('pdf') ? 'bg-red-50 dark:bg-red-950/30' : 'bg-blue-50 dark:bg-blue-950/30'}`}>
                       <FileText className={`h-6 w-6 ${doc.file_type.includes('pdf') ? 'text-red-500' : 'text-blue-500'}`} />
                     </div>
-                    <span className="text-[10px] font-semibold text-center leading-tight line-clamp-2 px-1 mt-1">
+                    <span className="text-[10px] font-semibold text-center leading-normal line-clamp-2 px-1 mt-1 break-all shrink-0">
                       {doc.file_name}
                     </span>
-                    <span className="text-[9px] text-muted-foreground mt-0.5">
+                    <span className="text-[9px] text-muted-foreground mt-0.5 shrink-0">
                       {formatFileSize(doc.file_size_mb)}
                     </span>
 
                     {/* Version badge (grid view) */}
                     {(versionCache[String(doc.id)] ? versionCache[String(doc.id)].length > 1 : (doc.version_count > 1)) && (
-                      <div className="relative mt-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="relative mt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={(e) => handleVersionBadgeClick(e, doc.id)}
                           className="flex items-center gap-0.5 bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 rounded-full px-1.5 py-0.5 text-[8px] font-bold transition-colors"
@@ -951,7 +951,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                       if (assigneesList.length === 0) return null;
                       if (assigneesList.length > 1) {
                         return (
-                          <div className="relative mt-1" onClick={(e) => e.stopPropagation()}>
+                          <div className="relative mt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => setOpenAssigneeDocId(openAssigneeDocId === doc.id ? null : doc.id)}
                               className="flex items-center gap-1 bg-secondary/50 hover:bg-secondary border border-border/50 rounded-full px-2 py-0.5 text-[8px] font-semibold text-muted-foreground transition-colors max-w-full"
@@ -989,7 +989,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                         const singleA = assigneesList[0];
                         const seen = isAssigneeSeen(doc, singleA.id);
                         return (
-                          <div className="flex items-center gap-1 mt-1 bg-secondary/50 px-1.5 py-0.5 rounded-full border border-border/50 max-w-[90%]">
+                          <div className="flex items-center gap-1 mt-1 bg-secondary/50 px-1.5 py-0.5 rounded-full border border-border/50 max-w-[90%] shrink-0">
                             <UserIcon className="h-2 w-2 text-muted-foreground" />
                             <span className="text-[8px] font-medium truncate text-muted-foreground">{singleA.name}</span>
                             {seen && (
@@ -1343,7 +1343,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
             onUpdate={(updatedFile) => setDocs(prev => prev.map(d => {
               const dRoot = d.parent_file_id || d.id;
               const uRoot = updatedFile.parent_file_id || updatedFile.id;
-              return dRoot === uRoot ? updatedFile : d;
+              if (dRoot === uRoot) {
+                if (updatedFile.id === d.id || updatedFile.is_current) {
+                  return updatedFile;
+                }
+              }
+              return d;
             }))}
             targetType="document"
             projectId={project.id}

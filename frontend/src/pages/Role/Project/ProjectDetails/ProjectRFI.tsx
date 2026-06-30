@@ -812,7 +812,7 @@ export default function ProjectRFI({ project, onUpdate }: ProjectRFIProps) {
             // Update the selected RFI view if it's the one being modified
             if (selectedRFI?.id === id) {
                 setSelectedRFI({ ...selectedRFI, status });
-            }            toast.success(t('status_updated_msg'));
+            }  
         } catch (err) {
             toast.error(t('failed_update_status'));
         }
