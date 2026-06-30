@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import 'multer';
 import db, { sequelize } from "../models/index.ts";
-const { files, folders, project_members, activities, users, organizations, projects, file_links, file_rfi_links, file_snag_links, project_member_folders } = db;
+const { files, folders, project_members, activities, users, organizations, projects, file_links, file_rfi_links, file_snag_links, project_member_folders, file_flag_history } = db;
 
 import { Op, Transaction } from "sequelize";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
@@ -1113,6 +1113,30 @@ export const bulkUpdateFiles = async (req: Request, res: Response) => {
             where: { id: ids }
         });
 
+        // Record flag history for do_not_follow / only_for_reference changes
+        if ((do_not_follow !== undefined || only_for_reference !== undefined) && ids.length > 0) {
+            const historyRows: any[] = [];
+            for (const fileId of ids) {
+                if (do_not_follow !== undefined) {
+                    historyRows.push({
+                        file_id: fileId,
+                        flag: 'do_not_follow',
+                        value: do_not_follow,
+                        changed_by: authUser.user_id,
+                    });
+                }
+                if (only_for_reference !== undefined) {
+                    historyRows.push({
+                        file_id: fileId,
+                        flag: 'only_for_reference',
+                        value: only_for_reference,
+                        changed_by: authUser.user_id,
+                    });
+                }
+            }
+            await file_flag_history.bulkCreate(historyRows);
+        }
+
         // Activity logging (simplified)
         if (ids.length > 0) {
             const firstFile = await files.findByPk(ids[0]);
@@ -1213,6 +1237,28 @@ export const updateFile = async (req: Request, res: Response) => {
             description: `Updated file: ${file.file_name}`,
             metadata: { fileId: file.id, updates: Object.keys(updateData), type: file.file_type?.startsWith('image/') ? 'photos' : 'documents' }
         });
+
+        // Record flag history for do_not_follow / only_for_reference changes
+        if (do_not_follow !== undefined || only_for_reference !== undefined) {
+            const historyRows: any[] = [];
+            if (do_not_follow !== undefined) {
+                historyRows.push({
+                    file_id: file.id,
+                    flag: 'do_not_follow',
+                    value: do_not_follow,
+                    changed_by: authUser.user_id,
+                });
+            }
+            if (only_for_reference !== undefined) {
+                historyRows.push({
+                    file_id: file.id,
+                    flag: 'only_for_reference',
+                    value: only_for_reference,
+                    changed_by: authUser.user_id,
+                });
+            }
+            await file_flag_history.bulkCreate(historyRows);
+        }
 
         res.status(200).json({ message: "File updated successfully", file });
     } catch (error) {
@@ -1961,6 +2007,33 @@ export const promoteFile = async (req: Request, res: Response) => {
     } catch (error) {
         await t.rollback();
         console.error("Promote File Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+export const getFileFlagHistory = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { fileId } = req.params;
+        const file = await files.findByPk(fileId);
+        if (!file) return res.status(404).json({ error: "File not found" });
+
+        const history = await file_flag_history.findAll({
+            where: { file_id: fileId },
+            include: [
+                {
+                    model: users,
+                    as: 'changer',
+                    attributes: ['id', 'name', 'profile_pic'],
+                },
+            ],
+            order: [['createdAt', 'DESC']],
+        });
+
+        res.status(200).json({ history });
+    } catch (error) {
+        console.error("Get File Flag History Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
