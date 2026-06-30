@@ -32,6 +32,7 @@ const UserManagement = () => {
     const [copied, setCopied] = useState<string | null>(null);
 
     const [deleteUserObj, setDeleteUserObj] = useState<any>(null);
+    const [deleteStep, setDeleteStep] = useState<'confirm' | 'blockScope'>('confirm');
     const [deleting, setDeleting] = useState(false);
 
     // Blocked users state
@@ -143,13 +144,24 @@ const UserManagement = () => {
 
 
 
-    const handleDelete = async (block: boolean = false) => {
+    const handleDelete = async (block: boolean = false, blockScope?: 'project' | 'org') => {
         if (!deleteUserObj) return;
         setDeleting(true);
         try {
-            await deleteUser(deleteUserObj.id, block);
+            // Resolve project ID context if project blocking requested
+            let targetProjectId = undefined;
+            if (block && blockScope === 'project') {
+                if (filterProject !== 'all') {
+                    targetProjectId = filterProject;
+                } else if (deleteUserObj.project_members?.length > 0) {
+                    targetProjectId = deleteUserObj.project_members[0].project_id;
+                }
+            }
+
+            await deleteUser(deleteUserObj.id, block, blockScope, targetProjectId);
             toast.success(t('remove_access_success'));
             setDeleteUserObj(null);
+            setDeleteStep('confirm');
             fetchUsers();
             if (activeTab === 'blocked') {
                 fetchBlockedUsers();
@@ -482,8 +494,8 @@ const UserManagement = () => {
                                                 {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                {!u.is_primary && u.id !== user.id && u.role !== 'admin' && u.role !== 'superadmin' && (
-                                                    <button onClick={() => setDeleteUserObj(u)} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors">
+                                                {!u.is_primary && u.id !== user.id && (u.base_role || u.role) !== 'admin' && (u.base_role || u.role) !== 'superadmin' && (
+                                                    <button onClick={() => { setDeleteUserObj(u); setDeleteStep('confirm'); }} className="rounded-lg p-2 hover:bg-destructive/10 transition-colors">
                                                         <Trash2 className="h-4 w-4 text-destructive" />
                                                     </button>
                                                 )}
@@ -533,8 +545,19 @@ const UserManagement = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold uppercase w-fit">
-                                                Blocked
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-bold uppercase w-fit border border-destructive/20">
+                                                    Blocked
+                                                </div>
+                                                {u.project_id ? (
+                                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-[9px] font-bold uppercase w-fit border border-amber-500/20">
+                                                        Project: {u.project?.name || 'Project'}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600/10 text-red-600 text-[9px] font-bold uppercase w-fit border border-red-600/20">
+                                                        Full Org
+                                                    </div>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-xs text-muted-foreground font-medium">
@@ -567,31 +590,63 @@ const UserManagement = () => {
             {/* Delete Confirmation */}
             <Dialog open={!!deleteUserObj} onOpenChange={(open) => !open && setDeleteUserObj(null)}>
                 <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{t('remove_access_title')}</DialogTitle>
-                        <DialogDescription>
-                            {t('remove_access_confirm').replace('{name}', deleteUserObj?.name || deleteUserObj?.email || deleteUserObj?.phone_number || '')}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="gap-2 flex flex-col sm:flex-row sm:justify-end">
-                        <Button variant="ghost" onClick={() => setDeleteUserObj(null)} disabled={deleting}>{t('cancel')}</Button>
-                        <Button
-                            variant="outline"
-                            onClick={() => handleDelete(false)}
-                            disabled={deleting}
-                            className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
-                        >
-                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('just_delete')}
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={() => handleDelete(true)}
-                            disabled={deleting}
-                            className="rounded-xl px-6 bg-red-600 hover:bg-red-700"
-                        >
-                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('block_and_delete')}
-                        </Button>
-                    </DialogFooter>
+                    {deleteStep === 'confirm' ? (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>{t('remove_access_title')}</DialogTitle>
+                                <DialogDescription>
+                                    {t('remove_access_confirm').replace('{name}', deleteUserObj?.name || deleteUserObj?.email || deleteUserObj?.phone_number || '')}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter className="gap-2 flex flex-col sm:flex-row sm:justify-end">
+                                <Button variant="ghost" onClick={() => setDeleteUserObj(null)} disabled={deleting}>{t('cancel')}</Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => handleDelete(false)}
+                                    disabled={deleting}
+                                    className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
+                                >
+                                    {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('just_delete')}
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    onClick={() => setDeleteStep('blockScope')}
+                                    disabled={deleting}
+                                    className="rounded-xl px-6 bg-red-600 hover:bg-red-700"
+                                >
+                                    {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('block_and_delete')}
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    ) : (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Block Scope Selection</DialogTitle>
+                                <DialogDescription>
+                                    Do you want to block this user from this project only, or from the whole organization?
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter className="gap-2 flex flex-col sm:flex-row sm:justify-end">
+                                <Button variant="ghost" onClick={() => setDeleteStep('confirm')} disabled={deleting}>Back</Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => handleDelete(true, 'project')}
+                                    disabled={deleting}
+                                    className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
+                                >
+                                    {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'This Project Only'}
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    onClick={() => handleDelete(true, 'org')}
+                                    disabled={deleting}
+                                    className="rounded-xl px-6 bg-red-600 hover:bg-red-700"
+                                >
+                                    {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Whole Org'}
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>

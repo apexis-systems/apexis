@@ -48,14 +48,24 @@ export const inviteUser = async (req: Request, res: Response) => {
             const isBlocked = await blocked_users.findOne({
                 where: {
                     organization_id: authUser.organization_id,
-                    [Op.or]: [
-                        normalizedEmail ? { email: normalizedEmail } : null,
-                        normalizedPhone ? { phone_number: normalizedPhone } : null
-                    ].filter(Boolean) as any[]
+                    [Op.and]: [
+                        actualProjectId ? {
+                            [Op.or]: [
+                                { project_id: null },
+                                { project_id: actualProjectId }
+                            ]
+                        } : { project_id: null },
+                        {
+                            [Op.or]: [
+                                normalizedEmail ? { email: normalizedEmail } : null,
+                                normalizedPhone ? { phone_number: normalizedPhone } : null
+                            ].filter(Boolean) as any[]
+                        }
+                    ]
                 }
             });
             if (isBlocked) {
-                return res.status(400).json({ error: "This user is blocked in this organization. Please unblock them first." });
+                return res.status(400).json({ error: isBlocked.project_id ? "This user is blocked in this project." : "This user is blocked in this organization. Please unblock them first." });
             }
         }
 
@@ -330,6 +340,7 @@ export const getOrgUsers = async (req: Request, res: Response) => {
                 }
             });
 
+            userJson.base_role = u.role;
             return userJson;
         }));
 
@@ -421,6 +432,8 @@ export const getProjectsUsers = async (req: Request, res: Response) => {
                 }
             });
 
+            userJson.base_role = u.role;
+
             if (userJson.id === authUser.user_id) {
                 userJson.role = 'admin';
             } else {
@@ -454,9 +467,15 @@ export const deleteUser = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "User not found" });
         }
 
+        const blockScope = req.query.blockScope || 'org'; // 'project' or 'org'
+        const targetProjectId = req.query.projectId ? Number(req.query.projectId) : null;
+
         if (req.query.block === 'true') {
             if (userToDelete.email || userToDelete.phone_number) {
-                const whereClause: any = { organization_id: authUser.organization_id };
+                const whereClause: any = { 
+                    organization_id: authUser.organization_id,
+                    project_id: (blockScope === 'project' && targetProjectId) ? targetProjectId : null
+                };
                 if (userToDelete.email && userToDelete.phone_number) {
                     whereClause[Op.or] = [
                         { email: userToDelete.email },
@@ -472,7 +491,8 @@ export const deleteUser = async (req: Request, res: Response) => {
                     await blocked_users.create({
                         organization_id: authUser.organization_id,
                         email: userToDelete.email || null,
-                        phone_number: userToDelete.phone_number || null
+                        phone_number: userToDelete.phone_number || null,
+                        project_id: (blockScope === 'project' && targetProjectId) ? targetProjectId : null
                     }, { transaction: t });
                 }
             }
@@ -496,11 +516,20 @@ export const deleteUser = async (req: Request, res: Response) => {
         });
         const ownedProjectIds = ownedProjects.map((p: any) => p.id);
 
+        let projectsToProcess = ownedProjectIds;
+        if (blockScope === 'project' && targetProjectId) {
+            if (!ownedProjectIds.includes(targetProjectId)) {
+                await t.rollback();
+                return res.status(403).json({ error: "Forbidden: Project context mismatch" });
+            }
+            projectsToProcess = [targetProjectId];
+        }
+
         // 2. Find memberships for this user in THESE projects
         const memberships = await project_members.findAll({
             where: { 
                 user_id: id,
-                project_id: { [Op.in]: ownedProjectIds }
+                project_id: { [Op.in]: projectsToProcess }
             },
             attributes: ['project_id'],
             transaction: t,
@@ -511,17 +540,17 @@ export const deleteUser = async (req: Request, res: Response) => {
         await project_members.destroy({ 
             where: { 
                 user_id: id, 
-                project_id: { [Op.in]: ownedProjectIds }
+                project_id: { [Op.in]: projectsToProcess }
             }, 
             transaction: t 
         });
         
-        if (ownedProjectIds.length > 0) {
+        if (projectsToProcess.length > 0) {
             await room_members.destroy({ 
                 where: { 
                     user_id: id,
                     room_id: {
-                        [Op.in]: Sequelize.literal(`(SELECT id FROM rooms WHERE project_id IN (${ownedProjectIds.join(',')}))`)
+                        [Op.in]: Sequelize.literal(`(SELECT id FROM rooms WHERE project_id IN (${projectsToProcess.join(',')}))`)
                     }
                 }, 
                 transaction: t 
@@ -531,7 +560,7 @@ export const deleteUser = async (req: Request, res: Response) => {
             await snags.update({ assigned_to: null }, { 
                 where: { 
                     assigned_to: id,
-                    project_id: { [Op.in]: ownedProjectIds }
+                    project_id: { [Op.in]: projectsToProcess }
                 }, 
                 transaction: t 
             });
@@ -539,15 +568,17 @@ export const deleteUser = async (req: Request, res: Response) => {
             await rfis.update({ assigned_to: null }, { 
                 where: { 
                     assigned_to: id,
-                    project_id: { [Op.in]: ownedProjectIds }
+                    project_id: { [Op.in]: projectsToProcess }
                 }, 
                 transaction: t 
             });
         }
 
-        // 5. Remove from organization (un-link)
-        if (userToDelete.organization_id === authUser.organization_id) {
-            await userToDelete.update({ organization_id: null }, { transaction: t });
+        // 5. Remove from organization (un-link) ONLY if org-wide block/delete
+        if (blockScope === 'org') {
+            if (userToDelete.organization_id === authUser.organization_id) {
+                await userToDelete.update({ organization_id: null }, { transaction: t });
+            }
         }
 
         // 6. Notify affected projects
@@ -722,6 +753,9 @@ export const getBlockedUsers = async (req: Request, res: Response) => {
         
         const blocked = await blocked_users.findAll({
             where: { organization_id: authUser.organization_id },
+            include: [
+                { model: projects, attributes: ['id', 'name'] }
+            ],
             order: [['createdAt', 'DESC']]
         });
         

@@ -49,6 +49,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | number | null>(null);
   const [deleteMemberObj, setDeleteMemberObj] = useState<any | null>(null);
+  const [deleteStep, setDeleteStep] = useState<'confirm' | 'blockScope'>('confirm');
 
   // Consultant/Vendor Invite Modal States
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -156,13 +157,14 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
     }
   };
 
-  const handleRemoveMember = async (member: any, block: boolean = false) => {
+  const handleRemoveMember = async (member: any, block: boolean = false, blockScope?: 'project' | 'org') => {
     if (!project?.id || !member?.user?.id) return;
     try {
       setRemovingMemberId(member.user.id);
-      await removeProjectMember(project.id, member.user.id, block);
+      await removeProjectMember(project.id, member.user.id, block, blockScope);
       toast.success(t('project_access_removed'));
       setDeleteMemberObj(null);
+      setDeleteStep('confirm');
       const refreshed = await getProjectMembers(project.id);
       const fetchedMembers = refreshed.members.filter((m: any) => {
         if (memberModalType === 'contributor') {
@@ -791,31 +793,63 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
 
       <Dialog open={!!deleteMemberObj} onOpenChange={(open) => !open && setDeleteMemberObj(null)}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('remove_access_title')}</DialogTitle>
-            <DialogDescription>
-              {t('remove_access_confirm').replace('{name}', deleteMemberObj?.user?.name || deleteMemberObj?.user?.email || deleteMemberObj?.user?.phone_number || '')}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 flex flex-col sm:flex-row sm:justify-end">
-            <Button variant="ghost" onClick={() => setDeleteMemberObj(null)} disabled={removingMemberId !== null}>{t('cancel')}</Button>
-            <Button
-              variant="outline"
-              onClick={() => handleRemoveMember(deleteMemberObj, false)}
-              disabled={removingMemberId !== null}
-              className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
-            >
-              {removingMemberId !== null ? <Loader2 className="h-4 w-4 animate-spin" /> : t('just_delete')}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => handleRemoveMember(deleteMemberObj, true)}
-              disabled={removingMemberId !== null}
-              className="rounded-xl px-6 bg-red-600 hover:bg-red-700"
-            >
-              {removingMemberId !== null ? <Loader2 className="h-4 w-4 animate-spin" /> : t('block_and_delete')}
-            </Button>
-          </DialogFooter>
+          {deleteStep === 'confirm' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t('remove_access_title')}</DialogTitle>
+                <DialogDescription>
+                  {t('remove_access_confirm').replace('{name}', deleteMemberObj?.user?.name || deleteMemberObj?.user?.email || deleteMemberObj?.user?.phone_number || '')}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 flex flex-col sm:flex-row sm:justify-end">
+                <Button variant="ghost" onClick={() => setDeleteMemberObj(null)} disabled={removingMemberId !== null}>{t('cancel')}</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleRemoveMember(deleteMemberObj, false)}
+                  disabled={removingMemberId !== null}
+                  className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
+                >
+                  {removingMemberId !== null ? <Loader2 className="h-4 w-4 animate-spin" /> : t('just_delete')}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeleteStep('blockScope')}
+                  disabled={removingMemberId !== null}
+                  className="rounded-xl px-6 bg-red-600 hover:bg-red-700"
+                >
+                  {removingMemberId !== null ? <Loader2 className="h-4 w-4 animate-spin" /> : t('block_and_delete')}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Block Scope Selection</DialogTitle>
+                <DialogDescription>
+                  Do you want to block this user from this project only, or from the whole organization?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 flex flex-col sm:flex-row sm:justify-end">
+                <Button variant="ghost" onClick={() => setDeleteStep('confirm')} disabled={removingMemberId !== null}>Back</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleRemoveMember(deleteMemberObj, true, 'project')}
+                  disabled={removingMemberId !== null}
+                  className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
+                >
+                  {removingMemberId !== null ? <Loader2 className="h-4 w-4 animate-spin" /> : 'This Project Only'}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => handleRemoveMember(deleteMemberObj, true, 'org')}
+                  disabled={removingMemberId !== null}
+                  className="rounded-xl px-6 bg-red-600 hover:bg-red-700"
+                >
+                  {removingMemberId !== null ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Whole Org'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

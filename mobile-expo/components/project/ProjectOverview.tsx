@@ -192,18 +192,47 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                 {
                     text: t('projectOverview.blockAndRemove') as string,
                     style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            setRemovingMemberId(member.user.id);
-                            await removeProjectMember(projectId, member.user.id, true);
-                            await refreshMembers();
-                            Alert.alert(t('projectOverview.success') as string, t('projectOverview.accessRemoved') as string);
-                        } catch (e) {
-                            const { message } = parseApiError(e, t('projectOverview.failedRemoveAccess') as string);
-                            Alert.alert(t('projectOverview.error') as string, message);
-                        } finally {
-                            setRemovingMemberId(null);
-                        }
+                    onPress: () => {
+                        Alert.alert(
+                            "Block Scope Selection",
+                            "Do you want to block this user from this project only, or from the whole organization?",
+                            [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                    text: "This Project Only",
+                                    onPress: async () => {
+                                        try {
+                                            setRemovingMemberId(member.user.id);
+                                            await removeProjectMember(projectId, member.user.id, true, 'project');
+                                            await refreshMembers();
+                                            Alert.alert(t('projectOverview.success') as string, t('projectOverview.accessRemoved') as string);
+                                        } catch (e) {
+                                            const { message } = parseApiError(e, t('projectOverview.failedRemoveAccess') as string);
+                                            Alert.alert(t('projectOverview.error') as string, message);
+                                        } finally {
+                                            setRemovingMemberId(null);
+                                        }
+                                    }
+                                },
+                                {
+                                    text: "Whole Org",
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        try {
+                                            setRemovingMemberId(member.user.id);
+                                            await removeProjectMember(projectId, member.user.id, true, 'org');
+                                            await refreshMembers();
+                                            Alert.alert(t('projectOverview.success') as string, t('projectOverview.accessRemoved') as string);
+                                        } catch (e) {
+                                            const { message } = parseApiError(e, t('projectOverview.failedRemoveAccess') as string);
+                                            Alert.alert(t('projectOverview.error') as string, message);
+                                        } finally {
+                                            setRemovingMemberId(null);
+                                        }
+                                    }
+                                }
+                            ]
+                        );
                     }
                 }
             ]

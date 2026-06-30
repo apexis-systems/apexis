@@ -33,9 +33,22 @@ export const inviteUser = async (data: { email?: string, phone_number?: string, 
     }
 };
 
-export const deleteUser = async (id: string | number, block?: boolean) => {
+export const deleteUser = async (
+    id: string | number,
+    block?: boolean,
+    blockScope?: 'project' | 'org',
+    projectId?: string | number
+) => {
     try {
-        const response = await PrivateAxios.delete(`/users/${id}${block ? '?block=true' : ''}`);
+        let url = `/users/${id}`;
+        const params: string[] = [];
+        if (block) params.push('block=true');
+        if (blockScope) params.push(`blockScope=${blockScope}`);
+        if (projectId) params.push(`projectId=${projectId}`);
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
+        const response = await PrivateAxios.delete(url);
         return response.data;
     } catch (error) {
         console.error("deleteUser Error", error);
