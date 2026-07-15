@@ -22,10 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getFreemiumLeads } from "@/services/superadminService";
+import { getFreemiumLeads, extendOrganizationTrials } from "@/services/superadminService";
 
 interface Lead {
   id: number;
+  organizationId: number | null;
   name: string;
   email: string;
   phone: string;
@@ -106,12 +107,16 @@ export default function FreemiumLeads() {
   const [loading, setLoading] = useState(true);
   const [leadsList, setLeadsList] = useState<Lead[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [extendDays, setExtendDays] = useState("7");
+  const [isExtending, setIsExtending] = useState(false);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
       const response = await getFreemiumLeads();
       setLeadsList(response.leads || []);
+      setSelectedIds(new Set());
     } catch (error) {
       console.error("Failed to fetch leads:", error);
     } finally {
@@ -155,6 +160,57 @@ export default function FreemiumLeads() {
       return true;
     });
   }, [activeFilter, expiryFilter, search, statusFilter, leadsList]);
+
+  const selectableFiltered = filtered.filter((lead) => lead.organizationId != null);
+  const allFilteredSelected =
+    selectableFiltered.length > 0 && selectableFiltered.every((lead) => selectedIds.has(lead.id));
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (allFilteredSelected) {
+        const next = new Set(prev);
+        selectableFiltered.forEach((lead) => next.delete(lead.id));
+        return next;
+      }
+      const next = new Set(prev);
+      selectableFiltered.forEach((lead) => next.add(lead.id));
+      return next;
+    });
+  };
+
+  const toggleSelectOne = (leadId: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(leadId)) {
+        next.delete(leadId);
+      } else {
+        next.add(leadId);
+      }
+      return next;
+    });
+  };
+
+  const handleExtendSelected = async () => {
+    const days = Number(extendDays);
+    if (!Number.isFinite(days) || days <= 0) return;
+
+    const organizationIds = leadsList
+      .filter((lead) => selectedIds.has(lead.id) && lead.organizationId != null)
+      .map((lead) => lead.organizationId as number);
+
+    const uniqueOrgIds = Array.from(new Set(organizationIds));
+    if (uniqueOrgIds.length === 0) return;
+
+    setIsExtending(true);
+    try {
+      await extendOrganizationTrials(uniqueOrgIds, days);
+      await handleRefresh();
+    } catch (error) {
+      console.error("Failed to extend trials:", error);
+    } finally {
+      setIsExtending(false);
+    }
+  };
 
   if (loading || isRefreshing) {
     return (
@@ -283,6 +339,38 @@ export default function FreemiumLeads() {
         </div>
       </div>
 
+      {selectedIds.size > 0 ? (
+        <div className={cn(cardClass, "flex flex-wrap items-center gap-3 p-4")}>
+          <span className={cn("text-xs font-semibold", strongTextClass)}>
+            {selectedIds.size} selected
+          </span>
+          <Input
+            type="number"
+            min={1}
+            value={extendDays}
+            onChange={(event) => setExtendDays(event.target.value)}
+            className="h-9 w-24 text-sm"
+          />
+          <span className={cn("text-xs", mutedTextClass)}>days</span>
+          <Button
+            size="sm"
+            onClick={handleExtendSelected}
+            disabled={isExtending || !Number(extendDays)}
+            className="h-9"
+          >
+            {isExtending ? "Extending..." : "Extend Trial"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSelectedIds(new Set())}
+            className="h-9"
+          >
+            Clear Selection
+          </Button>
+        </div>
+      ) : null}
+
       {remindableLeads.length > 0 ? (
         <div className="rounded border border-amber-500/20 bg-amber-500/5 p-4">
           <h3 className={cn("mb-2 flex items-center gap-2 text-sm font-semibold", strongTextClass)}>
@@ -310,6 +398,15 @@ export default function FreemiumLeads() {
           <table className="min-w-full">
             <thead className="bg-[hsl(37_18%_91%/0.45)] dark:bg-[hsl(30_6%_18%/0.9)]">
               <tr>
+                <th className={cn(tableHeadClass, "w-10")}>
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAll}
+                    disabled={selectableFiltered.length === 0}
+                    className="h-4 w-4 accent-[hsl(24_95%_53%)]"
+                  />
+                </th>
                 <th className={tableHeadClass}>User</th>
                 <th className={tableHeadClass}>Company</th>
                 <th className={tableHeadClass}>Trial Period</th>
@@ -326,6 +423,15 @@ export default function FreemiumLeads() {
 
                 return (
                   <tr key={lead.id}>
+                    <td className={tableCellClass}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(lead.id)}
+                        onChange={() => toggleSelectOne(lead.id)}
+                        disabled={lead.organizationId == null}
+                        className="h-4 w-4 accent-[hsl(24_95%_53%)]"
+                      />
+                    </td>
                     <td className={tableCellClass}>
                       <div>
                         <div className={cn("text-sm font-medium", strongTextClass)}>{lead.name}</div>
@@ -402,7 +508,7 @@ export default function FreemiumLeads() {
 
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className={cn("py-8 text-center text-sm", mutedTextClass)}>
+                  <td colSpan={8} className={cn("py-8 text-center text-sm", mutedTextClass)}>
                     No leads match your filters.
                   </td>
                 </tr>

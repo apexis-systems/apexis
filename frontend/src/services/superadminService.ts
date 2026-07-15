@@ -103,6 +103,16 @@ export const getFreemiumLeads = async () => {
     }
 };
 
+export const extendOrganizationTrials = async (organizationIds: (number | string)[], days: number) => {
+    try {
+        const response = await PrivateAxios.post('/superadmin/organizations/extend-trial', { organizationIds, days });
+        return response.data;
+    } catch (error) {
+        console.error("extendOrganizationTrials Error", error);
+        throw error;
+    }
+};
+
 export const getRevenueAnalytics = async () => {
     try {
         const response = await PrivateAxios.get('/superadmin/dashboard/revenue');

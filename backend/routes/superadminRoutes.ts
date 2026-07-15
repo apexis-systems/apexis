@@ -12,7 +12,8 @@ import {
     getOrganizationDetails,
     getUsersList,
     sendBroadcastNotification,
-    updateSystemConfig
+    updateSystemConfig,
+    extendOrganizationTrials
 } from "../controllers/superadminController.ts";
 import { verifyToken, isSuperAdmin } from "../middleware/verifyToken.ts";
 
@@ -35,5 +36,6 @@ router.post("/broadcast", sendBroadcastNotification);
 router.post("/invite", inviteSuperAdmin);
 router.delete("/teams/:id", deleteSuperAdmin);
 router.put("/system-config", updateSystemConfig);
+router.post("/organizations/extend-trial", extendOrganizationTrials);
 
 export default router;

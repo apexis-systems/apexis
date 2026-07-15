@@ -347,6 +347,48 @@ export const sendBroadcastNotification = async (req: Request, res: Response) => 
     }
 };
 
+export const extendOrganizationTrials = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser || authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: SuperAdmin access only" });
+        }
+
+        const { organizationIds, days } = req.body;
+
+        if (!Array.isArray(organizationIds) || organizationIds.length === 0) {
+            return res.status(400).json({ error: "organizationIds must be a non-empty array" });
+        }
+
+        const extendByDays = Number(days);
+        if (!Number.isFinite(extendByDays) || extendByDays <= 0) {
+            return res.status(400).json({ error: "days must be a positive number" });
+        }
+
+        const orgs = await organizations.findAll({ where: { id: organizationIds } });
+
+        if (orgs.length === 0) {
+            return res.status(404).json({ error: "No matching organizations found" });
+        }
+
+        const now = new Date();
+        await Promise.all(orgs.map((org: any) => {
+            const currentEnd = org.plan_end_date ? new Date(org.plan_end_date) : now;
+            const base = currentEnd > now ? currentEnd : now;
+            const newEndDate = new Date(base.getTime() + extendByDays * 24 * 60 * 60 * 1000);
+            return org.update({ plan_end_date: newEndDate });
+        }));
+
+        res.status(200).json({
+            message: `Extended trial by ${extendByDays} day(s) for ${orgs.length} organization(s)`,
+            updated: orgs.map((org: any) => ({ id: org.id, plan_end_date: org.plan_end_date }))
+        });
+    } catch (error) {
+        console.error("Extend Organization Trials Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const updateSystemConfig = async (req: Request, res: Response) => {
     try {
         const authUser = (req as any).user;
