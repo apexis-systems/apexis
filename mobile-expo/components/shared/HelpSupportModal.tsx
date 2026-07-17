@@ -27,6 +27,24 @@ const videos = [
 
 const youtubeTutorials: YouTubeVideo[] = [
     {
+        id: '4iinkhWi9ZM',
+        title: 'How to onboard a vendor to the project',
+        duration: '1:39',
+        description: 'Learn how to onboard and add vendors to your project workspace.',
+    },
+    {
+        id: 'utkKNB5euhc',
+        title: 'How to upload a document on a document (version control)',
+        duration: '1:40',
+        description: 'Upload new versions of an existing document to track changes and keep an active drawings trail.',
+    },
+    {
+        id: '4DFp-oKJMXQ',
+        title: 'How to connect ApexisPro to PC/Mac',
+        duration: '0:32',
+        description: 'Connect your mobile device to your computer for seamless workflow synchronization.',
+    },
+    {
         id: 'JepGKRCDAmk',
         title: 'How to create a RFI from a photo',
         duration: '0:39',

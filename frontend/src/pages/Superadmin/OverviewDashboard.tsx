@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -274,6 +274,21 @@ export default function OverviewDashboard() {
   const [data, setData] = useState<any>(null);
   const [activitiesList, setActivitiesList] = useState<any[]>([]);
   const [showAllUsage, setShowAllUsage] = useState(false);
+  const [usageFilter, setUsageFilter] = useState<"mostActive" | "recentActive">("mostActive");
+
+  const sortedCompanyUsage = useMemo(() => {
+    if (!data?.companyUsage) return [];
+    const companies = [...data.companyUsage];
+    if (usageFilter === "recentActive") {
+      return companies.sort((a, b) => (b.lastActiveRaw || 0) - (a.lastActiveRaw || 0));
+    }
+    return companies.sort((a, b) => {
+      const aScore = (a.tasks || 0) + (a.messages || 0) + (a.projects || 0);
+      const bScore = (b.tasks || 0) + (b.messages || 0) + (b.projects || 0);
+      return bScore - aScore;
+    });
+  }, [data?.companyUsage, usageFilter]);
+
   const [timeRange, setTimeRange] = useState("allTime");
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [orgDetails, setOrgDetails] = useState<any>(null);
@@ -758,15 +773,39 @@ export default function OverviewDashboard() {
 
           <section id="company-usage" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("company-usage")}>
-              <div className="mb-4 flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-[hsl(24_95%_53%)]" />
-                <div>
-                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
-                    Company Usage
-                  </h3>
-                  <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
-                    The most active companies by projects, users, messages, and tasks
-                  </p>
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-[hsl(24_95%_53%)]" />
+                  <div>
+                    <h3 className={cn("text-sm font-semibold", strongTextClass)}>
+                      Company Usage
+                    </h3>
+                    <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
+                      {usageFilter === "mostActive"
+                        ? "The most active companies by projects, users, messages, and tasks"
+                        : "Companies sorted by their most recent activity"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-1 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)]">
+                  {[
+                    { id: "mostActive", label: "Most Active" },
+                    { id: "recentActive", label: "Recent Active" },
+                  ].map((filter) => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setUsageFilter(filter.id as "mostActive" | "recentActive")}
+                      className={cn(
+                        "rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all",
+                        usageFilter === filter.id
+                          ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
+                          : "text-[hsl(30_8%_45%)] hover:bg-[hsl(37_18%_91%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)]"
+                      )}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -783,13 +822,20 @@ export default function OverviewDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(showAllUsage ? (data?.companyUsage || []) : (data?.companyUsage || []).slice(0, 6)).map((company: any, index: number) => (
+                    {(showAllUsage ? sortedCompanyUsage : sortedCompanyUsage.slice(0, 6)).map((company: any, index: number) => (
                       <tr
                         key={company.id || company.name}
                         onClick={() => handleCompanyClick(company.id)}
                         className="border-b border-[hsl(35_15%_85%/0.5)] cursor-pointer transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
                         <td className={cn("py-2.5 font-medium", mutedTextClass)}>{index + 1}</td>
-                        <td className={cn("py-2.5 font-medium", strongTextClass)}>{company.name}</td>
+                        <td className={cn("py-2.5 font-medium", strongTextClass)}>
+                          <div>{company.name}</div>
+                          {company.lastActive && (
+                            <div className={cn("mt-0.5 text-[10px] font-normal", mutedTextClass)}>
+                              Last active: {company.lastActive}
+                            </div>
+                          )}
+                        </td>
                         <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.projects}</td>
                         <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.users}</td>
                         <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.messages?.toLocaleString() || "0"}</td>
@@ -800,7 +846,7 @@ export default function OverviewDashboard() {
                 </table>
               </div>
 
-              {(data?.companyUsage?.length || 0) > 6 && (
+              {(sortedCompanyUsage.length || 0) > 6 && (
                 <div className="mt-4 flex justify-center border-t border-[hsl(35_15%_85%/0.3)] pt-4 dark:border-[hsl(30_8%_22%/0.3)]">
                   <button
                     onClick={() => setShowAllUsage(!showAllUsage)}

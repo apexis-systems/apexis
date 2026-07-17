@@ -733,7 +733,7 @@ export const getCompanyUsageData = async () => {
 
     const companyUsage = await Promise.all(
         orgs.map(async (org: any) => {
-            const [projectCount, userCount, messageCount, snagCount, rfiCount, photoCount, pdfCount] = await Promise.all([
+            const [projectCount, userCount, messageCount, snagCount, rfiCount, photoCount, pdfCount, lastAct] = await Promise.all([
                 projects.count({ where: { organization_id: org.id } }),
                 users.count({ where: { organization_id: org.id } }),
                 chat_messages.count({
@@ -782,6 +782,10 @@ export const getCompanyUsageData = async () => {
                     where: {
                         file_type: 'application/pdf'
                     }
+                }),
+                activities.findOne({
+                    include: [{ model: projects, where: { organization_id: org.id }, required: true }],
+                    order: [['createdAt', 'DESC']]
                 })
             ]);
 
@@ -794,6 +798,8 @@ export const getCompanyUsageData = async () => {
                 tasks: snagCount + rfiCount,
                 photos: photoCount,
                 pdfs: pdfCount,
+                lastActiveRaw: lastAct ? new Date(lastAct.createdAt).getTime() : 0,
+                lastActive: lastAct ? formatRelativeTime(lastAct.createdAt) : "Never",
             };
         })
     );
