@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
     View,
     TouchableOpacity,
@@ -219,6 +219,59 @@ export default function ProjectSnagList({ project, initialSnagId }: Props) {
     const [showFolderPicker, setShowFolderPicker] = useState(false);
     const [showFilePicker, setShowFilePicker] = useState(false);
     const [selectedFolderIds, setSelectedFolderIds] = useState<number[]>([]);
+
+    // Lifecycle-aware temporary file cleanup
+    const editPhotoRef = useRef(editPhoto);
+    const editAudioRef = useRef(editAudio);
+    const responsePhotosRef = useRef(responsePhotos);
+
+    useEffect(() => {
+        if (editPhotoRef.current && editPhotoRef.current !== editPhoto) {
+            const oldUri = editPhotoRef.current;
+            if (oldUri.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(oldUri).catch(() => {});
+            }
+        }
+        editPhotoRef.current = editPhoto;
+    }, [editPhoto]);
+
+    useEffect(() => {
+        if (editAudioRef.current && editAudioRef.current !== editAudio) {
+            const oldUri = editAudioRef.current;
+            if (oldUri.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(oldUri).catch(() => {});
+            }
+        }
+        editAudioRef.current = editAudio;
+    }, [editAudio]);
+
+    useEffect(() => {
+        const removed = responsePhotosRef.current.filter(x => !responsePhotos.includes(x));
+        const urisToDelete = removed.filter(uri => uri.startsWith('file://'));
+        if (urisToDelete.length > 0) {
+            const { deleteFilesAsync } = require('@/services/cacheService');
+            deleteFilesAsync(urisToDelete).catch(() => {});
+        }
+        responsePhotosRef.current = responsePhotos;
+    }, [responsePhotos]);
+
+    useEffect(() => {
+        return () => {
+            const { deleteFileAsync, deleteFilesAsync } = require('@/services/cacheService');
+            if (editPhotoRef.current && editPhotoRef.current.startsWith('file://')) {
+                deleteFileAsync(editPhotoRef.current).catch(() => {});
+            }
+            if (editAudioRef.current && editAudioRef.current.startsWith('file://')) {
+                deleteFileAsync(editAudioRef.current).catch(() => {});
+            }
+            const files = responsePhotosRef.current.filter(x => x.startsWith('file://'));
+            if (files.length > 0) {
+                deleteFilesAsync(files).catch(() => {});
+            }
+        };
+    }, []);
 
     const handleLinkFile = async (targetFileId: string | number) => {
         if (!selectedSnag) return;

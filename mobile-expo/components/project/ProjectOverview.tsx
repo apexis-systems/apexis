@@ -315,6 +315,7 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
     const [isCountingDown, setIsCountingDown] = useState(false);
     const [latestExport, setLatestExport] = useState<{ url: string, date: string } | null>(null);
     const handleShareFile = async (url: string) => {
+        let uri = '';
         try {
             if (!url) return;
 
@@ -322,7 +323,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             const localUri = `${(FileSystem as any).cacheDirectory}${fileName}`;
 
             Alert.alert("Preparing...", "Downloading report to share...");
-            const { uri } = await FileSystem.downloadAsync(url, localUri);
+            const downloadResult = await FileSystem.downloadAsync(url, localUri);
+            uri = downloadResult.uri;
 
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
@@ -340,6 +342,10 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         } catch (e) {
             console.error('Share error:', e);
             Alert.alert("Error", "Failed to share report");
+        } finally {
+            if (uri && uri.startsWith('file://')) {
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+            }
         }
     };
 

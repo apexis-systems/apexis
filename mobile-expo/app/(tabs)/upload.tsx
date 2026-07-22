@@ -91,6 +91,32 @@ export default function UploadScreen() {
 
     const [fileQueue, setFileQueue] = useState<FileProgress[]>([]);
 
+    const cleanupQueueFiles = (queue: FileProgress[]) => {
+        if (!queue || queue.length === 0) return;
+        const uris = queue.map(item => item.asset.uri).filter((uri): uri is string => !!uri && uri.startsWith('file://'));
+        if (uris.length === 0) return;
+        const { deleteFilesAsync } = require('@/services/cacheService');
+        deleteFilesAsync(uris).catch(() => {});
+    };
+
+    const fileQueueRef = useRef(fileQueue);
+    useEffect(() => {
+        fileQueueRef.current = fileQueue;
+    }, [fileQueue]);
+
+    useEffect(() => {
+        return () => {
+            const queue = fileQueueRef.current;
+            if (queue && queue.length > 0) {
+                const uris = queue.map(item => item.asset.uri).filter((uri): uri is string => !!uri && uri.startsWith('file://'));
+                if (uris.length > 0) {
+                    const { deleteFilesAsync } = require('@/services/cacheService');
+                    deleteFilesAsync(uris).catch(() => {});
+                }
+            }
+        };
+    }, []);
+
     // State: Destination Selection
     const [selectedProject, setSelectedProject] = useState<string | null>(params.projectId || null);
     const [selectedFolder, setSelectedFolder] = useState<string | null>(params.folderId || null);
@@ -797,6 +823,7 @@ export default function UploadScreen() {
 
 
     const reset = () => {
+        cleanupQueueFiles(fileQueue);
         setFileQueue([]);
         setMode('capture');
         setPhotoLocation('');
@@ -819,6 +846,7 @@ export default function UploadScreen() {
         const snapshotDone = mode === 'done';
 
         // Clear file queue immediately so if user re-opens the tab it's fresh
+        cleanupQueueFiles(fileQueue);
         setFileQueue([]);
         setMode('capture');
         setPhotoLocation('');
@@ -844,7 +872,7 @@ export default function UploadScreen() {
         } else {
             router.push('/');
         }
-    }, [selectedProject, selectedFolder, isDocMode, mode, params.projectId, params.folderId, router]);
+    }, [selectedProject, selectedFolder, isDocMode, mode, params.projectId, params.folderId, router, fileQueue]);
 
     useFocusEffect(
         useCallback(() => {
@@ -963,7 +991,14 @@ export default function UploadScreen() {
                                         <View key={idx} style={{ position: 'relative' }}>
                                             <Image source={{ uri: item.asset.uri }} style={{ width: 56, height: 56, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' }} />
                                             <TouchableOpacity
-                                                onPress={() => setFileQueue(prev => prev.filter((_, i) => i !== idx))}
+                                                onPress={() => {
+                                                    const itemToRemove = fileQueue[idx];
+                                                    if (itemToRemove && itemToRemove.asset.uri && itemToRemove.asset.uri.startsWith('file://')) {
+                                                        const { deleteFileAsync } = require('@/services/cacheService');
+                                                        deleteFileAsync(itemToRemove.asset.uri).catch(() => {});
+                                                    }
+                                                    setFileQueue(prev => prev.filter((_, i) => i !== idx));
+                                                }}
                                                 style={{
                                                     position: 'absolute', top: -8, right: -8, zIndex: 10, elevation: 4,
                                                     backgroundColor: '#ef4444', width: 24, height: 24, borderRadius: 12,
@@ -1015,7 +1050,7 @@ export default function UploadScreen() {
                                             t('upload.clearQueueMessage', { mode: !isDocMode ? t('upload.photo') : t('upload.scan') }),
                                             [
                                                 { text: t('upload.cancel'), style: "cancel" },
-                                                { text: t('upload.clearAndSwitch'), style: "destructive", onPress: () => { setFileQueue([]); toggleMode(); } }
+                                                { text: t('upload.clearAndSwitch'), style: "destructive", onPress: () => { cleanupQueueFiles(fileQueue); setFileQueue([]); toggleMode(); } }
                                             ]
                                         );
                                     } else {
@@ -1520,7 +1555,7 @@ export default function UploadScreen() {
 
                         {/* Moved Buttons to Top */}
                         <View style={{ gap: 12, width: '100%' }}>
-                            <TouchableOpacity onPress={() => { setFileQueue([]); setMode('capture'); }} style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}>
+                            <TouchableOpacity onPress={() => { cleanupQueueFiles(fileQueue); setFileQueue([]); setMode('capture'); }} style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}>
                                 <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>{t('upload.startNewUpload')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={handleClose} style={{ height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
@@ -1596,7 +1631,7 @@ export default function UploadScreen() {
                             <TouchableOpacity onPress={handleUpload} style={{ height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 2 }}>
                                 <Text style={{ fontSize: 16, fontWeight: '800', color: '#fff' }}>{t('upload.retryFailed')}</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => { setFileQueue([]); setMode('capture'); }} style={{ height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
+                            <TouchableOpacity onPress={() => { cleanupQueueFiles(fileQueue); setFileQueue([]); setMode('capture'); }} style={{ height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
                                 <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('upload.cancelAndClear')}</Text>
                             </TouchableOpacity>
                         </>

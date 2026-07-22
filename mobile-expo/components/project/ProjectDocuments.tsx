@@ -127,6 +127,26 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     // View state helpers for nested modals on iOS
     const restoreViewerUrlRef = useRef<string | null>(null);
 
+    // Lifecycle-aware temporary file cleanup
+    const lastOpenedPdfUriRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (pdfViewerUrl && pdfViewerUrl.startsWith('file://')) {
+            lastOpenedPdfUriRef.current = pdfViewerUrl;
+        } else if (!pdfViewerUrl && lastOpenedPdfUriRef.current && !restoreViewerUrlRef.current) {
+            const uriToDelete = lastOpenedPdfUriRef.current;
+            lastOpenedPdfUriRef.current = null;
+            FileSystem.deleteAsync(uriToDelete, { idempotent: true }).catch(() => {});
+        }
+    }, [pdfViewerUrl]);
+
+    useEffect(() => {
+        return () => {
+            if (lastOpenedPdfUriRef.current) {
+                FileSystem.deleteAsync(lastOpenedPdfUriRef.current, { idempotent: true }).catch(() => {});
+            }
+        };
+    }, []);
+
     const openSubModalFromViewer = (openSubModalFn: () => void) => {
         if (pdfViewerUrl) {
             restoreViewerUrlRef.current = pdfViewerUrl;
@@ -1869,6 +1889,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     };
 
     const handleShare = async (doc: any) => {
+        let uri = '';
         try {
             if (!doc.downloadUrl) return;
             console.log(doc);
@@ -1881,7 +1902,6 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
             let urlToDownload = doc.downloadUrl;
-            let uri = '';
 
             if ((doc.do_not_follow || doc.only_for_reference) && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
                 const data = await downloadFile(doc.id);
@@ -1919,6 +1939,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToShareDocument'));
         } finally {
             setSharing(false);
+            if (uri && uri.startsWith('file://')) {
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+            }
         }
     };
 
@@ -2154,6 +2177,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleShareDoc = async (doc: any) => {
         if (!doc) return;
+        let uri = '';
         try {
             setProcessing('sharing');
             const ext = doc.file_name?.split('.').pop() || 'pdf';
@@ -2161,7 +2185,6 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
             let urlToDownload = doc.downloadUrl;
-            let uri = '';
 
             if ((doc.do_not_follow || doc.only_for_reference) && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
                 const data = await downloadFile(doc.id);
@@ -2195,6 +2218,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToShareDocument'));
         } finally {
             setProcessing(null);
+            if (uri && uri.startsWith('file://')) {
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+            }
         }
     };
 

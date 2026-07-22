@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { View, TouchableOpacity, ActivityIndicator, BackHandler, Platform } from 'react-native';
 import { Text } from '@/components/ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +23,28 @@ export default function ScanScreen() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingStep, setProcessingStep] = useState<'capturing' | 'enhancing' | null>(null);
     const router = useRouter();
+
+    // Lifecycle-aware temporary file cleanup
+    const capturedImageRef = useRef(capturedImage);
+    useEffect(() => {
+        if (capturedImageRef.current && capturedImageRef.current !== capturedImage) {
+            const oldUri = capturedImageRef.current;
+            if (oldUri.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(oldUri).catch(() => {});
+            }
+        }
+        capturedImageRef.current = capturedImage;
+    }, [capturedImage]);
+
+    useEffect(() => {
+        return () => {
+            if (capturedImageRef.current && capturedImageRef.current.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(capturedImageRef.current).catch(() => {});
+            }
+        };
+    }, []);
 
     useFocusEffect(
         useCallback(() => {

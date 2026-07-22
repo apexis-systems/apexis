@@ -41,22 +41,32 @@ export default function TransactionsScreen() {
             const fileName = `Invoice_${item.invoice_number || item.id}.pdf`;
             const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
 
-            const { uri } = await FileSystem.downloadAsync(
-                url,
-                fileUri,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
+            let uri = '';
+            try {
+                const downloadResult = await FileSystem.downloadAsync(
+                    url,
+                    fileUri,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
                     }
-                }
-            );
+                );
+                uri = downloadResult.uri;
 
-            if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(uri);
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(uri);
+                }
+            } catch (error) {
+                console.error("handleShareInvoice Error", error);
+            } finally {
+                setSharingId(null);
+                if (uri && uri.startsWith('file://')) {
+                    FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+                }
             }
         } catch (error) {
-            console.error("handleShareInvoice Error", error);
-        } finally {
+            console.error("handleShareInvoice auth/URL generation error", error);
             setSharingId(null);
         }
     };

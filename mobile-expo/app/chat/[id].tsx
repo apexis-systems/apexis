@@ -87,6 +87,35 @@ export default function ChatDetailScreen() {
     const [editingAttachmentIndex, setEditingAttachmentIndex] = useState<number | null>(null);
     const [annotatingImage, setAnnotatingImage] = useState<any>(null);
     const [isUploading, setIsUploading] = useState(false);
+
+    // Lifecycle-aware temporary file cleanup
+    const attachmentsRef = useRef(attachments);
+    const annotatingImageRef = useRef(annotatingImage);
+
+    useEffect(() => {
+        attachmentsRef.current = attachments;
+    }, [attachments]);
+
+    useEffect(() => {
+        annotatingImageRef.current = annotatingImage;
+    }, [annotatingImage]);
+
+    useEffect(() => {
+        return () => {
+            // Clean up remaining attachments and annotatingImage on unmount
+            const { deleteFileAsync, deleteFilesAsync } = require('@/services/cacheService');
+            const remaining = attachmentsRef.current;
+            if (remaining && remaining.length > 0) {
+                const uris = remaining.map(x => x.uri).filter((uri): uri is string => !!uri && uri.startsWith('file://'));
+                if (uris.length > 0) {
+                    deleteFilesAsync(uris).catch(() => {});
+                }
+            }
+            if (annotatingImageRef.current && annotatingImageRef.current.uri && annotatingImageRef.current.uri.startsWith('file://')) {
+                deleteFileAsync(annotatingImageRef.current.uri).catch(() => {});
+            }
+        };
+    }, []);
     const [showEmojis, setShowEmojis] = useState(false);
     const [isCameraVisible, setIsCameraVisible] = useState(false);
     const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
@@ -435,6 +464,13 @@ export default function ChatDetailScreen() {
         } finally {
             setIsUploading(false);
             setIsSending(false);
+            if (filesToUpload && filesToUpload.length > 0) {
+                const { deleteFilesAsync } = require('@/services/cacheService');
+                const uris = filesToUpload.map(f => f.uri).filter(uri => uri && uri.startsWith('file://'));
+                if (uris.length > 0) {
+                    deleteFilesAsync(uris).catch(() => {});
+                }
+            }
         }
     };
 
@@ -575,11 +611,13 @@ export default function ChatDetailScreen() {
     const handleDownload = React.useCallback(async (msg: any) => {
         if (!msg.downloadUrl) return;
         setIsDownloading(String(msg.id));
+        let uri = '';
         try {
             const fileName = msg.file_name || `chat_file_${msg.id}`;
             const fileUri = (FileSystem as any).cacheDirectory + fileName;
 
             const downloadRes = await FileSystem.downloadAsync(msg.downloadUrl, fileUri);
+            uri = downloadRes.uri;
             if (downloadRes.status === 200) {
                 await Sharing.shareAsync(downloadRes.uri);
             } else {
@@ -590,6 +628,9 @@ export default function ChatDetailScreen() {
             Alert.alert('Error', 'An error occurred during download');
         } finally {
             setIsDownloading(null);
+            if (uri && uri.startsWith('file://')) {
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+            }
         }
     }, []);
 
@@ -1174,6 +1215,11 @@ export default function ChatDetailScreen() {
                                                 {/* Close/Remove button on top-right */}
                                                 <TouchableOpacity
                                                     onPress={() => {
+                                                        const itemToRemove = attachments[index];
+                                                        if (itemToRemove && itemToRemove.uri && itemToRemove.uri.startsWith('file://')) {
+                                                            const { deleteFileAsync } = require('@/services/cacheService');
+                                                            deleteFileAsync(itemToRemove.uri).catch(() => {});
+                                                        }
                                                         setAttachments(prev => prev.filter((_, idx) => idx !== index));
                                                     }}
                                                     style={{
@@ -1345,6 +1391,10 @@ export default function ChatDetailScreen() {
                 <ImageAnnotator
                     uri={annotatingImage.uri}
                     onSave={(newUri: string) => {
+                        if (annotatingImage.uri && annotatingImage.uri.startsWith('file://')) {
+                            const { deleteFileAsync } = require('@/services/cacheService');
+                            deleteFileAsync(annotatingImage.uri).catch(() => {});
+                        }
                         setAttachments(prev => [...prev, { ...annotatingImage, uri: newUri }]);
                         setAnnotatingImage(null);
                     }}
@@ -1359,6 +1409,11 @@ export default function ChatDetailScreen() {
                 <ImageAnnotator
                     uri={attachments[editingAttachmentIndex].uri}
                     onSave={(newUri: string) => {
+                        const oldUri = attachments[editingAttachmentIndex].uri;
+                        if (oldUri && oldUri !== newUri && oldUri.startsWith('file://')) {
+                            const { deleteFileAsync } = require('@/services/cacheService');
+                            deleteFileAsync(oldUri).catch(() => {});
+                        }
                         setAttachments(prev => {
                             const copy = [...prev];
                             copy[editingAttachmentIndex] = { ...copy[editingAttachmentIndex], uri: newUri };

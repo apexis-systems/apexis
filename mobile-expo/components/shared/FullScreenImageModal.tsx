@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Modal, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,25 @@ export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: 
     const insets = useSafeAreaInsets();
     const [sharing, setSharing] = useState(false);
     const [downloading, setDownloading] = useState(false);
+    const tempFilesRef = useRef<Set<string>>(new Set());
+
+    // Clean up temporary files on modal close or unmount
+    useEffect(() => {
+        if (!visible) {
+            const files = Array.from(tempFilesRef.current);
+            tempFilesRef.current.clear();
+            const { deleteFilesAsync } = require('@/services/cacheService');
+            deleteFilesAsync(files).catch(() => {});
+        }
+    }, [visible]);
+
+    useEffect(() => {
+        return () => {
+            const files = Array.from(tempFilesRef.current);
+            const { deleteFilesAsync } = require('@/services/cacheService');
+            deleteFilesAsync(files).catch(() => {});
+        };
+    }, []);
 
     if (!uri) return null;
 
@@ -41,6 +60,7 @@ export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: 
         const fileName = getFileName(url);
         const localUri = `${(FileSystem as any).cacheDirectory}fsm_${Date.now()}_${fileName}`;
         const { uri: downloaded } = await (FileSystem as any).downloadAsync(url, localUri);
+        tempFilesRef.current.add(downloaded);
         return downloaded;
     };
 

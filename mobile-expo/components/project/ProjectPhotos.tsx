@@ -1163,6 +1163,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         const photo = sortedPhotos[viewerIndex];
         if (!photo?.downloadUrl) return;
         setDownloading(true);
+        let uri = '';
         try {
             const { status } = await MediaLibrary.requestPermissionsAsync(true);
             if (status !== 'granted') {
@@ -1171,7 +1172,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             }
             const ext = photo.file_name?.split('.').pop() || 'jpg';
             const localUri = (FileSystem as any).cacheDirectory + `apexis_${Date.now()}.${ext}`;
-            const { uri } = await (FileSystem as any).downloadAsync(photo.downloadUrl, localUri);
+            const downloadResult = await (FileSystem as any).downloadAsync(photo.downloadUrl, localUri);
+            uri = downloadResult.uri;
             await MediaLibrary.saveToLibraryAsync(uri);
             Alert.alert(t('projectPhotos.saved'), t('projectPhotos.photoSavedMessage'));
         } catch (err) {
@@ -1179,6 +1181,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToSavePhoto'));
         } finally {
             setDownloading(false);
+            if (uri && uri.startsWith('file://')) {
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+            }
         }
     };
 
@@ -1581,12 +1586,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             const firstId = Array.from(selectedFiles)[0];
             const firstPhoto = photos.find(p => p.id === firstId);
             if (firstPhoto && firstPhoto.downloadUrl) {
+                let uri = '';
                 try {
                     const ext = firstPhoto.file_name?.split('.').pop() || 'jpg';
                     const localUri = `${(FileSystem as any).cacheDirectory}${firstPhoto.file_name || `photo_${Date.now()}.${ext}`}`;
 
                     setDownloading(true);
-                    const { uri } = await FileSystem.downloadAsync(firstPhoto.downloadUrl, localUri);
+                    const downloadResult = await FileSystem.downloadAsync(firstPhoto.downloadUrl, localUri);
+                    uri = downloadResult.uri;
 
                     if (await Sharing.isAvailableAsync()) {
                         await Sharing.shareAsync(uri, {
@@ -1605,6 +1612,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToSharePhoto'));
                 } finally {
                     setDownloading(false);
+                    if (uri && uri.startsWith('file://')) {
+                        FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+                    }
                 }
             }
         } else {
@@ -1634,12 +1644,14 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         const photoToShare = photo || (selectedFiles.size > 0 ? photos.find(p => String(p.id) === String(Array.from(selectedFiles)[0])) : null);
         if (!photoToShare) return;
 
+        let uri = '';
         try {
             setSharing(true);
             const ext = photoToShare.file_name?.split('.').pop() || 'jpg';
             const localUri = `${(FileSystem as any).cacheDirectory}${photoToShare.file_name || `photo_${Date.now()}.${ext}`}`;
 
-            const { uri } = await (FileSystem as any).downloadAsync(photoToShare.downloadUrl, localUri);
+            const downloadResult = await (FileSystem as any).downloadAsync(photoToShare.downloadUrl, localUri);
+            uri = downloadResult.uri;
 
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
@@ -1656,6 +1668,9 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             Alert.alert(t('projectPhotos.error'), t('projectPhotos.failedToSharePhoto'));
         } finally {
             setSharing(false);
+            if (uri && uri.startsWith('file://')) {
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+            }
         }
     };
 

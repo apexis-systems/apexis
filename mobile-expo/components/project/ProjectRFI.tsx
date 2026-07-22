@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, TouchableOpacity, FlatList, BackHandler, ActivityIndicator,
   Modal, ScrollView, TextInput, Alert, StyleSheet, Platform, RefreshControl, Dimensions,
@@ -372,6 +372,8 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [reassigningToId, setReassigningToId] = useState<number | null>(null);
 
+
+
   const handleLinkFile = async (targetFileId: string | number) => {
     if (!selectedRFI) return;
     setSubmitting(true);
@@ -460,6 +462,26 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [currentDoc, setCurrentDoc] = useState<any | null>(null);
   const [docMetadata, setDocMetadata] = useState<Record<string, { size?: string; type?: string }>>({});
 
+  // Lifecycle-aware temporary file cleanup
+  const lastOpenedPdfUriRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (pdfViewerUrl && pdfViewerUrl.startsWith('file://')) {
+      lastOpenedPdfUriRef.current = pdfViewerUrl;
+    } else if (!pdfViewerUrl && lastOpenedPdfUriRef.current) {
+      const uriToDelete = lastOpenedPdfUriRef.current;
+      lastOpenedPdfUriRef.current = null;
+      FileSystem.deleteAsync(uriToDelete, { idempotent: true }).catch(() => {});
+    }
+  }, [pdfViewerUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (lastOpenedPdfUriRef.current) {
+        FileSystem.deleteAsync(lastOpenedPdfUriRef.current, { idempotent: true }).catch(() => {});
+      }
+    };
+  }, []);
+
   // Physical Orientation Tracking
   const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
 
@@ -490,6 +512,59 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   const [responseImages, setResponseImages] = useState<string[]>([]);
   const [removedResponsePhotos, setRemovedResponsePhotos] = useState<string[]>([]);
   const [annotatingImageIndex, setAnnotatingImageIndex] = useState<number | null>(null);
+
+  // Lifecycle-aware temporary file cleanup
+  const selectedImagesRef = useRef(selectedImages);
+  const selectedAudioRef = useRef(selectedAudio);
+  const responseImagesRef = useRef(responseImages);
+
+  useEffect(() => {
+    const removed = selectedImagesRef.current.filter(x => !selectedImages.includes(x));
+    const urisToDelete = removed.filter(uri => uri.startsWith('file://'));
+    if (urisToDelete.length > 0) {
+      const { deleteFilesAsync } = require('@/services/cacheService');
+      deleteFilesAsync(urisToDelete).catch(() => {});
+    }
+    selectedImagesRef.current = selectedImages;
+  }, [selectedImages]);
+
+  useEffect(() => {
+    if (selectedAudioRef.current && selectedAudioRef.current !== selectedAudio) {
+      const oldUri = selectedAudioRef.current;
+      if (oldUri.startsWith('file://')) {
+        const { deleteFileAsync } = require('@/services/cacheService');
+        deleteFileAsync(oldUri).catch(() => {});
+      }
+    }
+    selectedAudioRef.current = selectedAudio;
+  }, [selectedAudio]);
+
+  useEffect(() => {
+    const removed = responseImagesRef.current.filter(x => !responseImages.includes(x));
+    const urisToDelete = removed.filter(uri => uri.startsWith('file://'));
+    if (urisToDelete.length > 0) {
+      const { deleteFilesAsync } = require('@/services/cacheService');
+      deleteFilesAsync(urisToDelete).catch(() => {});
+    }
+    responseImagesRef.current = responseImages;
+  }, [responseImages]);
+
+  useEffect(() => {
+    return () => {
+      const { deleteFileAsync, deleteFilesAsync } = require('@/services/cacheService');
+      if (selectedAudioRef.current && selectedAudioRef.current.startsWith('file://')) {
+        deleteFileAsync(selectedAudioRef.current).catch(() => {});
+      }
+      const selImages = selectedImagesRef.current.filter(x => x.startsWith('file://'));
+      if (selImages.length > 0) {
+        deleteFilesAsync(selImages).catch(() => {});
+      }
+      const respImages = responseImagesRef.current.filter(x => x.startsWith('file://'));
+      if (respImages.length > 0) {
+        deleteFilesAsync(respImages).catch(() => {});
+      }
+    };
+  }, []);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [annotatingRemoteUri, setAnnotatingRemoteUri] = useState<string | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -1053,6 +1128,12 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
   };
 
   const resetForm = () => {
+    // Delete local temporary files
+    const { deleteFilesAsync, deleteFileAsync } = require('@/services/cacheService');
+    deleteFilesAsync(selectedImages).catch(() => {});
+    if (selectedAudio) {
+      deleteFileAsync(selectedAudio).catch(() => {});
+    }
     setTitle('');
     setDescription('');
     setAssignedToId(null);
@@ -2243,6 +2324,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                     }
                                   }
                                 }
+                                const uriToRemove = selectedImages[idx];
+                                if (uriToRemove && uriToRemove.startsWith('file://')) {
+                                  const { deleteFileAsync } = require('@/services/cacheService');
+                                  deleteFileAsync(uriToRemove).catch(() => {});
+                                }
                                 setSelectedImages(selectedImages.filter((_, i) => i !== idx));
                               }}
                               style={{ position: 'absolute', top: -8, right: -8, backgroundColor: '#ef4444', borderRadius: 10, padding: 3 }}
@@ -3247,6 +3333,11 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
                                         });
                                       }
                                     }
+                                  }
+                                  const uriToRemove = selectedImages[idx];
+                                  if (uriToRemove && uriToRemove.startsWith('file://')) {
+                                    const { deleteFileAsync } = require('@/services/cacheService');
+                                    deleteFileAsync(uriToRemove).catch(() => {});
                                   }
                                   setSelectedImages(selectedImages.filter((_, i) => i !== idx));
                                 }}

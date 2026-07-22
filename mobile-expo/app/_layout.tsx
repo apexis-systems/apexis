@@ -362,6 +362,14 @@ function RootLayoutNav() {
   }, [isLoggedIn, isAuthLoading, isPendingName, segments, code, hasSeenOnboarding, subscriptionLocked]);
 
   useEffect(() => {
+    const { pruneCacheAsync } = require('@/services/cacheService');
+    const timer = setTimeout(() => {
+      pruneCacheAsync().catch((err: any) => console.warn('[Startup] Failed to prune cache:', err));
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     const checkVersion = async () => {
       try {
         const response = await getSystemConfig();
