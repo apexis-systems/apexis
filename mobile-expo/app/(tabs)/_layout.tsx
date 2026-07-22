@@ -150,6 +150,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="project/photo-library"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
         name="project/snag-create"
         options={{
           href: null,

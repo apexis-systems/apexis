@@ -374,7 +374,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
       if (returnSnagId) params.set('snagId', returnSnagId);
       if (returnFolderId) params.set('folder', returnFolderId);
       if (returnFileId) params.set('fileId', returnFileId);
-      
+
       setTimeout(() => {
         router.push(window.location.pathname + `?${params.toString()}`);
       }, 300);

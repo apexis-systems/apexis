@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Modal, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Modal, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Text } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -14,10 +14,12 @@ interface Props {
     visible: boolean;
     onClose: () => void;
     uri: string | null;
+    title?: string;
+    folderName?: string;
     onEdit?: (uri: string) => void;
 }
 
-export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: Props) {
+export default function FullScreenImageModal({ visible, onClose, uri, title, folderName, onEdit }: Props) {
     const insets = useSafeAreaInsets();
     const [sharing, setSharing] = useState(false);
     const [downloading, setDownloading] = useState(false);
@@ -129,6 +131,25 @@ export default function FullScreenImageModal({ visible, onClose, uri, onEdit }: 
                         <Feather name="x" size={24} color="#fff" />
                     </TouchableOpacity>
 
+                    {/* Folder & Title Header — top center */}
+                    {(folderName || title) && (
+                        <View style={[styles.titleHeader, { top: topOffset }]} pointerEvents="none">
+                            {folderName ? (
+                                <View style={styles.folderBadge}>
+                                    <Feather name="folder" size={14} color="#E2E8F0" style={{ marginRight: 6 }} />
+                                    <Text style={styles.folderText} numberOfLines={1}>
+                                        {folderName}
+                                    </Text>
+                                </View>
+                            ) : null}
+                            {title && title !== folderName ? (
+                                <Text style={styles.titleText} numberOfLines={1}>
+                                    {title}
+                                </Text>
+                            ) : null}
+                        </View>
+                    )}
+
                     {/* Download + Share — top right */}
                     <View style={[styles.topRight, { top: topOffset }]}>
                         <TouchableOpacity
@@ -194,5 +215,35 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    titleHeader: {
+        position: 'absolute',
+        left: 68,
+        right: 116,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 90,
+    },
+    folderBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.15)',
+        maxWidth: '100%',
+    },
+    folderText: {
+        color: '#E2E8F0',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    titleText: {
+        color: '#94A3B8',
+        fontSize: 11,
+        marginTop: 2,
     },
 });

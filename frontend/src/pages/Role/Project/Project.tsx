@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import ProjectOverview from '@/pages/Role/Project/ProjectDetails/ProjectOverview';
 import ProjectDocuments from '@/pages/Role/Project/ProjectDetails/ProjectDocuments';
 import ProjectPhotos from '@/pages/Role/Project/ProjectDetails/ProjectPhotos';
+import PhotoLibrary from '@/pages/Role/Project/ProjectDetails/PhotoLibrary';
 import ProjectReports from '@/pages/Role/Project/ProjectDetails/ProjectReports';
 
 import ProjectSnagList from '@/pages/Role/Project/ProjectDetails/ProjectSnagList';
@@ -23,7 +24,7 @@ import { ArrowLeft, LayoutDashboard, FileText, Camera, ClipboardList, BarChart3,
 
 
 
-type TabKey = 'overview' | 'documents' | 'photos' | 'reports' | 'snags' | 'manuals' | 'rfi';
+type TabKey = 'overview' | 'documents' | 'photos' | 'photo-library' | 'reports' | 'snags' | 'manuals' | 'rfi';
 
 
 
@@ -65,7 +66,7 @@ export default function Project({ id }: ProjectProps) {
             const isConsultantVendor = user.role === 'consultant' || user.role === 'vendor';
             const defaultTab = isConsultantVendor ? 'documents' : 'overview';
             const allowedForConsultantVendor = ['documents', 'photos', 'manuals', 'rfi'];
-            const allowedTabs = isConsultantVendor ? allowedForConsultantVendor : ['overview', 'documents', 'photos', 'reports', 'snags', 'rfi', 'manuals'];
+            const allowedTabs = isConsultantVendor ? allowedForConsultantVendor : ['overview', 'documents', 'photos', 'photo-library', 'reports', 'snags', 'rfi', 'manuals'];
             const targetTab = urlTab && allowedTabs.includes(urlTab)
                 ? urlTab
                 : defaultTab;
@@ -302,6 +303,7 @@ export default function Project({ id }: ProjectProps) {
                 )}
                 {activeTab === 'documents' && <ProjectDocuments project={project} user={user} />}
                 {activeTab === 'photos' && <ProjectPhotos project={project} user={user} />}
+                {activeTab === ('photo-library' as any) && <PhotoLibrary project={project} user={user} onBack={() => setTab('overview')} />}
                 {activeTab === 'reports' && <ProjectReports project={project} userRole={user.role} />}
 
                 {activeTab === 'snags' && <ProjectSnagList project={project} />}

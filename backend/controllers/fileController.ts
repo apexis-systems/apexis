@@ -1858,12 +1858,12 @@ export const markFileSeen = async (req: Request, res: Response) => {
             const userId = parseInt(authUser.user_id, 10);
             if (!currentSeenBy.includes(userId)) {
                 file.seen_by = [...currentSeenBy, userId];
-                
+
                 // If this is the first person seeing it, set the root seen_at
                 if (!file.seen_at) {
                     file.seen_at = new Date();
                 }
-                
+
                 // Sequelize requires setting changed for arrays in some versions
                 file.changed('seen_by', true);
                 await file.save();

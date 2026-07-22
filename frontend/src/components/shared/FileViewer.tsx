@@ -125,7 +125,7 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
       toast.error(t('failed_toggle_dnf') || 'Failed to toggle Do Not Follow');
     }
   };
-  
+
   const handleToggleOnlyForReference = async () => {
     try {
       const targetState = !currentFile.only_for_reference;

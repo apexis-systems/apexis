@@ -264,6 +264,11 @@ export default function ProjectWorkspaceScreen() {
                             } else if (actionId === 'edit-end') {
                                 setEditModalFocus('end_date');
                                 setIsEditModalOpen(true);
+                            } else if (actionId === 'photos' && (user.role === 'admin' || user.role === 'superadmin')) {
+                                router.push({
+                                    pathname: '/(tabs)/project/photo-library',
+                                    params: { projectId: project.id }
+                                });
                             } else {
                                 handleTabPress(actionId as Tab);
                             }
