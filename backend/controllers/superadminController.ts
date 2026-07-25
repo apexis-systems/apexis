@@ -238,6 +238,16 @@ export const getFreemiumLeadList = async (req: Request, res: Response) => {
     }
 };
 
+export const getAllLeadList = async (req: Request, res: Response) => {
+    try {
+        const leads = await analyticsService.getAllLeads();
+        res.status(200).json({ leads });
+    } catch (error) {
+        console.error("getAllLeadList Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const getGrowthAnalytics = async (req: Request, res: Response) => {
     try {
         const data = await analyticsService.getSaasGrowthAnalytics();

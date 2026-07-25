@@ -308,7 +308,7 @@ export const getFreemiumLeads = async () => {
             model: organizations,
             where: { plan_name: 'Freemium' },
             required: true,
-            attributes: ['id', 'name', 'plan_start_date', 'plan_end_date']
+            attributes: ['id', 'name', 'plan_name', 'plan_start_date', 'plan_end_date']
         }],
         attributes: ['id', 'name', 'email', 'phone_number', 'createdAt'],
         order: [['createdAt', 'DESC']]
@@ -340,6 +340,7 @@ export const getFreemiumLeads = async () => {
             email: u.email,
             phone: u.phone_number || "+91 0000000000",
             company: org?.name || "Individual / Startup",
+            planName: org?.plan_name || "Freemium",
             installDate: u.createdAt,
             trialStart: planStart.toISOString(),
             trialEnd: planEnd.toISOString(),
@@ -351,6 +352,59 @@ export const getFreemiumLeads = async () => {
         };
     }));
 };
+
+export const getAllLeads = async () => {
+    // Fetch all admin users and their organizations regardless of plan
+    const allUsers = await users.findAll({
+        where: { role: 'admin' },
+        include: [{
+            model: organizations,
+            required: false,
+            attributes: ['id', 'name', 'plan_name', 'plan_start_date', 'plan_end_date']
+        }],
+        attributes: ['id', 'name', 'email', 'phone_number', 'createdAt'],
+        order: [['createdAt', 'DESC']]
+    });
+
+    return await Promise.all(allUsers.map(async (u: any) => {
+        const org = u.organization;
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        // Fetch dynamic metrics for each lead
+        const [activityCount, recentActivity, transactionCount] = await Promise.all([
+            activities.count({ where: { user_id: u.id, createdAt: { [Op.gte]: thirtyDaysAgo } } }),
+            activities.count({ where: { user_id: u.id, createdAt: { [Op.gte]: sevenDaysAgo } } }),
+            transactions.count({ where: { organization_id: org?.id, payment_status: 'success' } })
+        ]);
+
+        const createdAt = new Date(u.createdAt);
+        const planStart = org?.plan_start_date ? new Date(org.plan_start_date) : createdAt;
+        const planEnd = org?.plan_end_date ? new Date(org.plan_end_date) : new Date(planStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+        const diffTime = planEnd.getTime() - now.getTime();
+        const remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone_number || "+91 0000000000",
+            company: org?.name || "Individual / Startup",
+            planName: org?.plan_name || "Freemium",
+            installDate: u.createdAt,
+            trialStart: planStart.toISOString(),
+            trialEnd: planEnd.toISOString(),
+            remaining: remaining > 0 ? remaining : 0,
+            daysUsed: Math.max(0, Math.floor((now.getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24))),
+            activityScore: Math.min(100, Math.floor((activityCount / 30) * 100)), // 30+ activities in 30 days = 100 score
+            isActive: recentActivity > 0, // Active if any activity in last 7 days
+            converted: transactionCount > 0 // True if they've ever made a successful payment
+        };
+    }));
+};
+
 
 export const getSaasGrowthAnalytics = async () => {
     const now = new Date();

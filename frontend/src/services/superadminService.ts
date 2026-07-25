@@ -103,6 +103,16 @@ export const getFreemiumLeads = async () => {
     }
 };
 
+export const getAllLeads = async () => {
+    try {
+        const response = await PrivateAxios.get('/superadmin/dashboard/leads/all');
+        return response.data;
+    } catch (error) {
+        console.error("getAllLeads Error", error);
+        throw error;
+    }
+};
+
 export const getRevenueAnalytics = async () => {
     try {
         const response = await PrivateAxios.get('/superadmin/dashboard/revenue');

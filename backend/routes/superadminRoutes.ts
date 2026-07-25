@@ -9,6 +9,7 @@ import {
     getGrowthAnalytics,
     getRevenueMetrics,
     getFreemiumLeadList,
+    getAllLeadList,
     getOrganizationDetails,
     getUsersList,
     sendBroadcastNotification,
@@ -27,6 +28,7 @@ router.get("/dashboard/overview", getDashboardOverview);
 router.get("/dashboard/growth", getGrowthAnalytics);
 router.get("/dashboard/revenue", getRevenueMetrics);
 router.get("/dashboard/leads", getFreemiumLeadList);
+router.get("/dashboard/leads/all", getAllLeadList);
 router.get("/teams", getSuperAdmins);
 router.get("/organizations", getOrganizations);
 router.get("/organizations/:id", getOrganizationDetails);
