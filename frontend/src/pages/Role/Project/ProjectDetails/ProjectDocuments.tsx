@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Project, User, Folder } from '@/types';
-import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, HelpCircle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus, MoreVertical, Loader2 } from 'lucide-react';
+import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, HelpCircle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus, MoreVertical, Loader2, Lock, Unlock, Key, Shield, ShieldOff } from 'lucide-react';
+import FolderPasswordDialog from '@/components/project/FolderPasswordDialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUsage } from '@/contexts/UsageContext';
 import { createRFI, getRFIAssignees } from '@/services/rfiService';
@@ -62,6 +63,12 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
   );
   const [folders, setFolders] = useState<any[]>([]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
+
+  // Confidential Folder Password state
+  const [unlockedFolders, setUnlockedFolders] = useState<Set<string | number>>(new Set());
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [targetPasswordFolder, setTargetPasswordFolder] = useState<any>(null);
+  const [passwordDialogMode, setPasswordDialogMode] = useState<'unlock' | 'set' | 'change' | 'forgot' | 'remove'>('unlock');
   const [activeFolderTab, setActiveFolderTab] = useState<'files' | 'rfi'>('files');
   const [linkedRFICount, setLinkedRFICount] = useState(0);
   const [linkedSnagCount, setLinkedSnagCount] = useState(0);
@@ -792,23 +799,63 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                   key={folder.id}
                   onClick={() => {
                     if (isSelectionMode) toggleSelection('folder', folder.id);
-                    else setSelectedFolder(folder.id);
+                    else {
+                      if (isConfidentialFolder && folder.is_password_protected && !unlockedFolders.has(folder.id)) {
+                        setTargetPasswordFolder(folder);
+                        setPasswordDialogMode('unlock');
+                        setPasswordDialogOpen(true);
+                      } else {
+                        setSelectedFolder(folder.id);
+                      }
+                    }
                   }}
                   className={`relative flex flex-col items-center gap-1 p-3 rounded-lg bg-card border transition-all group ${isSelected ? 'border-accent bg-accent/5' : 'border-border hover:border-accent'}`}
                 >
-                  {!isSelectionMode && !isArchiveFolder && !isConfirmationFolder && !isConfidentialFolder && (
+                  {/* Folder action buttons */}
+                  {!isSelectionMode && !isArchiveFolder && !isConfirmationFolder && (
                     <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-card/80 backdrop-blur-sm p-0.5 rounded-full border border-border shadow-sm">
-                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                      {isConfidentialFolder && (user.role === 'admin' || user.role === 'superadmin') && (
+                        <>
+                          {folder.is_password_protected ? (
+                            <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setTargetPasswordFolder(folder); setPasswordDialogMode('change'); setPasswordDialogOpen(true); }}
+                                className="rounded-full p-1 hover:bg-secondary transition-colors"
+                                title="Change Folder Password"
+                              >
+                                <Key className="h-2.5 w-2.5 text-accent" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setTargetPasswordFolder(folder); setPasswordDialogMode('remove'); setPasswordDialogOpen(true); }}
+                                className="rounded-full p-1 hover:bg-destructive/10 transition-colors"
+                                title="Remove Password Security"
+                              >
+                                <ShieldOff className="h-2.5 w-2.5 text-destructive" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setTargetPasswordFolder(folder); setPasswordDialogMode('set'); setPasswordDialogOpen(true); }}
+                              className="rounded-full p-1 hover:bg-secondary transition-colors"
+                              title="Set Folder Password"
+                            >
+                              <Shield className="h-2.5 w-2.5 text-rose-500" />
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {!isConfidentialFolder && (user.role === 'admin' || user.role === 'superadmin') && (
                         <button onClick={(e) => toggleFolderVis(folder, e)} className="rounded-full p-1 hover:bg-secondary transition-colors">
                           {folder.client_visible !== false ? <Eye className="h-2.5 w-2.5 text-accent" /> : <EyeOff className="h-2.5 w-2.5 text-muted-foreground" />}
                         </button>
                       )}
-                      {(user.role === 'admin' || user.role === 'superadmin') && (
+                      {!isConfidentialFolder && (user.role === 'admin' || user.role === 'superadmin') && (
                         <button onClick={(e) => handleSingleMove('folder', folder.id, e)} className="rounded-full p-1 hover:bg-secondary transition-colors" title={t('move_folder_tip')}>
                           <Move className="h-2.5 w-2.5 text-muted-foreground" />
                         </button>
                       )}
-                      {(['admin', 'superadmin', 'contributor'].includes(user.role)) && (
+                      {!isConfidentialFolder && (['admin', 'superadmin', 'contributor'].includes(user.role)) && (
                         <>
                           <button
                             onClick={(e) => { e.stopPropagation(); setEditFolder(folder); }}
@@ -818,6 +865,16 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
                             <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                           </button>
                         </>
+                      )}
+                    </div>
+                  )}
+
+                  {folder.is_password_protected && (
+                    <div className="absolute top-2 left-2 z-10">
+                      {unlockedFolders.has(folder.id) ? (
+                        <Unlock className="h-3 w-3 text-rose-500" />
+                      ) : (
+                        <Lock className="h-3 w-3 text-rose-500" />
                       )}
                     </div>
                   )}
@@ -1609,6 +1666,27 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FolderPasswordDialog
+        isOpen={passwordDialogOpen}
+        folder={targetPasswordFolder}
+        user={user}
+        initialMode={passwordDialogMode}
+        onClose={() => setPasswordDialogOpen(false)}
+        onSuccess={(action) => {
+          setPasswordDialogOpen(false);
+          if (targetPasswordFolder) {
+            if (action === 'unlocked') {
+              setUnlockedFolders((prev) => new Set(prev).add(targetPasswordFolder.id));
+              setSelectedFolder(targetPasswordFolder.id);
+            } else if (action === 'updated') {
+              setFolders((prev) => prev.map(f => (f.name?.toLowerCase() === 'confidential' ? { ...f, is_password_protected: true } : f)));
+            } else if (action === 'removed') {
+              setFolders((prev) => prev.map(f => (f.name?.toLowerCase() === 'confidential' ? { ...f, is_password_protected: false } : f)));
+            }
+          }
+        }}
+      />
     </div>
   );
 };

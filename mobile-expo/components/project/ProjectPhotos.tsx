@@ -30,6 +30,7 @@ import ZoomableImage from '../shared/ZoomableImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
+import FolderPasswordModal from './FolderPasswordModal';
 import { getFolderRFIs, getRFIAssignees, createRFI } from '@/services/rfiService';
 import { getFolderSnags, getAssignees as getSnagAssignees, createSnag } from '@/services/snagService';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -281,6 +282,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [activeActionFolder, setActiveActionFolder] = useState<any>(null);
     const [processing, setProcessing] = useState<string | null>(null);
     const mainScrollRef = useRef<ScrollView>(null);
+
+    // Confidential Folder Password state
+    const [unlockedFolders, setUnlockedFolders] = useState<Set<string | number>>(new Set());
+    const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+    const [targetPasswordFolder, setTargetPasswordFolder] = useState<any>(null);
+    const [passwordModalMode, setPasswordModalMode] = useState<'unlock' | 'set' | 'change' | 'forgot' | 'remove'>('unlock');
 
     // Snag & RFI from existing photo creation states
     const [showCreateSnagModal, setShowCreateSnagModal] = useState(false);
@@ -2109,7 +2116,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 <TouchableOpacity
                                                     onPress={() => {
                                                         if (isSelectionMode) toggleSelection('folder', folder.id);
-                                                        else setSelectedFolder(folder.id);
+                                                        else {
+                                                            if (isConfidentialFolder && folder.is_password_protected && !unlockedFolders.has(folder.id)) {
+                                                                setTargetPasswordFolder(folder);
+                                                                setPasswordModalMode('unlock');
+                                                                setPasswordModalVisible(true);
+                                                            } else {
+                                                                setSelectedFolder(folder.id);
+                                                            }
+                                                        }
                                                     }}
                                                     onLongPress={() => handleLongPress('folder', folder.id)}
                                                     style={{
@@ -2117,6 +2132,11 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         zIndex: 5,
                                                     }}
                                                 />
+                                                {folder.is_password_protected && (
+                                                    <View style={{ position: 'absolute', top: 6, left: 6, zIndex: 10 }}>
+                                                        <Feather name={unlockedFolders.has(folder.id) ? "unlock" : "lock"} size={12} color="#f43f5e" />
+                                                    </View>
+                                                )}
                                                 <View style={{ marginBottom: 6 }}>
                                                     <Feather
                                                         name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : isConfidentialFolder ? "shield" : "folder"}
@@ -2139,7 +2159,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 {/* Folder Action Menu - Hidden for Clients */}
                                                 {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                                                     <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
-                                                        {!isConfirmationFolder && !isArchiveFolder && !isConfidentialFolder && (
+                                                        {(!isConfirmationFolder && !isArchiveFolder && (!isConfidentialFolder || (isConfidentialFolder && (user.role === 'admin' || user.role === 'superadmin')))) && (
                                                             <TouchableOpacity
                                                                 onPress={() => {
                                                                     setActiveActionFolder(folder);
@@ -3042,6 +3062,44 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 clientVisible={activeActionFolder?.client_visible !== false}
                 folderName={activeActionFolder?.name || ''}
                 processingAction={processing}
+                isConfidentialFolder={activeActionFolder?.name?.toLowerCase() === 'confidential'}
+                isPasswordProtected={!!activeActionFolder?.is_password_protected}
+                onSetPassword={() => {
+                    setTargetPasswordFolder(activeActionFolder);
+                    setPasswordModalMode('set');
+                    setPasswordModalVisible(true);
+                }}
+                onChangePassword={() => {
+                    setTargetPasswordFolder(activeActionFolder);
+                    setPasswordModalMode('change');
+                    setPasswordModalVisible(true);
+                }}
+                onRemovePassword={() => {
+                    setTargetPasswordFolder(activeActionFolder);
+                    setPasswordModalMode('remove');
+                    setPasswordModalVisible(true);
+                }}
+            />
+
+            <FolderPasswordModal
+                visible={passwordModalVisible}
+                folder={targetPasswordFolder}
+                user={user}
+                initialMode={passwordModalMode}
+                onClose={() => setPasswordModalVisible(false)}
+                onSuccess={(action) => {
+                    setPasswordModalVisible(false);
+                    if (targetPasswordFolder) {
+                        if (action === 'unlocked') {
+                            setUnlockedFolders((prev) => new Set(prev).add(targetPasswordFolder.id));
+                            setSelectedFolder(targetPasswordFolder.id);
+                        } else if (action === 'updated') {
+                            setFolders((prev) => prev.map(f => (f.name?.toLowerCase() === 'confidential' ? { ...f, is_password_protected: true } : f)));
+                        } else if (action === 'removed') {
+                            setFolders((prev) => prev.map(f => (f.name?.toLowerCase() === 'confidential' ? { ...f, is_password_protected: false } : f)));
+                        }
+                    }
+                }}
             />
 
             {/* Create Snag Modal */}
