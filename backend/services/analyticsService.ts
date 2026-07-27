@@ -649,19 +649,62 @@ export const getChurnAndRetentionMetrics = async () => {
     };
 };
 
-export const getGlobalActivityFeed = async () => {
+export const getFilteredActivityFeed = async (filters: {
+    companyId?: string | number;
+    type?: string;
+    dateRange?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+} = {}) => {
+    const whereCondition: any = {};
+
+    if (filters.type && filters.type !== "all") {
+        whereCondition.type = filters.type;
+    }
+
+    if (filters.dateRange && filters.dateRange !== "all") {
+        const now = new Date();
+        if (filters.dateRange === "today") {
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            whereCondition.createdAt = { [Op.gte]: startOfDay };
+        } else if (filters.dateRange === "7d") {
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(now.getDate() - 7);
+            whereCondition.createdAt = { [Op.gte]: sevenDaysAgo };
+        } else if (filters.dateRange === "30d") {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(now.getDate() - 30);
+            whereCondition.createdAt = { [Op.gte]: thirtyDaysAgo };
+        }
+    } else if (filters.startDate || filters.endDate) {
+        whereCondition.createdAt = {};
+        if (filters.startDate) whereCondition.createdAt[Op.gte] = new Date(filters.startDate);
+        if (filters.endDate) whereCondition.createdAt[Op.lte] = new Date(filters.endDate);
+    }
+
+    const projectInclude: any = {
+        model: projects,
+        as: 'project',
+        attributes: ['name', 'organization_id']
+    };
+
+    if (filters.companyId && filters.companyId !== "all") {
+        projectInclude.where = { organization_id: Number(filters.companyId) };
+    }
+
     const recentActivities = await activities.findAll({
-        limit: 10,
+        where: whereCondition,
+        limit: filters.limit ? Number(filters.limit) : 25,
         order: [['createdAt', 'DESC']],
-        include: [{
-            model: users,
-            as: 'user',
-            attributes: ['name']
-        }, {
-            model: projects,
-            as: 'project',
-            attributes: ['name']
-        }]
+        include: [
+            {
+                model: users,
+                as: 'user',
+                attributes: ['name']
+            },
+            projectInclude
+        ]
     });
 
     return recentActivities.map((act: any) => {
@@ -681,10 +724,17 @@ export const getGlobalActivityFeed = async () => {
             icon: "Circle",
             text: `${act.user?.name || 'User'} ${verb} in ${act.project?.name || 'a project'}`,
             time: act.createdAt,
-            type: act.type
+            type: act.type,
+            projectId: act.project_id,
+            userId: act.user_id
         };
     });
 };
+
+export const getGlobalActivityFeed = async () => {
+    return getFilteredActivityFeed({ limit: 10 });
+};
+
 
 export const getPlatformInsights = async () => {
     const [rfiCount, snagCount, photoCount, documentCount, chatRoomCount] = await Promise.all([

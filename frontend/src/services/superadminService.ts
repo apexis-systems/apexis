@@ -83,6 +83,23 @@ export const getDashboardOverview = async () => {
     }
 };
 
+export const getFilteredActivities = async (params: {
+    companyId?: string;
+    type?: string;
+    dateRange?: string;
+    startDate?: string;
+    endDate?: string;
+}) => {
+    try {
+        const response = await PrivateAxios.get('/superadmin/dashboard/activities', { params });
+        return response.data;
+    } catch (error) {
+        console.error("getFilteredActivities Error", error);
+        throw error;
+    }
+};
+
+
 export const getGrowthAnalytics = async () => {
     try {
         const response = await PrivateAxios.get('/superadmin/dashboard/growth');

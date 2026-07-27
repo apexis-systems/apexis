@@ -6,6 +6,7 @@ import {
     inviteSuperAdmin, 
     deleteSuperAdmin,
     getDashboardOverview,
+    getFilteredActivities,
     getGrowthAnalytics,
     getRevenueMetrics,
     getFreemiumLeadList,
@@ -25,6 +26,8 @@ router.use(isSuperAdmin);
 
 router.get("/overview", getOrgOverview);
 router.get("/dashboard/overview", getDashboardOverview);
+router.get("/dashboard/activities", getFilteredActivities);
+
 router.get("/dashboard/growth", getGrowthAnalytics);
 router.get("/dashboard/revenue", getRevenueMetrics);
 router.get("/dashboard/leads", getFreemiumLeadList);
