@@ -17,6 +17,11 @@ interface FolderActionMenuProps {
     isAdmin: boolean;
     folderName: string;
     processingAction?: string | null;
+    isConfidentialFolder?: boolean;
+    isPasswordProtected?: boolean;
+    onSetPassword?: () => void;
+    onChangePassword?: () => void;
+    onRemovePassword?: () => void;
 }
 
 export default function FolderActionMenu({
@@ -28,7 +33,12 @@ export default function FolderActionMenu({
     clientVisible,
     isAdmin,
     folderName,
-    processingAction = null
+    processingAction = null,
+    isConfidentialFolder = false,
+    isPasswordProtected = false,
+    onSetPassword,
+    onChangePassword,
+    onRemovePassword
 }: FolderActionMenuProps) {
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
@@ -52,7 +62,41 @@ export default function FolderActionMenu({
                             </View>
 
                             <View style={styles.optionsContainer}>
-                                {!(folderName.toLowerCase() === 'confirmation' || folderName.toLowerCase() === 'confirmations' || folderName.toLowerCase() === 'archive') && (isAdmin || !isAdmin) && (
+                                {isConfidentialFolder && isAdmin && (
+                                    <>
+                                        {isPasswordProtected ? (
+                                            <>
+                                                <TouchableOpacity 
+                                                    style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                                    onPress={() => { !isProcessing && onChangePassword && onChangePassword(); onClose(); }}
+                                                    disabled={isProcessing}
+                                                >
+                                                    <Feather name="key" size={18} color={colors.primary} />
+                                                    <Text style={[styles.optionText, { color: colors.text }]}>Change Password</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity 
+                                                    style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                                    onPress={() => { !isProcessing && onRemovePassword && onRemovePassword(); onClose(); }}
+                                                    disabled={isProcessing}
+                                                >
+                                                    <Feather name="shield-off" size={18} color="#ef4444" />
+                                                    <Text style={[styles.optionText, { color: "#ef4444" }]}>Remove Password Security</Text>
+                                                </TouchableOpacity>
+                                            </>
+                                        ) : (
+                                            <TouchableOpacity 
+                                                style={[styles.option, isProcessing && { opacity: 0.5 }]} 
+                                                onPress={() => { !isProcessing && onSetPassword && onSetPassword(); onClose(); }}
+                                                disabled={isProcessing}
+                                            >
+                                                <Feather name="shield" size={18} color="#f43f5e" />
+                                                <Text style={[styles.optionText, { color: colors.text }]}>Set Folder Password</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </>
+                                )}
+
+                                {!(folderName.toLowerCase() === 'confirmation' || folderName.toLowerCase() === 'confirmations' || folderName.toLowerCase() === 'archive' || isConfidentialFolder) && (isAdmin || !isAdmin) && (
                                     <TouchableOpacity 
                                         style={[styles.option, isProcessing && { opacity: 0.5 }]} 
                                         onPress={() => { !isProcessing && onHideUnhide(); }}
@@ -75,7 +119,7 @@ export default function FolderActionMenu({
 
                                 {isAdmin && (
                                     <>
-                                        {!(folderName.toLowerCase() === 'confirmation' || folderName.toLowerCase() === 'confirmations' || folderName.toLowerCase() === 'archive') && (
+                                        {!(folderName.toLowerCase() === 'confirmation' || folderName.toLowerCase() === 'confirmations' || folderName.toLowerCase() === 'archive' || isConfidentialFolder) && (
                                             <>
                                                 <TouchableOpacity 
                                                     style={[styles.option, isProcessing && { opacity: 0.5 }]} 

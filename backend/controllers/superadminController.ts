@@ -209,6 +209,25 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
     }
 };
 
+export const getFilteredActivities = async (req: Request, res: Response) => {
+    try {
+        const { companyId, type, dateRange, startDate, endDate, limit } = req.query;
+        const feed = await analyticsService.getFilteredActivityFeed({
+            companyId: companyId as string,
+            type: type as string,
+            dateRange: dateRange as string,
+            startDate: startDate as string,
+            endDate: endDate as string,
+            limit: limit ? Number(limit) : 25,
+        });
+        res.status(200).json({ feed });
+    } catch (error) {
+        console.error("getFilteredActivities Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+
 export const getRevenueMetrics = async (req: Request, res: Response) => {
     try {
         const data = await analyticsService.getRevenueAnalytics();
@@ -234,6 +253,16 @@ export const getFreemiumLeadList = async (req: Request, res: Response) => {
         res.status(200).json({ leads });
     } catch (error) {
         console.error("getFreemiumLeadList Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getAllLeadList = async (req: Request, res: Response) => {
+    try {
+        const leads = await analyticsService.getAllLeads();
+        res.status(200).json({ leads });
+    } catch (error) {
+        console.error("getAllLeadList Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

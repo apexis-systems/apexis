@@ -425,8 +425,8 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textMuted, marginBottom: 4 }}>
-                {(user as any).organization?.name ? (
-                  ((user as any).organization.name).charAt(0).toUpperCase() + ((user as any).organization.name).slice(1)
+                {(user as any)?.organization?.name ? (
+                  String((user as any).organization.name).charAt(0).toUpperCase() + String((user as any).organization.name).slice(1)
                 ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text className="font-angelica" style={{ color: colors.primary, fontFamily: 'Angelica', fontWeight: 'normal' }}>APEXIS</Text>
@@ -439,13 +439,18 @@ export default function DashboardScreen() {
                 <TouchableOpacity onPress={() => setIsProfilePreviewOpen(true)}>
                   <SecureAvatar
                     fileKey={user.profile_pic}
-                    name={user.name}
+                    name={user.name || 'User'}
                     size={36}
                     style={{ borderWidth: 1.5 }}
                   />
                 </TouchableOpacity>
                 <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text }}>
-                  {t('dashboard.greeting', { name: user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1) })}
+                  {t('dashboard.greeting', {
+                    name: (() => {
+                      const firstName = (user?.name || 'User').split(' ')[0] || 'User';
+                      return firstName.charAt(0).toUpperCase() + firstName.slice(1);
+                    })()
+                  })}
                 </Text>
               </View>
 

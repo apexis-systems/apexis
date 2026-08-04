@@ -6,9 +6,11 @@ import {
     inviteSuperAdmin, 
     deleteSuperAdmin,
     getDashboardOverview,
+    getFilteredActivities,
     getGrowthAnalytics,
     getRevenueMetrics,
     getFreemiumLeadList,
+    getAllLeadList,
     getOrganizationDetails,
     getUsersList,
     sendBroadcastNotification,
@@ -24,9 +26,12 @@ router.use(isSuperAdmin);
 
 router.get("/overview", getOrgOverview);
 router.get("/dashboard/overview", getDashboardOverview);
+router.get("/dashboard/activities", getFilteredActivities);
+
 router.get("/dashboard/growth", getGrowthAnalytics);
 router.get("/dashboard/revenue", getRevenueMetrics);
 router.get("/dashboard/leads", getFreemiumLeadList);
+router.get("/dashboard/leads/all", getAllLeadList);
 router.get("/teams", getSuperAdmins);
 router.get("/organizations", getOrganizations);
 router.get("/organizations/:id", getOrganizationDetails);

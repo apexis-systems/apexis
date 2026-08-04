@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -41,7 +41,7 @@ import {
 } from "recharts";
 import { SUPERADMIN_SECTION_HIGHLIGHT_EVENT } from "@/components/superadmin/SuperadminSidebar";
 import { cn } from "@/lib/utils";
-import { getDashboardOverview, getOrganizationDetails } from "@/services/superadminService";
+import { getDashboardOverview, getOrganizationDetails, getFilteredActivities } from "@/services/superadminService";
 import { useSocket } from "@/contexts/SocketContext";
 import {
   Dialog,
@@ -204,10 +204,10 @@ function MetricCard({
     .join(" ");
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className={cn(
-        cardClass, 
+        cardClass,
         "relative overflow-hidden p-4 transition-all duration-300",
         onClick && "cursor-pointer hover:border-[hsl(24_95%_53%/0.4)] hover:shadow-md hover:translate-y-[-2px] active:scale-[0.98]"
       )}
@@ -274,6 +274,57 @@ export default function OverviewDashboard() {
   const [data, setData] = useState<any>(null);
   const [activitiesList, setActivitiesList] = useState<any[]>([]);
   const [showAllUsage, setShowAllUsage] = useState(false);
+  const [usageFilter, setUsageFilter] = useState<"mostActive" | "recentActive">("mostActive");
+
+  // Live Activity Feed Filters State
+  const [activityCompanyFilter, setActivityCompanyFilter] = useState("all");
+  const [activityTypeFilter, setActivityTypeFilter] = useState("all");
+  const [activityDateFilter, setActivityDateFilter] = useState("all");
+  const [filteredFeed, setFilteredFeed] = useState<any[]>([]);
+  const [loadingFeed, setLoadingFeed] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchFilteredFeed = async () => {
+      setLoadingFeed(true);
+      try {
+        const res = await getFilteredActivities({
+          companyId: activityCompanyFilter,
+          type: activityTypeFilter,
+          dateRange: activityDateFilter,
+        });
+        if (isMounted) {
+          setFilteredFeed(res.feed || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch filtered activity feed:", err);
+      } finally {
+        if (isMounted) {
+          setLoadingFeed(false);
+        }
+      }
+    };
+
+    fetchFilteredFeed();
+    return () => {
+      isMounted = false;
+    };
+  }, [activityCompanyFilter, activityTypeFilter, activityDateFilter]);
+
+
+  const sortedCompanyUsage = useMemo(() => {
+    if (!data?.companyUsage) return [];
+    const companies = [...data.companyUsage];
+    if (usageFilter === "recentActive") {
+      return companies.sort((a, b) => (b.lastActiveRaw || 0) - (a.lastActiveRaw || 0));
+    }
+    return companies.sort((a, b) => {
+      const aScore = (a.tasks || 0) + (a.messages || 0) + (a.projects || 0);
+      const bScore = (b.tasks || 0) + (b.messages || 0) + (b.projects || 0);
+      return bScore - aScore;
+    });
+  }, [data?.companyUsage, usageFilter]);
+
   const [timeRange, setTimeRange] = useState("allTime");
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [orgDetails, setOrgDetails] = useState<any>(null);
@@ -355,12 +406,12 @@ export default function OverviewDashboard() {
 
   const dashboardStats = data?.stats || {};
   const currentStats = (dashboardStats as any)[timeRange] || {};
-  
+
   const metricsList = [
     {
       title: "Active Companies",
       value: String(currentStats.activeCompanies?.total || 0),
-      change: currentStats.activeCompanies?.text || "0%", 
+      change: currentStats.activeCompanies?.text || "0%",
       changeType: (currentStats.activeCompanies?.type || "neutral") as "up" | "down" | "neutral",
       icon: Building2,
       sparkline: [12, 19, 28, 38, 52, 65, 78, currentStats.activeCompanies?.total || 0],
@@ -415,7 +466,7 @@ export default function OverviewDashboard() {
       cardClass,
       "transition-all duration-500",
       highlightedSection === sectionId &&
-        "animate-pulse ring-2 ring-[hsl(24_95%_53%/0.45)] ring-offset-2 ring-offset-[hsl(38_33%_95%)] shadow-[0_0_0_4px_hsl(24_95%_53%/0.10)] dark:ring-offset-[hsl(30_10%_10%)]",
+      "animate-pulse ring-2 ring-[hsl(24_95%_53%/0.45)] ring-offset-2 ring-offset-[hsl(38_33%_95%)] shadow-[0_0_0_4px_hsl(24_95%_53%/0.10)] dark:ring-offset-[hsl(30_10%_10%)]",
     );
 
   return (
@@ -427,7 +478,7 @@ export default function OverviewDashboard() {
             Real-time platform health & analytics
           </p>
         </div>
-        
+
         <div className="flex items-center gap-3 mr-12">
           <button
             onClick={handleRefresh}
@@ -471,9 +522,9 @@ export default function OverviewDashboard() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {metricsList.map((metric: any) => (
-          <MetricCard 
-            key={metric.title} 
-            {...metric} 
+          <MetricCard
+            key={metric.title}
+            {...metric}
             onClick={metric.targetId || metric.targetUrl ? () => {
               if (metric.targetUrl) {
                 router.push(metric.targetUrl);
@@ -585,52 +636,52 @@ export default function OverviewDashboard() {
               <h3 className={cn("mb-4 text-sm font-semibold", strongTextClass)}>
                 Most Active Projects
               </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)]">
-                    <th className={cn("py-2 text-left font-medium uppercase tracking-wide", mutedTextClass)}>Project</th>
-                    <th className={cn("py-2 text-left font-medium uppercase tracking-wide", mutedTextClass)}>Company</th>
-                    <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Risk</th>
-                    <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Activity</th>
-                    <th className={cn("py-2 text-right font-medium uppercase tracking-wide", mutedTextClass)}>Tasks</th>
-                    <th className={cn("py-2 text-right font-medium uppercase tracking-wide", mutedTextClass)}>Messages</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data?.topProjects || []).map((project: any) => (
-                    <tr
-                      key={project.name}
-                      className="border-b border-[hsl(35_15%_85%/0.5)] transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
-                      <td className={cn("py-2.5 font-medium", strongTextClass)}>{project.name}</td>
-                      <td className={cn("py-2.5", mutedTextClass)}>{project.company}</td>
-                      <td className="py-2.5 text-center">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className={cn("h-2 w-2 rounded-full", riskColors[project.risk || 'green'])} />
-                          <span className={mutedTextClass}>{riskLabels[project.risk || 'green']}</span>
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-center">
-                        <SummaryPill className={activityBadge[project.activity > 100 ? "High" : (project.activity > 50 ? "Medium" : "Low")]}>
-                          {project.activity > 100 ? "High" : (project.activity > 50 ? "Medium" : "Low")}
-                        </SummaryPill>
-                      </td>
-                      <td className={cn("py-2.5 text-right font-medium", strongTextClass)}>{project.tasks}</td>
-                      <td className={cn("py-2.5 text-right font-medium", strongTextClass)}>
-                        {project.messages.toLocaleString()}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)]">
+                      <th className={cn("py-2 text-left font-medium uppercase tracking-wide", mutedTextClass)}>Project</th>
+                      <th className={cn("py-2 text-left font-medium uppercase tracking-wide", mutedTextClass)}>Company</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Risk</th>
+                      <th className={cn("py-2 text-center font-medium uppercase tracking-wide", mutedTextClass)}>Activity</th>
+                      <th className={cn("py-2 text-right font-medium uppercase tracking-wide", mutedTextClass)}>Tasks</th>
+                      <th className={cn("py-2 text-right font-medium uppercase tracking-wide", mutedTextClass)}>Messages</th>
                     </tr>
-                  ))}
-                  {(!data?.topProjects || data.topProjects.length === 0) && (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center opacity-50">No active projects found yet.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(data?.topProjects || []).map((project: any) => (
+                      <tr
+                        key={project.name}
+                        className="border-b border-[hsl(35_15%_85%/0.5)] transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
+                        <td className={cn("py-2.5 font-medium", strongTextClass)}>{project.name}</td>
+                        <td className={cn("py-2.5", mutedTextClass)}>{project.company}</td>
+                        <td className="py-2.5 text-center">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className={cn("h-2 w-2 rounded-full", riskColors[project.risk || 'green'])} />
+                            <span className={mutedTextClass}>{riskLabels[project.risk || 'green']}</span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-center">
+                          <SummaryPill className={activityBadge[project.activity > 100 ? "High" : (project.activity > 50 ? "Medium" : "Low")]}>
+                            {project.activity > 100 ? "High" : (project.activity > 50 ? "Medium" : "Low")}
+                          </SummaryPill>
+                        </td>
+                        <td className={cn("py-2.5 text-right font-medium", strongTextClass)}>{project.tasks}</td>
+                        <td className={cn("py-2.5 text-right font-medium", strongTextClass)}>
+                          {project.messages.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                    {(!data?.topProjects || data.topProjects.length === 0) && (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center opacity-50">No active projects found yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
           <section id="communication" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("communication")}>
@@ -758,15 +809,39 @@ export default function OverviewDashboard() {
 
           <section id="company-usage" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("company-usage")}>
-              <div className="mb-4 flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-[hsl(24_95%_53%)]" />
-                <div>
-                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
-                    Company Usage
-                  </h3>
-                  <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
-                    The most active companies by projects, users, messages, and tasks
-                  </p>
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-[hsl(24_95%_53%)]" />
+                  <div>
+                    <h3 className={cn("text-sm font-semibold", strongTextClass)}>
+                      Company Usage
+                    </h3>
+                    <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
+                      {usageFilter === "mostActive"
+                        ? "The most active companies by projects, users, messages, and tasks"
+                        : "Companies sorted by their most recent activity"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-1 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)]">
+                  {[
+                    { id: "mostActive", label: "Most Active" },
+                    { id: "recentActive", label: "Recent Active" },
+                  ].map((filter) => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setUsageFilter(filter.id as "mostActive" | "recentActive")}
+                      className={cn(
+                        "rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all",
+                        usageFilter === filter.id
+                          ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
+                          : "text-[hsl(30_8%_45%)] hover:bg-[hsl(37_18%_91%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)]"
+                      )}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -783,13 +858,20 @@ export default function OverviewDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(showAllUsage ? (data?.companyUsage || []) : (data?.companyUsage || []).slice(0, 6)).map((company: any, index: number) => (
+                    {(showAllUsage ? sortedCompanyUsage : sortedCompanyUsage.slice(0, 6)).map((company: any, index: number) => (
                       <tr
                         key={company.id || company.name}
                         onClick={() => handleCompanyClick(company.id)}
                         className="border-b border-[hsl(35_15%_85%/0.5)] cursor-pointer transition-colors duration-100 hover:bg-[hsl(37_18%_91%/0.4)] last:border-0 dark:border-[hsl(30_8%_22%/0.5)] dark:hover:bg-[hsl(30_6%_18%/0.7)]">
                         <td className={cn("py-2.5 font-medium", mutedTextClass)}>{index + 1}</td>
-                        <td className={cn("py-2.5 font-medium", strongTextClass)}>{company.name}</td>
+                        <td className={cn("py-2.5 font-medium", strongTextClass)}>
+                          <div>{company.name}</div>
+                          {company.lastActive && (
+                            <div className={cn("mt-0.5 text-[10px] font-normal", mutedTextClass)}>
+                              Last active: {company.lastActive}
+                            </div>
+                          )}
+                        </td>
                         <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.projects}</td>
                         <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.users}</td>
                         <td className={cn("py-2.5 text-center", mutedTextClass)}>{company.messages?.toLocaleString() || "0"}</td>
@@ -800,7 +882,7 @@ export default function OverviewDashboard() {
                 </table>
               </div>
 
-              {(data?.companyUsage?.length || 0) > 6 && (
+              {(sortedCompanyUsage.length || 0) > 6 && (
                 <div className="mt-4 flex justify-center border-t border-[hsl(35_15%_85%/0.3)] pt-4 dark:border-[hsl(30_8%_22%/0.3)]">
                   <button
                     onClick={() => setShowAllUsage(!showAllUsage)}
@@ -864,38 +946,133 @@ export default function OverviewDashboard() {
             </div>
           </div> */}
 
-          {/* <section id="live-activity" className={scrollSectionClass}>
+          <section id="live-activity" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("live-activity")}>
-              <div className="mb-4 flex items-center gap-2">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                <h3 className={cn("text-sm font-semibold", strongTextClass)}>
-                  Live Activity Feed
-                </h3>
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                  <h3 className={cn("text-sm font-semibold", strongTextClass)}>
+                    Live Activity Feed
+                  </h3>
+                </div>
+
+                {(activityCompanyFilter !== "all" || activityTypeFilter !== "all" || activityDateFilter !== "all") && (
+                  <button
+                    onClick={() => {
+                      setActivityCompanyFilter("all");
+                      setActivityTypeFilter("all");
+                      setActivityDateFilter("all");
+                    }}
+                    className="text-[10px] font-semibold text-[hsl(24_95%_53%)] hover:underline"
+                  >
+                    Reset Filters
+                  </button>
+                )}
               </div>
-              <div className="max-h-[400px] space-y-0 overflow-y-auto">
-                {(data?.feed || []).map((activity: any, index: number) => {
+
+              {/* Filters Bar */}
+              <div className="mb-4 grid grid-cols-1 gap-2 border-b border-[hsl(35_15%_85%/0.5)] pb-3 sm:grid-cols-3 dark:border-[hsl(30_8%_22%/0.5)]">
+                {/* Company Filter */}
+                <div>
+                  <label className={cn("mb-1 block text-[10px] font-semibold uppercase tracking-wider", mutedTextClass)}>
+                    Company
+                  </label>
+                  <select
+                    value={activityCompanyFilter}
+                    onChange={(e) => setActivityCompanyFilter(e.target.value)}
+                    className={cn(
+                      "w-full rounded border border-[hsl(35_15%_85%)] bg-white px-2 py-1 text-xs transition-colors dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_18%)]",
+                      strongTextClass
+                    )}
+                  >
+                    <option value="all">All Companies</option>
+                    {(data?.companyUsage || []).map((company: any) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Activity Type Filter */}
+                <div>
+                  <label className={cn("mb-1 block text-[10px] font-semibold uppercase tracking-wider", mutedTextClass)}>
+                    Activity Type
+                  </label>
+                  <select
+                    value={activityTypeFilter}
+                    onChange={(e) => setActivityTypeFilter(e.target.value)}
+                    className={cn(
+                      "w-full rounded border border-[hsl(35_15%_85%)] bg-white px-2 py-1 text-xs transition-colors dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_18%)]",
+                      strongTextClass
+                    )}
+                  >
+                    <option value="all">All Types</option>
+                    <option value="upload">Files Uploaded</option>
+                    <option value="upload_photo">Photos Added</option>
+                    <option value="comment">Comments</option>
+                    <option value="photo_comment">Photo Comments</option>
+                    <option value="edit">Edits</option>
+                    <option value="delete">Deletions</option>
+                    <option value="share">Shares</option>
+                  </select>
+                </div>
+
+                {/* Date Range Filter */}
+                <div>
+                  <label className={cn("mb-1 block text-[10px] font-semibold uppercase tracking-wider", mutedTextClass)}>
+                    Date Range
+                  </label>
+                  <select
+                    value={activityDateFilter}
+                    onChange={(e) => setActivityDateFilter(e.target.value)}
+                    className={cn(
+                      "w-full rounded border border-[hsl(35_15%_85%)] bg-white px-2 py-1 text-xs transition-colors dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_18%)]",
+                      strongTextClass
+                    )}
+                  >
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Feed List */}
+              <div className="relative max-h-[400px] space-y-0 overflow-y-auto">
+                {loadingFeed && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-[hsl(30_8%_14%)]/60">
+                    <Activity className="h-5 w-5 animate-spin text-[hsl(24_95%_53%)]" />
+                  </div>
+                )}
+
+                {((filteredFeed.length > 0 ? filteredFeed : (activityCompanyFilter === "all" && activityTypeFilter === "all" && activityDateFilter === "all" ? data?.feed : [])) || []).map((activity: any, index: number) => {
                   const Icon = activityIconMap[activity.type] || activityIconMap.default;
                   const color = activityColorMap[activity.type] || activityColorMap.default;
                   return (
-                  <div
-                    key={`${activity.text}-${index}`}
-                    className="flex items-start gap-3 border-b border-[hsl(35_15%_85%/0.5)] py-2.5 last:border-0 dark:border-[hsl(30_8%_22%/0.5)]">
-                    <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", color)} />
-                    <div className="min-w-0 flex-1">
-                      <p className={cn("text-xs leading-relaxed", strongTextClass)}>{activity.text}</p>
-                      <p className={cn("mt-0.5 text-[10px]", mutedTextClass)}>{new Date(activity.time).toLocaleTimeString()}</p>
+                    <div
+                      key={`${activity.text}-${index}`}
+                      className="flex items-start gap-3 border-b border-[hsl(35_15%_85%/0.5)] py-2.5 last:border-0 dark:border-[hsl(30_8%_22%/0.5)]">
+                      <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", color)} />
+                      <div className="min-w-0 flex-1">
+                        <p className={cn("text-xs leading-relaxed", strongTextClass)}>{activity.text}</p>
+                        <p className={cn("mt-0.5 text-[10px]", mutedTextClass)}>{new Date(activity.time).toLocaleString()}</p>
+                      </div>
                     </div>
-                  </div>
-                )})}
-                {(!data?.feed || data.feed.length === 0) && (
+                  )
+                })}
+
+                {!loadingFeed && (filteredFeed.length === 0 && (activityCompanyFilter !== "all" || activityTypeFilter !== "all" || activityDateFilter !== "all" || !data?.feed || data.feed.length === 0)) && (
                   <div className="flex flex-col items-center justify-center py-8 opacity-50">
                     <Activity className="h-8 w-8 animate-pulse text-[hsl(24_95%_53%)]" />
-                    <p className="mt-2 text-xs">Waiting for live activities...</p>
+                    <p className="mt-2 text-xs">No matching activities found for selected filters.</p>
                   </div>
                 )}
               </div>
             </div>
-          </section> */}
+          </section>
+
 
           <section id="alerts" className={scrollSectionClass}>
             <div className={getHighlightedCardClass("alerts")}>
@@ -909,19 +1086,20 @@ export default function OverviewDashboard() {
                 {(data?.alerts || []).map((alert: any, index: number) => {
                   const Icon = alert.severity === 'critical' ? AlertTriangle : (alert.severity === 'warning' ? AlertCircle : Clock);
                   return (
-                  <div
-                    key={`${alert.text}-${index}`}
-                    className={cn(
-                      "flex items-start gap-3 rounded border p-3",
-                      severityStyles[alert.severity as keyof typeof severityStyles] || severityStyles.info,
-                    )}>
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium">{alert.text}</p>
-                      <p className="mt-0.5 text-[10px] opacity-70">{new Date(alert.time).toLocaleTimeString()}</p>
+                    <div
+                      key={`${alert.text}-${index}`}
+                      className={cn(
+                        "flex items-start gap-3 rounded border p-3",
+                        severityStyles[alert.severity as keyof typeof severityStyles] || severityStyles.info,
+                      )}>
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium">{alert.text}</p>
+                        <p className="mt-0.5 text-[10px] opacity-70">{new Date(alert.time).toLocaleTimeString()}</p>
+                      </div>
                     </div>
-                  </div>
-                )})}
+                  )
+                })}
               </div>
             </div>
           </section>
@@ -1023,10 +1201,10 @@ export default function OverviewDashboard() {
                     tickLine={false}
                     tickFormatter={(value: any) => `₹${(Number(value) / 1000).toFixed(0)}k`}
                   />
-                    <Tooltip
-                      contentStyle={{ fontSize: 12, borderRadius: 6, border: `1px solid ${chartGridStroke}` }}
-                      formatter={(value: any) => [`₹${Number(value).toLocaleString()}`, "MRR"]}
-                    />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 6, border: `1px solid ${chartGridStroke}` }}
+                    formatter={(value: any) => [`₹${Number(value).toLocaleString()}`, "MRR"]}
+                  />
                   <Area type="monotone" dataKey="mrr" stroke="hsl(160,84%,39%)" strokeWidth={2} fill="url(#overview-revenue)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -1157,22 +1335,22 @@ export default function OverviewDashboard() {
                               </div>
                             </div>
                           </div>
-                          
+
                           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[hsl(35_15%_85%/0.4)] dark:border-[hsl(30_8%_22%/0.4)]">
-                             <div className="bg-[hsl(39_30%_97%)] dark:bg-black/20 rounded-lg p-2.5 text-center">
-                                <div className={cn("text-lg font-black", strongTextClass)}>{project.tasks}</div>
-                                <div className="text-[10px] uppercase opacity-50 font-black tracking-tighter">Total Tasks</div>
-                             </div>
-                             <div className="bg-[hsl(39_30%_97%)] dark:bg-black/20 rounded-lg p-2.5 text-center">
-                                <div className={cn("text-lg font-black", strongTextClass)}>{project.files}</div>
-                                <div className="text-[10px] uppercase opacity-50 font-black tracking-tighter">Files</div>
-                             </div>
+                            <div className="bg-[hsl(39_30%_97%)] dark:bg-black/20 rounded-lg p-2.5 text-center">
+                              <div className={cn("text-lg font-black", strongTextClass)}>{project.tasks}</div>
+                              <div className="text-[10px] uppercase opacity-50 font-black tracking-tighter">Total Tasks</div>
+                            </div>
+                            <div className="bg-[hsl(39_30%_97%)] dark:bg-black/20 rounded-lg p-2.5 text-center">
+                              <div className={cn("text-lg font-black", strongTextClass)}>{project.files}</div>
+                              <div className="text-[10px] uppercase opacity-50 font-black tracking-tighter">Files</div>
+                            </div>
                           </div>
                         </div>
                       ))}
                       {(!orgDetails?.projects || orgDetails.projects.length === 0) && (
                         <div className="py-10 text-center border-2 border-dashed border-[hsl(35_15%_85%)] dark:border-[hsl(30_8%_22%)] rounded-xl opacity-40">
-                           No projects found in this organization.
+                          No projects found in this organization.
                         </div>
                       )}
                     </div>
@@ -1182,9 +1360,9 @@ export default function OverviewDashboard() {
                   <div className="lg:col-span-4 space-y-6">
                     <div className="flex items-center justify-between px-1">
                       <h4 className={cn("text-base font-bold flex items-center gap-3", strongTextClass)}>
-                         <div className="flex items-center justify-center h-5 w-5">
-                            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                         </div>
+                        <div className="flex items-center justify-center h-5 w-5">
+                          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        </div>
                         Live Activity
                       </h4>
                       <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-tight">Real-time</Badge>
@@ -1208,8 +1386,8 @@ export default function OverviewDashboard() {
                         ))}
                         {(!orgDetails?.activities || orgDetails.activities.length === 0) && (
                           <div className="py-24 text-center">
-                             <Activity className="h-10 w-10 mx-auto opacity-10 mb-3" />
-                             <p className="opacity-40 text-xs font-medium">No recent activity logged.</p>
+                            <Activity className="h-10 w-10 mx-auto opacity-10 mb-3" />
+                            <p className="opacity-40 text-xs font-medium">No recent activity logged.</p>
                           </div>
                         )}
                       </div>

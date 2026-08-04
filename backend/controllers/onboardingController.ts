@@ -250,6 +250,8 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
             plan_id: plan.id,
             plan_name: plan.name,
             plan_price: plan.price,
+            seats_purchased: plan.contributor_limit || 50,
+            price_per_seat: 159,
             plan_start_date: now,
             plan_end_date: endDate,
             storage_limit_mb: plan.storage_limit_mb

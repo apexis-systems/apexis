@@ -12,6 +12,8 @@ import { useSocket } from "./SocketContext";
 export interface UsageData {
   plan: {
     name: string;
+    seats_purchased?: number;
+    price_per_seat?: number;
     startDate: string;
     endDate: string;
     daysRemaining: number;
@@ -26,11 +28,18 @@ export interface UsageData {
   };
   usage: {
     projects: number;
+    seats_purchased?: number;
+    seats_per_project?: number;
+    seats_limit_total?: number;
+    seats_used?: number;
+    seats_remaining?: number;
     contributors: number;
     clients: number;
     snags: number;
     rfis: number;
     storage_mb: number;
+    storage_limit_per_project_mb?: number;
+    storage_limit_mb?: number;
     storage_percent: number;
   };
   alert: {

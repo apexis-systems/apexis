@@ -25,7 +25,9 @@ import {
   getPlans,
   createOrder,
   verifyPayment,
+  validateSeatChange,
 } from "@/services/subscriptionService";
+import { ProjectMemberManagementModal } from "@/components/subscription/ProjectMemberManagementModal";
 import { getMe } from "@/services/authService";
 let RazorpayCheckout: any = null;
 try {
@@ -34,14 +36,8 @@ try {
     // Not available in Expo Go — requires a development build
 }
 
-const PLAN_ORDER = ["One-Time Buy", "Starter", "Professional", "Enterprise"];
+const PLAN_ORDER = ["Starter", "Enterprise"];
 const GST_RATE = 0.18;
-const PLAN_PERIOD_MAP: Record<string, string> = {
-  "One-Time Buy": "",
-  Starter: "/mo",
-  Professional: "/mo",
-  Enterprise: "",
-};
 
 const isEnterprisePlan = (plan: any): boolean => {
   const name = String(plan?.name || "")
@@ -59,72 +55,28 @@ const PLAN_DETAILS: Record<
     featureKeys: string[];
   }
 > = {
-  "One-Time Buy": {
-    subtitleKey: "subscription.plans.oneTimeSubtitle",
-    validity: "Valid for 90 days",
-    trial: "14 Day Free Trial",
-    featureKeys: [
-      "singleProject",
-      "clientView",
-      "basicReporting",
-      "storage5GB",
-      "oneTimePurchase",
-      "snagList",
-      "drawingsRelease",
-      "multilingual",
-      "freeTrial",
-      "secureStorage",
-    ],
-  },
   Starter: {
-    subtitleKey: "subscription.plans.starterSubtitle",
-    trial: "14 Day Free Trial",
+    subtitleKey: "Pay Per Seat Subscription",
     featureKeys: [
-      "upTo5Projects",
-      "clientView",
-      "structuredReporting",
-      "storage25GB",
-      "basicDashboard",
+      "unlimitedProjects",
+      "storage5GBPerProject",
+      "fullRoleAccess",
       "snagList",
       "drawingsRelease",
       "multilingual",
-      "freeTrial",
-      "secureStorage",
-    ],
-  },
-  Professional: {
-    subtitleKey: "subscription.plans.professionalSubtitle",
-    trial: "14 Day Free Trial",
-    featureKeys: [
-      "upTo10Projects",
-      "clientView",
-      "aiReports",
-      "roleAccess",
-      "storage100GB",
-      "mediaDoc",
-      "prioritySupport",
-      "snagList",
-      "drawingsRelease",
-      "multilingual",
-      "freeTrial",
       "secureStorage",
     ],
   },
   Enterprise: {
-    subtitleKey: "subscription.plans.enterpriseSubtitle",
-    trial: "14 Day Free Trial",
+    subtitleKey: "Custom Pricing (>100 Seats)",
     featureKeys: [
-      "above10Projects",
-      "clientView",
-      "customWorkflows",
-      "customOnboarding",
+      "above100Seats",
+      "customStorage",
       "dedicatedSupport",
       "customIntegrations",
-      "above100GB",
       "snagList",
       "drawingsRelease",
       "multilingual",
-      "freeTrial",
       "secureStorage",
     ],
   },
@@ -153,13 +105,29 @@ export default function SubscriptionScreen() {
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const appIconUri = Image.resolveAssetSource(
     require("../assets/images/app-icon.png"),
-  ).uri;
+  )?.uri || "";
 
   useEffect(() => {
     fetchPlans();
   }, []);
 
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+  const [selectedSeats, setSelectedSeats] = useState<number>(5);
+
+  // Member management modal state
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [validationProjects, setValidationProjects] = useState<any[]>([]);
+  const [pendingPlan, setPendingPlan] = useState<any | null>(null);
+
+  const handleRefreshValidation = async () => {
+    try {
+      const res = await validateSeatChange(selectedSeats);
+      setValidationProjects(res.projects || []);
+      return res;
+    } catch (error) {
+      console.error("Error refreshing mobile seat validation", error);
+    }
+  };
 
   const fetchPlans = async () => {
     setPlansLoading(true);
@@ -170,28 +138,31 @@ export default function SubscriptionScreen() {
         (a: any, b: any) =>
           PLAN_ORDER.indexOf(a.name) - PLAN_ORDER.indexOf(b.name),
       );
-      setAvailablePlans(sorted);
+      if (!sorted || sorted.length === 0) {
+        setAvailablePlans([
+          { id: 1, name: "Starter", price: 159 },
+          { id: 2, name: "Enterprise", price: 999999 }
+        ]);
+      } else {
+        setAvailablePlans(sorted);
+      }
     } catch (error) {
       console.error("Failed to fetch plans mobile:", error);
+      setAvailablePlans([
+        { id: 1, name: "Starter", price: 159 },
+        { id: 2, name: "Enterprise", price: 999999 }
+      ]);
     } finally {
       setPlansLoading(false);
     }
   };
 
   const getEffectivePrice = (plan: any) => {
-    const basePrice = Number(plan.price) || 0;
-    if (plan.name === "One-Time Buy" || plan.name === "Enterprise") return basePrice;
-    return billingCycle === "annual" ? basePrice * 0.65 : basePrice;
+    const unitPrice = billingCycle === "annual" ? 99 : 159;
+    return unitPrice;
   };
 
-  const handleUpgrade = async (plan: any) => {
-    if (processingPayment) return;
-    if (isEnterprisePlan(plan)) {
-      Linking.openURL(
-        "mailto:support@apexis.in?subject=Enterprise Plan Inquiry",
-      );
-      return;
-    }
+  const executeCheckout = async (plan: any) => {
     const razorpayKey = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID;
     if (!razorpayKey) {
       Alert.alert(
@@ -213,24 +184,55 @@ export default function SubscriptionScreen() {
 
     setProcessingPayment(true);
     try {
-      const effectivePrice = getEffectivePrice(plan);
-      const isAnnual = billingCycle === "annual" && plan.name !== "One-Time Buy";
-      const amount = isAnnual ? effectivePrice * 12 : effectivePrice;
+      const currentSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
+      const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
+      const isPlanActive = (usageData?.plan?.daysRemaining || 0) > 0;
+      const isUpgrade = isPlanActive && selectedSeats > currentSeats;
+
+      let estimatedAmount = 0;
+      if (isUpgrade) {
+        const addedSeats = selectedSeats - currentSeats;
+        const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
+        const dailyRatePerSeat = billingCycle === "annual" ? (99 * 12) / 365 : 159 / 30;
+        const proratedCost = Math.round(addedSeats * dailyRatePerSeat * remainingDays);
+        estimatedAmount = Math.max(1, Math.min(fullCycleCost, proratedCost));
+      } else {
+        estimatedAmount = billingCycle === "annual" ? selectedSeats * 99 * 12 : selectedSeats * 159;
+      }
 
       const orderData = await createOrder({
-        amount,
+        amount: estimatedAmount,
         currency: "INR",
-        plan_name: plan.name,
-        plan_cycle: plan.name === "One-Time Buy" ? "monthly" : billingCycle,
+        plan_name: "Seat Subscription",
+        plan_cycle: billingCycle,
+        seats: selectedSeats,
       });
 
+      if (orderData?.is_downgrade) {
+        Alert.alert(t('common.success') || "Success", orderData.message || `Seats updated to ${selectedSeats} seats.`);
+        await refreshUsage();
+        try {
+          const refreshed = await getMe();
+          if (refreshed?.user) {
+            updateUser({
+              ...refreshed.user,
+              organization: refreshed.organization,
+              project_id: refreshed.project_id,
+            } as any);
+          }
+        } catch (refreshError) {
+          console.error("Failed to refresh user after seat update:", refreshError);
+        }
+        setProcessingPayment(false);
+        return;
+      }
 
       if (!orderData?.order?.id || !orderData.order.amount) {
         throw new Error("Invalid payment order received from server.");
       }
 
       const options = {
-        description: `${plan.name} Subscription`,
+        description: isUpgrade ? `Add ${selectedSeats - currentSeats} Seats (${remainingDays} days remaining)` : `${plan.name} Subscription`,
         image: appIconUri,
         currency: "INR",
         key: razorpayKey,
@@ -259,7 +261,7 @@ export default function SubscriptionScreen() {
           razorpay_payment_id: data.razorpay_payment_id,
           razorpay_signature: data.razorpay_signature,
           plan_name: plan.name,
-          plan_cycle: "monthly",
+          plan_cycle: billingCycle,
         });
 
         try {
@@ -278,7 +280,6 @@ export default function SubscriptionScreen() {
         await refreshUsage();
         Alert.alert(t('common.success') || 'Success', t('subscription.successUpgrade'));
       } catch (e: any) {
-
         const message =
           e?.response?.data?.message ||
           e?.message ||
@@ -286,7 +287,6 @@ export default function SubscriptionScreen() {
         Alert.alert("Error", message);
       }
     } catch (error: any) {
-      // Razorpay cancellation code in RN SDK.
       if (error?.code === 2) return;
       const rawMessage = String(error?.description || error?.message || "");
       if (
@@ -303,11 +303,37 @@ export default function SubscriptionScreen() {
       }
       const errorMessage =
         error?.response?.data?.message ||
-        error?.response?.data?.error?.description ||
         error?.message ||
-        "Failed to initiate payment";
+        "Payment initiation failed. Please try again.";
       Alert.alert("Error", errorMessage);
     } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const handleUpgrade = async (plan: any) => {
+    if (processingPayment) return;
+    if (isEnterprisePlan(plan) || selectedSeats > 100) {
+      Linking.openURL(
+        "mailto:support@apexis.in?subject=Enterprise Plan Inquiry (>100 Seats)",
+      );
+      return;
+    }
+
+    setProcessingPayment(true);
+    try {
+      const validation = await validateSeatChange(selectedSeats);
+      if (!validation.valid) {
+        setValidationProjects(validation.projects || []);
+        setPendingPlan(plan);
+        setIsMemberModalOpen(true);
+        setProcessingPayment(false);
+        return;
+      }
+
+      await executeCheckout(plan);
+    } catch (error) {
+      console.error("Pre-checkout seat validation error in mobile", error);
       setProcessingPayment(false);
     }
   };
@@ -509,14 +535,14 @@ export default function SubscriptionScreen() {
                            : `₹${effectivePrice.toLocaleString("en-IN")}`}
                        </Text>
 
-                      {!!period && (
+                      {!isEnterprise && (
                         <Text
                           style={{
                             fontSize: 12,
                             color: colors.textMuted,
                             marginLeft: 4,
                           }}>
-                          {period}
+                          /seat/mo
                         </Text>
                       )}
                     </View>
@@ -641,53 +667,85 @@ export default function SubscriptionScreen() {
                          ]}>
                          {isEnterprisePlan(selectedPlan)
                            ? t('subscription.customPricing')
-                           : `₹${getEffectivePrice(selectedPlan).toLocaleString("en-IN")}`}
+                           : `₹${(billingCycle === "annual" ? 99 : 159).toLocaleString("en-IN")}`}
                        </Text>
 
-                      {selectedPlan.name !== "One-Time Buy" &&
-                        !isEnterprisePlan(selectedPlan) && (
-                          <Text
-                            style={[
-                              styles.modalPeriod,
-                              { color: colors.textMuted },
-                            ]}>
-                            /mo
-                          </Text>
-                        )}
+                      {!isEnterprisePlan(selectedPlan) && (
+                        <Text
+                          style={[
+                            styles.modalPeriod,
+                            { color: colors.textMuted },
+                          ]}>
+                          /seat/mo
+                        </Text>
+                      )}
                     </View>
-                    {!!selectedPlanDetails.validity && (
-                      <Text
-                        style={[
-                          styles.modalMetaText,
-                          { color: colors.textMuted },
-                        ]}>
-                        {selectedPlanDetails.validity}
-                      </Text>
-                    )}
-                    {!!selectedPlanDetails.trial && (
-                      <Text
-                        style={[
-                          styles.modalMetaText,
-                          { color: colors.textMuted },
-                        ]}>
-                        {selectedPlanDetails.trial}
-                      </Text>
-                    )}
-                     {billingCycle === "annual" && selectedPlan.name !== "One-Time Buy" && !isEnterprisePlan(selectedPlan) && (
-                       <Text style={{ color: colors.primary, fontWeight: "700", marginTop: 4 }}>
-                         {t('subscription.billedAnnually', { amount: (getEffectivePrice(selectedPlan) * 12).toLocaleString("en-IN") })}
-                       </Text>
-                     )}
+
+                    {!isEnterprisePlan(selectedPlan) && (() => {
+                      const activeSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
+                      const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
+                      const isPlanActive = (usageData?.plan?.daysRemaining || 0) > 0;
+                      const isSeatUpgrade = isPlanActive && selectedSeats > activeSeats;
+                      const addedSeats = selectedSeats - activeSeats;
+                      const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
+                      const dailyRatePerSeat = billingCycle === "annual" ? (99 * 12) / 365 : 159 / 30;
+                      const proratedCost = Math.round(addedSeats * dailyRatePerSeat * remainingDays);
+                      const calcTotal = isSeatUpgrade
+                        ? Math.max(1, Math.min(fullCycleCost, proratedCost))
+                        : (billingCycle === "annual" ? selectedSeats * 99 * 12 : selectedSeats * 159);
+
+                      return (
+                        <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border }}>
+                          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textMuted, letterSpacing: 0.5, marginBottom: 8 }}>
+                            SELECT NUMBER OF SEATS
+                          </Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                              <TouchableOpacity
+                                onPress={() => setSelectedSeats(Math.max(1, selectedSeats - 1))}
+                                style={{ width: 36, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: `${colors.primary}10` }}>
+                                <Feather name="minus" size={16} color={colors.primary} />
+                              </TouchableOpacity>
+
+                              <Text style={{ fontSize: 18, fontWeight: "900", color: colors.text, minWidth: 30, textAlign: "center" }}>
+                                {selectedSeats}
+                              </Text>
+
+                              <TouchableOpacity
+                                onPress={() => {
+                                  if (selectedSeats >= 100) {
+                                    Alert.alert("Custom Pricing", "For more than 100 seats, please contact support@apexis.in.");
+                                  } else {
+                                    setSelectedSeats(selectedSeats + 1);
+                                  }
+                                }}
+                                style={{ width: 36, height: 36, borderRadius: 10, borderWidth: 1, borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: `${colors.primary}10` }}>
+                                <Feather name="plus" size={16} color={colors.primary} />
+                              </TouchableOpacity>
+                            </View>
+
+                            <View style={{ alignItems: "flex-end" }}>
+                              <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: "600" }}>
+                                {isSeatUpgrade ? `Prorated (+${addedSeats} seat${addedSeats > 1 ? 's' : ''}, ${remainingDays}d)` : `Total (${billingCycle})`}
+                              </Text>
+                              <Text style={{ fontSize: 18, fontWeight: "900", color: colors.primary }}>
+                                ₹{calcTotal.toLocaleString("en-IN")}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })()}
 
                     {!isEnterprisePlan(selectedPlan) && (
                       <Text
                         style={{
-                          fontSize: 12,
+                          fontSize: 11,
                           color: colors.textMuted,
-                          marginTop: 4,
+                          marginTop: 10,
                           fontWeight: "600",
                         }}>
-                        (Incl. 18% GST)
+                        (Incl. 18% GST) · 5GB Storage per project
                       </Text>
                     )}
                   </View>
@@ -728,51 +786,92 @@ export default function SubscriptionScreen() {
 
                 </ScrollView>
 
-                <TouchableOpacity
-                  style={[
-                    styles.modalActionBtn,
-                    {
-                      backgroundColor:
-                        selectedPlan.name === plan.name
-                          ? colors.surface
-                          : colors.primary,
-                      borderColor: colors.primary,
-                    },
-                  ]}
-                  disabled={
-                    processingPayment || selectedPlan.name === plan.name
-                  }
-                  onPress={() => handleUpgrade(selectedPlan)}>
-                  {processingPayment ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={selectedPlan.name === plan.name ? colors.primary : "white"}
-                    />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.modalActionText,
-                        {
-                          color:
-                            selectedPlan.name === plan.name
-                              ? colors.primary
-                              : "white",
-                        },
-                       ]}>
-                       {selectedPlan.name === plan.name
-                         ? t('subscription.currentPlan')
-                         : isEnterprisePlan(selectedPlan)
-                           ? t('subscription.contactSales')
-                           : t('subscription.buyPlan')}
-                     </Text>
+                {(() => {
+                  const activeSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
+                  const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
+                  const isPlanActive = (usageData?.plan?.daysRemaining || 0) > 0;
+                  const isUpgrade = isPlanActive && selectedSeats > activeSeats;
+                  const isDowngrade = isPlanActive && selectedSeats < activeSeats;
+                  const isSeatChanged = selectedSeats !== activeSeats;
+                  const addedSeats = selectedSeats - activeSeats;
+                  const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
+                  const dailyRatePerSeat = billingCycle === "annual" ? (99 * 12) / 365 : 159 / 30;
+                  const proratedCost = Math.round(addedSeats * dailyRatePerSeat * remainingDays);
+                  const calcTotal = isUpgrade
+                    ? Math.max(1, Math.min(fullCycleCost, proratedCost))
+                    : (billingCycle === "annual" ? selectedSeats * 99 * 12 : selectedSeats * 159);
 
-                  )}
-                </TouchableOpacity>
+                  const isCurrent = selectedPlan.name === plan.name;
+                  const isDisabled = processingPayment || (isCurrent && !isSeatChanged);
+
+                  let btnText = "";
+                  if (processingPayment) {
+                    btnText = t('subscription.processing') || "Processing...";
+                  } else if (isEnterprisePlan(selectedPlan)) {
+                    btnText = t('subscription.contactSales');
+                  } else if (isUpgrade) {
+                    btnText = `Upgrade to ${selectedSeats} Seats (₹${calcTotal.toLocaleString("en-IN")})`;
+                  } else if (isDowngrade) {
+                    btnText = `Update to ${selectedSeats} Seats (₹${calcTotal.toLocaleString("en-IN")})`;
+                  } else if (isCurrent) {
+                    btnText = t('subscription.currentPlan');
+                  } else {
+                    btnText = `Buy Plan (${selectedSeats} Seat${selectedSeats > 1 ? 's' : ''} · ₹${calcTotal.toLocaleString("en-IN")})`;
+                  }
+
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        styles.modalActionBtn,
+                        {
+                          backgroundColor: isDisabled
+                            ? colors.surface
+                            : colors.primary,
+                          borderColor: colors.primary,
+                        },
+                      ]}
+                      disabled={isDisabled}
+                      onPress={() => handleUpgrade(selectedPlan)}>
+                      {processingPayment ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={isDisabled ? colors.primary : "white"}
+                        />
+                      ) : (
+                        <Text
+                          style={[
+                            styles.modalActionText,
+                            {
+                              color: isDisabled
+                                ? colors.primary
+                                : "white",
+                            },
+                          ]}>
+                          {btnText}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })()}
               </>
             )}
           </View>
         </View>
       </Modal>
+
+      <ProjectMemberManagementModal
+        visible={isMemberModalOpen}
+        onClose={() => setIsMemberModalOpen(false)}
+        targetSeats={selectedSeats}
+        projects={validationProjects}
+        onRefreshValidation={handleRefreshValidation}
+        onProceed={async () => {
+          setIsMemberModalOpen(false);
+          if (pendingPlan) {
+            await executeCheckout(pendingPlan);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }

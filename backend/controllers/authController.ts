@@ -234,11 +234,11 @@ export const projectLogin = async (req: Request, res: Response) => {
 
         if (!user) {
             if (roleForCode === "contributor" || roleForCode === "client") {
-                const memberLimit = await checkMemberLimit(project.organization_id, roleForCode);
+                const memberLimit = await checkMemberLimit(project.organization_id, roleForCode, project.id);
                 if (!memberLimit.allowed) {
                     return res.status(memberLimit.status).json({
                         error: "Limit Reached",
-                        message: memberLimit.message,
+                        message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
                         code: memberLimit.code,
                     });
                 }
@@ -285,6 +285,16 @@ export const projectLogin = async (req: Request, res: Response) => {
                 });
             }
         } else {
+            // Check member limit before adding to project
+            const memberLimit = await checkMemberLimit(project.organization_id, roleForCode, project.id);
+            if (!memberLimit.allowed) {
+                return res.status(memberLimit.status).json({
+                    error: "Limit Reached",
+                    message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
+                    code: memberLimit.code,
+                });
+            }
+
             // Auto-add them to the project since they possess a valid code and are not yet a member
             await project_members.create({
                 project_id: project.id,
@@ -561,11 +571,11 @@ export const completePublicSignup = async (req: Request, res: Response) => {
 
         if (!user) {
             if (decoded.role === "contributor" || decoded.role === "client") {
-                const memberLimit = await checkMemberLimit(decoded.organization_id, decoded.role);
+                const memberLimit = await checkMemberLimit(decoded.organization_id, decoded.role, project.id);
                 if (!memberLimit.allowed) {
                     return res.status(memberLimit.status).json({
                         error: "Limit Reached",
-                        message: memberLimit.message,
+                        message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
                         code: memberLimit.code,
                     });
                 }
@@ -606,6 +616,16 @@ export const completePublicSignup = async (req: Request, res: Response) => {
             }
             // Already a member with the same role, proceed to success (no duplicate needed)
         } else {
+            // Check member limit before adding to project
+            const memberLimit = await checkMemberLimit(project.organization_id, decoded.role, project.id);
+            if (!memberLimit.allowed) {
+                return res.status(memberLimit.status).json({
+                    error: "Limit Reached",
+                    message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
+                    code: memberLimit.code,
+                });
+            }
+
             // Add to project with the new role
             await project_members.create({
                 project_id: project.id,

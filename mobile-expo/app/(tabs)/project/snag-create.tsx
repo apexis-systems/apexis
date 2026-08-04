@@ -66,6 +66,45 @@ export default function SnagCreateScreen() {
     const [submitting, setSubmitting] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
 
+    // Lifecycle-aware temporary file cleanup
+    const capturedPhotoRef = useRef(capturedPhoto);
+    const capturedAudioRef = useRef(capturedAudio);
+
+    useEffect(() => {
+        if (capturedPhotoRef.current && capturedPhotoRef.current.uri !== capturedPhoto?.uri) {
+            const oldUri = capturedPhotoRef.current.uri;
+            if (oldUri.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(oldUri).catch(() => {});
+            }
+        }
+        capturedPhotoRef.current = capturedPhoto;
+    }, [capturedPhoto]);
+
+    useEffect(() => {
+        if (capturedAudioRef.current && capturedAudioRef.current !== capturedAudio) {
+            const oldUri = capturedAudioRef.current;
+            if (oldUri.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(oldUri).catch(() => {});
+            }
+        }
+        capturedAudioRef.current = capturedAudio;
+    }, [capturedAudio]);
+
+    useEffect(() => {
+        return () => {
+            if (capturedPhotoRef.current && capturedPhotoRef.current.uri.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(capturedPhotoRef.current.uri).catch(() => {});
+            }
+            if (capturedAudioRef.current && capturedAudioRef.current.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(capturedAudioRef.current).catch(() => {});
+            }
+        };
+    }, []);
+
     // Physical Orientation Tracking
     const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
 

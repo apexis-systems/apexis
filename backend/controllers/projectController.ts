@@ -936,3 +936,107 @@ export const restoreProject = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const getProjectPhotos = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const authUser = (req as any).user;
+
+        if (!authUser) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        if (authUser.role !== "admin" && authUser.role !== "superadmin") {
+            return res.status(403).json({ error: "Only admins can fetch project photos" });
+        }
+
+        const project = await projects.findOne({ where: { id } });
+        if (!project) {
+            return res.status(404).json({ error: "Project not found" });
+        }
+
+        // Restrict access to organization's projects unless superadmin
+        if (authUser.role === "admin" && project.organization_id !== authUser.organization_id) {
+            return res.status(403).json({ error: "Forbidden: Not part of organization" });
+        }
+
+        const limit = parseInt(req.query.limit as string, 10) || 40;
+        const page = parseInt(req.query.page as string, 10) || 1;
+        const offset = (page - 1) * limit;
+
+        // Get all folders for this project
+        const folderData = await folders.findAll({
+            where: { project_id: id }
+        });
+        const folderIds = folderData.map((f: any) => f.id);
+
+        const projectOrFolderCond = folderIds.length > 0
+            ? {
+                [Op.or]: [
+                    { project_id: id },
+                    { folder_id: { [Op.in]: folderIds } }
+                ]
+              }
+            : { project_id: id };
+
+        const whereCondition: any = {
+            [Op.and]: [
+                projectOrFolderCond,
+                { file_type: { [Op.iLike]: "image/%" } },
+                { is_current: true }
+            ]
+        };
+
+        const totalCount = await files.count({ where: whereCondition });
+
+        const photosList = await files.findAll({
+            where: whereCondition,
+            limit,
+            offset,
+            order: [["createdAt", "DESC"]],
+            include: [
+                {
+                    model: users,
+                    as: "creator",
+                    attributes: ["id", "name", "email"]
+                },
+                {
+                    model: folders,
+                    attributes: ["id", "name"]
+                }
+            ]
+        });
+
+        // Generate presigned URLs
+        const finalizedPhotos = await Promise.all(
+            photosList.map(async (file: any) => {
+                const fileJson = file.toJSON ? file.toJSON() : file;
+                try {
+                    const command = new GetObjectCommand({
+                        Bucket: BUCKET_NAME,
+                        Key: fileJson.file_url
+                    });
+                    fileJson.downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+                } catch (urlErr) {
+                    console.error(`Failed to generate signed URL for key ${fileJson.file_url}:`, urlErr);
+                    fileJson.downloadUrl = null;
+                }
+                return fileJson;
+            })
+        );
+
+        res.status(200).json({
+            photos: finalizedPhotos,
+            pagination: {
+                total: totalCount,
+                page,
+                limit,
+                totalPages: Math.ceil(totalCount / limit)
+            }
+        });
+    } catch (error) {
+        console.error("Get Project Photos Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+

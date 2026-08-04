@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createOrder, verifyPayment, getTransactions, getUsage, getPlans, getInvoice } from "../controllers/subscriptionController.ts";
+import { createOrder, verifyPayment, getTransactions, getUsage, getPlans, getInvoice, validateSeatChange } from "../controllers/subscriptionController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 
 const router = Router();
@@ -10,5 +10,6 @@ router.post("/verify-payment", verifyToken, verifyPayment);
 router.get("/transactions", verifyToken, getTransactions);
 router.get("/usage", verifyToken, getUsage);
 router.get("/invoice/:id", verifyToken, getInvoice);
+router.post("/validate-seat-change", verifyToken, validateSeatChange);
 
 export default router;
