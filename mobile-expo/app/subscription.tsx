@@ -105,7 +105,7 @@ export default function SubscriptionScreen() {
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const appIconUri = Image.resolveAssetSource(
     require("../assets/images/app-icon.png"),
-  ).uri;
+  )?.uri || "";
 
   useEffect(() => {
     fetchPlans();

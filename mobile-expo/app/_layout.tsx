@@ -434,28 +434,32 @@ function RootLayoutNav() {
   );
 }
 
+import ErrorBoundary from '@/components/shared/ErrorBoundary';
+
+
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { TourProvider } from '@/contexts/TourContext';
 import { UsageProvider } from '@/contexts/UsageContext';
 import TourOverlay from '@/components/tour/TourOverlay';
-
 function ThemedLayout() {
   const { isDark } = useTheme();
   return (
-    <GluestackUIProvider mode={isDark ? "dark" : "light"}>
-      <AuthProvider>
-        <SocketProvider>
-          <TourProvider>
-            <UsageProvider>
-              <RootLayoutNav />
-              <TourOverlay />
-            </UsageProvider>
-          </TourProvider>
-        </SocketProvider>
-        <StatusBar style={isDark ? "light" : "dark"} />
-      </AuthProvider>
-    </GluestackUIProvider>
+    <ErrorBoundary>
+      <GluestackUIProvider mode={isDark ? "dark" : "light"}>
+        <AuthProvider>
+          <SocketProvider>
+            <TourProvider>
+              <UsageProvider>
+                <RootLayoutNav />
+                <TourOverlay />
+              </UsageProvider>
+            </TourProvider>
+          </SocketProvider>
+          <StatusBar style={isDark ? "light" : "dark"} />
+        </AuthProvider>
+      </GluestackUIProvider>
+    </ErrorBoundary>
   );
 }
 
