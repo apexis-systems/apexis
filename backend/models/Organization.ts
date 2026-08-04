@@ -25,9 +25,19 @@ export default (sequelize: Sequelize) => {
                 defaultValue: "Free",
             },
             plan_price: {
+                type: DataTypes.DECIMAL(10, 2),
+                allowNull: false,
+                defaultValue: 0.00,
+            },
+            seats_purchased: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
-                defaultValue: 0,
+                defaultValue: 1,
+            },
+            price_per_seat: {
+                type: DataTypes.DECIMAL(10, 2),
+                allowNull: false,
+                defaultValue: 159.00,
             },
             plan_id: {
                 type: DataTypes.INTEGER,

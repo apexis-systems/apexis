@@ -715,7 +715,7 @@ export default function UploadScreen() {
                 });
 
                 const res = await uploadScans(formData, (p) => {
-                    setFileQueue(prev => prev.map(it => ({ ...it, progress: p, status: p === 100 ? 'done' : 'uploading' })));
+                    setFileQueue(prev => prev.map(it => ({ ...it, progress: Math.min(p, 99), status: 'uploading' })));
                 });
 
                 if (res.success) {
@@ -758,8 +758,8 @@ export default function UploadScreen() {
                                 const next = [...prev];
                                 const targetIdx = next.findIndex(n => n.asset.uri === item.asset.uri);
                                 if (targetIdx !== -1) {
-                                    next[targetIdx].progress = p;
-                                    next[targetIdx].status = p === 100 ? 'done' : 'uploading';
+                                    next[targetIdx].progress = Math.min(p, 99);
+                                    next[targetIdx].status = 'uploading';
                                 }
                                 return next;
                             });

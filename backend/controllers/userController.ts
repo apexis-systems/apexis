@@ -22,6 +22,8 @@ import { Op, Sequelize } from "sequelize";
 import { getIO } from "../socket.ts";
 import { normalizePhone } from "../utils/sms.ts";
 
+import { checkMemberLimit } from "../utils/subscriptionAccess.ts";
+
 export const inviteUser = async (req: Request, res: Response) => {
     try {
         const { role, email, phone_number, project_id, projectId } = req.body;
@@ -130,6 +132,15 @@ export const inviteUser = async (req: Request, res: Response) => {
             });
 
             if (!existingMembership) {
+                const memberLimit = await checkMemberLimit(authUser.organization_id, role, Number(actualProjectId));
+                if (!memberLimit.allowed) {
+                    return res.status(403).json({
+                        error: "Limit Reached",
+                        message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
+                        code: memberLimit.code,
+                    });
+                }
+
                 const newMember = await project_members.create({
                     project_id: actualProjectId,
                     user_id: user.id,

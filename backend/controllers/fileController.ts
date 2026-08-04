@@ -104,7 +104,7 @@ export const confirmScreenshot = async (req: Request | any, res: Response) => {
         }
 
         const fileSizeMb = (req as any).file.size / (1024 * 1024);
-        const storageCheck = await checkStorageLimit(project.organization_id, fileSizeMb);
+        const storageCheck = await checkStorageLimit(project.organization_id, fileSizeMb, project.id, (req as any).user?.role);
         if (!storageCheck.allowed) {
             return res.status(storageCheck.status).json({
                 error: storageCheck.message,
@@ -240,7 +240,7 @@ export const uploadFile = async (req: Request | any, res: Response) => {
         }
 
         const fileSizeMb = (req as any).file.size / (1024 * 1024);
-        const storageCheck = await checkStorageLimit(project.organization_id, fileSizeMb);
+        const storageCheck = await checkStorageLimit(project.organization_id, fileSizeMb, project.id, (req as any).user?.role);
         if (!storageCheck.allowed) {
             return res.status(storageCheck.status).json({
                 error: storageCheck.message,
@@ -1291,7 +1291,7 @@ export const uploadScans = async (req: Request | any, res: Response) => {
         const scanFiles = (req as any).files as MulterFile[];
         const totalIncomingSizeMb = (scanFiles || []).reduce((acc, f) => acc + (f.size / (1024 * 1024)), 0);
 
-        const storageCheck = await checkStorageLimit(project.organization_id, totalIncomingSizeMb);
+        const storageCheck = await checkStorageLimit(project.organization_id, totalIncomingSizeMb, project.id, (req as any).user?.role);
         if (!storageCheck.allowed) {
             return res.status(storageCheck.status).json({
                 error: storageCheck.message,

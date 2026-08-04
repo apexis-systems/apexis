@@ -53,3 +53,23 @@ export const verifyPayment = async (data: any) => {
 export const getInvoiceDownloadUrl = (id: number) => {
     return `${PrivateAxios.defaults.baseURL}/subscription/invoice/${id}`;
 };
+
+export const validateSeatChange = async (targetSeats: number) => {
+    try {
+        const response = await PrivateAxios.post('/subscription/validate-seat-change', { targetSeats });
+        return response.data;
+    } catch (error) {
+        console.error("validateSeatChange Error", error);
+        throw error;
+    }
+};
+
+export const removeProjectMember = async (projectId: number, userId: number) => {
+    try {
+        const response = await PrivateAxios.delete(`/projects/${projectId}/members/${userId}`);
+        return response.data;
+    } catch (error) {
+        console.error("removeProjectMember Error", error);
+        throw error;
+    }
+};

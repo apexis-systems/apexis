@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Project, User, Folder } from '@/types';
 import { FileText, Upload, Trash2, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Move, X, List, LayoutGrid, ChevronDown, ShieldAlert, Info, Pencil, AlertTriangle, HelpCircle, Archive, User as UserIcon, CheckCircle2, CheckCheck, Plus, MoreVertical, Loader2, Lock, Unlock, Key, Shield, ShieldOff } from 'lucide-react';
-import FolderPasswordDialog from '@/components/project/FolderPasswordDialog';
+import FolderPasswordDialog from '@/components/Project/FolderPasswordDialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUsage } from '@/contexts/UsageContext';
 import { createRFI, getRFIAssignees } from '@/services/rfiService';

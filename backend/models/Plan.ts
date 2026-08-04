@@ -19,6 +19,16 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.DECIMAL,
                 allowNull: false,
             },
+            price_per_seat_monthly: {
+                type: DataTypes.DECIMAL(10, 2),
+                allowNull: false,
+                defaultValue: 159.00,
+            },
+            price_per_seat_annually: {
+                type: DataTypes.DECIMAL(10, 2),
+                allowNull: false,
+                defaultValue: 99.00,
+            },
             storage_limit_mb: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
