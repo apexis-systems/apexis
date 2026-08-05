@@ -1,4 +1,4 @@
-import { organizations, plans, users, projects, project_members, files, Sequelize } from "../models/index.ts";
+import { organizations, plans, users, projects, project_members, files, manuals, Sequelize } from "../models/index.ts";
 import { Op } from "sequelize";
 
 export const SUBSCRIPTION_GRACE_DAYS = 4;
@@ -189,7 +189,8 @@ export const checkStorageLimit = async (
 
   if (projectId) {
     const fileSumMb = (await files.sum("file_size_mb", { where: { project_id: projectId } })) || 0;
-    currentUsedMb = Number(fileSumMb);
+    const manualSumMb = (await manuals.sum("file_size_mb", { where: { project_id: projectId } })) || 0;
+    currentUsedMb = Number(fileSumMb) + Number(manualSumMb);
   } else {
     // If no specific project ID provided, check max project storage across org projects
     const orgProjectIds = (
@@ -207,7 +208,23 @@ export const checkStorageLimit = async (
         raw: true,
       });
 
-      currentUsedMb = counts.reduce((max, item) => Math.max(max, Number(item.sum_size || 0)), 0);
+      const manualCounts: any[] = await manuals.findAll({
+        where: { project_id: { [Op.in]: orgProjectIds } },
+        attributes: ["project_id", [Sequelize.fn("SUM", Sequelize.col("file_size_mb")), "sum_size"]],
+        group: ["project_id"],
+        raw: true,
+      });
+
+      const projectTotals = new Map<number, number>();
+      counts.forEach((item) => {
+        projectTotals.set(Number(item.project_id), Number(item.sum_size || 0));
+      });
+      manualCounts.forEach((item) => {
+        const existing = projectTotals.get(Number(item.project_id)) || 0;
+        projectTotals.set(Number(item.project_id), existing + Number(item.sum_size || 0));
+      });
+
+      currentUsedMb = Array.from(projectTotals.values()).reduce((max, size) => Math.max(max, size), 0);
     } else {
       currentUsedMb = org.storage_used_mb || 0;
     }

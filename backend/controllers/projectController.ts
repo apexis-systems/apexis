@@ -8,6 +8,7 @@ import { projects, users, folders, files, organizations, project_members, room_m
 import { Op, fn, col, literal } from "sequelize";
 
 import { checkProjectLimit } from "../utils/subscriptionAccess.ts";
+import { validateTrashItemRestoreLimit } from "../services/trashService.ts";
 import { getIO } from "../socket.ts";
 
 // Helper to generate 6-character random alphanumeric code
@@ -927,6 +928,17 @@ export const restoreProject = async (req: Request, res: Response) => {
 
         if (!project.deletedAt) {
             return res.status(400).json({ error: "Project is not in trash" });
+        }
+
+        const limitCheck = await validateTrashItemRestoreLimit("project", project, authUser);
+        if (!limitCheck.allowed) {
+            return res.status(limitCheck.status || 403).json({
+                error: limitCheck.message,
+                message: limitCheck.message,
+                code: limitCheck.code || "LIMIT_REACHED",
+                limit: limitCheck.limit,
+                currentUsage: limitCheck.currentUsage,
+            });
         }
 
         await project.restore();

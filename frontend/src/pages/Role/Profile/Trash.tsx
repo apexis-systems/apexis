@@ -124,9 +124,10 @@ export default function Trash() {
             await restoreTrashItem(item.itemType, item.id);
             toast.success(t('restore_success'));
             fetchTrashItems();
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to restore trash item", e);
-            toast.error(t('restore_error'));
+            const errorMsg = e?.response?.data?.message || e?.response?.data?.error || t('restore_error');
+            toast.error(errorMsg);
         } finally {
             setIsRestoring(null);
         }

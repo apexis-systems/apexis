@@ -11,6 +11,7 @@ import {
   rfis,
   project_members,
   files,
+  manuals,
   Sequelize,
 } from "../models/index.ts";
 import { Op } from "sequelize";
@@ -483,19 +484,53 @@ export const getUsage = async (req: Request, res: Response) => {
         raw: true,
       });
 
+      const manualStorageCounts: any[] = await manuals.findAll({
+        where: { project_id: { [Op.in]: projectIds } },
+        attributes: ["project_id", [Sequelize.fn("SUM", Sequelize.col("file_size_mb")), "sum_size"]],
+        group: ["project_id"],
+        raw: true,
+      });
+
       const projectStorageMap: Record<number, number> = {};
       projectStorageCounts.forEach((item: any) => {
         projectStorageMap[Number(item.project_id)] = Number(item.sum_size || 0);
       });
+      manualStorageCounts.forEach((item: any) => {
+        const current = projectStorageMap[Number(item.project_id)] || 0;
+        projectStorageMap[Number(item.project_id)] = current + Number(item.sum_size || 0);
+      });
 
-      exceededProjects = orgProjects
-        .filter((p: any) => (projectStorageMap[p.id] || 0) >= perProjectStorageLimitMb)
-        .map((p: any) => p.name);
+      let userProjectIds: Set<number> | null = null;
+      const userRole = (req as any).user?.role;
+      const userId = (req as any).user?.user_id;
+      const isAllowedRoleForStorageAlert = ["admin", "superadmin", "contributor"].includes(userRole);
+
+      if (userRole !== "admin" && userRole !== "superadmin") {
+        const memberships = await project_members.findAll({
+          where: { user_id: userId },
+          attributes: ["project_id"],
+          raw: true,
+        });
+        userProjectIds = new Set(memberships.map((m: any) => Number(m.project_id)));
+      }
+
+      if (isAllowedRoleForStorageAlert) {
+        exceededProjects = orgProjects
+          .filter((p: any) => {
+            if (userProjectIds && !userProjectIds.has(Number(p.id))) {
+              return false;
+            }
+            return (projectStorageMap[p.id] || 0) >= perProjectStorageLimitMb;
+          })
+          .map((p: any) => p.name);
+      }
     }
 
     let alert = null;
+    const userRole = (req as any).user?.role;
+    const isAllowedRoleForStorageAlert = ["admin", "superadmin"].includes(userRole);
 
-    if (diffDays <= 10 || exceededProjects.length > 0 || storageUsagePercent >= 90) {
+    if (diffDays <= 10 || exceededProjects.length > 0 || (isAllowedRoleForStorageAlert && storageUsagePercent >= 90)) {
       if (access.isLocked) {
         alert = {
           type: "expiry",
@@ -510,13 +545,18 @@ export const getUsage = async (req: Request, res: Response) => {
           message:
             `Your plan has expired. Grace period: ${access.graceDaysRemaining} day(s) remaining.`,
         };
-      } else if (exceededProjects.length > 0) {
+      } else if (exceededProjects.length > 0 && isAllowedRoleForStorageAlert) {
         const projectNamesStr = exceededProjects.join(", ");
         const projectText = exceededProjects.length === 1 ? `the ${projectNamesStr} project` : `projects: ${projectNamesStr}`;
+        const isAdmin = userRole === "admin" || userRole === "superadmin";
+        const actionText = isAdmin
+          ? "Contact support@apexis.in for more storage."
+          : "Please contact your project Admin to increase the storage.";
+
         alert = {
           type: "storage",
           severity: "error",
-          message: `Storage limit reached in ${projectText}. Contact support@apexis.in for more storage.`,
+          message: `Storage limit reached in ${projectText}. ${actionText}`,
         };
       } else if (
         diffDays <= 10 &&
@@ -527,7 +567,7 @@ export const getUsage = async (req: Request, res: Response) => {
           severity: "warning",
           message: `Your plan expires in ${diffDays} days. Upgrade now to avoid service interruption.`,
         };
-      } else {
+      } else if (isAllowedRoleForStorageAlert && storageUsagePercent >= 90) {
         alert = {
           type: "storage",
           severity: "warning",

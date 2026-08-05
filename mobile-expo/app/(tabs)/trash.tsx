@@ -131,8 +131,9 @@ export default function TrashScreen() {
       await restoreTrashItem(item.itemType, item.id);
       Alert.alert(t('trash.successTitle') as string, t('trash.successRestore') as string);
       fetchTrash();
-    } catch {
-      Alert.alert(t('trash.errorTitle') as string, t('trash.errorRestore') as string);
+    } catch (e: any) {
+      const errorMsg = e?.response?.data?.message || e?.response?.data?.error || t('trash.errorRestore');
+      Alert.alert(t('trash.errorTitle') as string, errorMsg as string);
     } finally {
       setIsRestoring(null);
     }

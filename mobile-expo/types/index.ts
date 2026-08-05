@@ -6,6 +6,7 @@ export interface User {
     email: string;
     phone_number?: string;
     role: UserRole;
+    organization_role?: string;
     is_primary?: boolean;
     email_verified?: boolean;
     phone_verified?: boolean;

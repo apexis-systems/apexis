@@ -22,6 +22,7 @@ import { WebView } from 'react-native-webview';
 import { getFolderRFIs, getRFIAssignees, createRFI } from '@/services/rfiService';
 import { getFolderSnags, getAssignees as getSnagAssignees, createSnag } from '@/services/snagService';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { handleApiErrorWithLimitAlert } from '@/helpers/apiError';
 import { getComments, addComment as addCommentApi, deleteComment as deleteCommentApi, updateComment as updateCommentApi, type CommentThread } from '@/services/commentService';
 import { getMemberForTag } from '@/services/projectService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -279,8 +280,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             closeCreateSnagModal();
         } catch (error: any) {
             console.error("Create Snag from doc error", error);
-            const errMsg = error.response?.data?.error || "Failed to create snag";
-            Alert.alert("Error", errMsg);
+            handleApiErrorWithLimitAlert(error, "Failed to create snag", user, router, t);
         } finally {
             setSubmittingEntity(false);
         }
@@ -317,8 +317,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             closeCreateRfiModal();
         } catch (error: any) {
             console.error("Create RFI from doc error", error);
-            const errMsg = error.response?.data?.error || "Failed to create RFI";
-            Alert.alert("Error", errMsg);
+            handleApiErrorWithLimitAlert(error, "Failed to create RFI", user, router, t);
         } finally {
             setSubmittingEntity(false);
         }

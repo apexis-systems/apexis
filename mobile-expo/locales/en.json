@@ -217,7 +217,12 @@
                 "customOnboarding": "Custom Onboarding",
                 "dedicatedSupport": "Dedicated Support",
                 "customIntegrations": "Custom Integrations",
-                "above100GB": "Above 100GB Cloud Storage"
+                "above100GB": "Above 100GB Cloud Storage",
+                "unlimitedProjects": "Unlimited Projects",
+                "storage5GBPerProject": "5GB Storage per project",
+                "fullRoleAccess": "Full Role & Permission Access",
+                "above100Seats": "Above 100 Seats Custom Quota",
+                "customStorage": "Custom Cloud Storage Quota"
             }
         },
         "linkedDevices": {
