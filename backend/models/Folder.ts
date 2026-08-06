@@ -36,6 +36,15 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.STRING,
                 allowNull: true,
             },
+            is_password_protected: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            password_hash: {
+                type: DataTypes.STRING,
+                allowNull: true,
+            },
         },
         {
             tableName: "folders",

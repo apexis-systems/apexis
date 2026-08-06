@@ -9,7 +9,7 @@ import db, {
   rfis,
 } from "../models/index.ts";
 import { Op } from "sequelize";
-import { getSubscriptionAccessState } from "../utils/subscriptionAccess.ts";
+import { getSubscriptionAccessState, checkMemberLimit, checkStorageLimit } from "../utils/subscriptionAccess.ts";
 
 export type LimitType =
   | "project"
@@ -113,69 +113,79 @@ export const checkLimit = (type: LimitType) => {
       let errorMessage = "Plan limit reached";
 
       switch (type) {
-        case "project":
+        case "project": {
+          const isPaidPlan = Boolean(org.plan_name && !["freemium", "free"].includes(org.plan_name.toLowerCase()));
+          if (isPaidPlan) {
+            break;
+          }
           currentUsage = await projects.count({
             where: { organization_id: org.id },
           });
-          limit = plan.project_limit;
-          errorMessage = `You have reached the limit of ${limit} projects for your ${plan.name} plan.`;
+          limit = plan?.project_limit || 10;
+          errorMessage = `You have reached the limit of ${limit} projects for your Freemium plan. Please upgrade to create more projects.`;
           break;
+        }
 
-        case "storage":
-          // Storage is already tracked in org.storage_used_mb
-          // We check if NEW upload will exceed limit.
+        case "storage": {
           const uploadReq = req as AuthRequest & {
             file?: { size?: number };
-            files?: Array<{ size?: number }>;
+            files?: Array<{ size?: number }> | { [fieldname: string]: Array<{ size?: number }> };
           };
-          let incomingSizeMb = 0;
+          let incomingBytes = 0;
           if (uploadReq.file) {
-            incomingSizeMb = Math.ceil(
-              (uploadReq.file.size || 0) / (1024 * 1024),
-            );
-          } else if (uploadReq.files && Array.isArray(uploadReq.files)) {
-            const totalBytes = uploadReq.files.reduce(
-              (acc, f) => acc + (f.size || 0),
-              0,
-            );
-            incomingSizeMb = Math.ceil(totalBytes / (1024 * 1024));
-          }
-
-          currentUsage = org.storage_used_mb;
-          limit = plan.storage_limit_mb;
-          errorMessage = `Storage limit reached (${limit}MB). Please upgrade for more space.`;
-          if (currentUsage + incomingSizeMb > limit) {
-            return res
-              .status(403)
-              .json({
-                error: "Limit Reached",
-                message: errorMessage,
-                code: "LIMIT_REACHED",
+            incomingBytes = uploadReq.file.size || 0;
+          } else if (uploadReq.files) {
+            if (Array.isArray(uploadReq.files)) {
+              const filesArr = uploadReq.files as Array<{ size?: number }>;
+              incomingBytes = filesArr.reduce((acc, f) => acc + (f.size || 0), 0);
+            } else if (typeof uploadReq.files === "object") {
+              Object.values(uploadReq.files).forEach((fileArray) => {
+                if (Array.isArray(fileArray)) {
+                  const filesArr = fileArray as Array<{ size?: number }>;
+                  incomingBytes += filesArr.reduce((acc, f) => acc + (f.size || 0), 0);
+                }
               });
+            }
           }
-          return next(); // Storage check is sum-based
+          const incomingSizeMb = Math.ceil(incomingBytes / (1024 * 1024));
 
-        case "member":
-          const requestedRole = req.body?.role;
-          if (["contributor", "consultant", "vendor"].includes(requestedRole)) {
-            currentUsage = await users.count({
-              where: {
-                organization_id: org.id,
-                role: { [Op.in]: ["contributor", "consultant", "vendor"] }
-              },
+          const targetProjectId = req.params?.id || req.params?.projectId || req.body?.project_id || req.body?.projectId || (req.query?.project_id as string) || authUser?.project_id;
+          const userRole = (req as any).user?.role;
+
+          const limitCheck = await checkStorageLimit(
+            org.id,
+            incomingSizeMb,
+            targetProjectId ? Number(targetProjectId) : undefined,
+            userRole
+          );
+
+          if (!limitCheck.allowed) {
+            return res.status(403).json({
+              error: "Limit Reached",
+              message: limitCheck.message,
+              code: "LIMIT_REACHED",
+              limit: limitCheck.limit,
+              currentUsage: limitCheck.currentUsage,
             });
-            limit = plan.contributor_limit;
-            errorMessage = `Contributor limit reached (${limit}) for your ${plan.name} plan.`;
-          } else if (requestedRole === "client") {
-            currentUsage = await users.count({
-              where: { organization_id: org.id, role: "client" },
-            });
-            limit = plan.client_limit;
-            errorMessage = `Client limit reached (${limit}) for your ${plan.name} plan.`;
-          } else {
-            return next(); // admin or others don't have count limits usually
           }
-          break;
+          return next();
+        }
+
+        case "member": {
+          const requestedRole = req.body?.role || "contributor";
+          const targetProjectId = req.params?.id || req.params?.projectId || req.body?.project_id || req.body?.projectId;
+          const limitCheck = await checkMemberLimit(org.id, requestedRole, targetProjectId ? Number(targetProjectId) : undefined);
+          if (!limitCheck.allowed) {
+            return res.status(403).json({
+              error: "Limit Reached",
+              message: limitCheck.message || `Organization seats are full (${org.seats_purchased || 1} seats purchased). Please upgrade your seats to add more team members.`,
+              code: "LIMIT_REACHED",
+              limit: limitCheck.limit,
+              currentUsage: limitCheck.currentUsage,
+            });
+          }
+          return next();
+        }
 
         case "snag":
           // Count snags across all projects in the org

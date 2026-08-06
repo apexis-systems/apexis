@@ -46,24 +46,32 @@ export default function UsageScreen() {
     const renderUsageItem = (label: string, current: number, limit: number, unit: string = '') => {
         const percent = Math.min(100, Math.round((current / limit) * 100));
 
+        const translationKey = `usage.${label.toLowerCase().replace(/\s+/g, '')}`;
+        const translatedLabel = t(translationKey, { defaultValue: label });
+        const isUnlimited = typeof limit === 'number' && limit >= 99999;
+        const limitStr = isUnlimited
+            ? 'Unlimited'
+            : (label === 'Cloud Storage' ? formatFileSize(limit) : `${limit}${unit}`);
+        const effectivePercent = isUnlimited ? 0 : percent;
+
         return (
             <View style={styles.usageItem} key={label}>
                 <View style={styles.usageHeader}>
-                    <Text style={[styles.usageLabel, { color: colors.text }]}>{t(`usage.${label.toLowerCase().replace(' ', '')}`)}</Text>
+                    <Text style={[styles.usageLabel, { color: colors.text }]}>{translatedLabel}</Text>
                     <Text style={[styles.usageValue, { color: colors.textMuted }]}>
-                        {label === 'Cloud Storage' ? formatFileSize(current) : `${current}${unit}`} / {label === 'Cloud Storage' ? formatFileSize(limit) : `${limit}${unit}`}
+                        {label === 'Cloud Storage' ? formatFileSize(current) : `${current}${unit}`} / {limitStr}
                     </Text>
                 </View>
 
                 <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
-                    <View 
+                    <View
                         style={[
-                            styles.progressBarFill, 
-                            { 
-                                width: `${percent}%`, 
-                                backgroundColor: colors.primary 
+                            styles.progressBarFill,
+                            {
+                                width: `${effectivePercent}%`,
+                                backgroundColor: colors.primary
                             }
-                        ]} 
+                        ]}
                     />
                 </View>
             </View>
@@ -83,7 +91,7 @@ export default function UsageScreen() {
                     <Feather name="refresh-cw" size={20} color={colors.text} />
                 </TouchableOpacity>
             </View>
-            
+
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {/* Current Plan Summary */}
                 <View style={[styles.planCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -105,9 +113,18 @@ export default function UsageScreen() {
                 <Text style={[styles.sectionTitle, { color: colors.primary }]}>{t('usage.consumptionBreakdown')}</Text>
                 <View style={[styles.usageGrid, { backgroundColor: colors.surface, borderColor: colors.border }]}>
 
+                    {renderUsageItem(
+                      'Team Seats',
+                      usage.seats_used ?? usage.contributors,
+                      usage.seats_limit_total ?? usage.seats_purchased ?? plan.seats_purchased ?? 1
+                    )}
+                    {renderUsageItem(
+                      'Cloud Storage',
+                      usage.storage_mb,
+                      usage.storage_limit_mb || plan.limits.storage_limit_mb || ((usage.storage_limit_per_project_mb || 5120) * Math.max(1, usage.projects || 1)),
+                      ' MB'
+                    )}
                     {renderUsageItem('Projects', usage.projects, plan.limits.project_limit)}
-                    {renderUsageItem('Cloud Storage', usage.storage_mb, plan.limits.storage_limit_mb, ' MB')}
-                    {renderUsageItem('Contributors', usage.contributors, plan.limits.contributor_limit)}
                     {renderUsageItem('Clients', usage.clients, plan.limits.client_limit)}
                     {renderUsageItem('Snags Count', usage.snags, plan.limits.max_snags)}
                     {renderUsageItem('RFIs Count', usage.rfis, plan.limits.max_rfis)}
@@ -116,13 +133,13 @@ export default function UsageScreen() {
                 <View style={[styles.infoBox, { backgroundColor: colors.primary + '10' }]}>
                     <Feather name="info" size={16} color={colors.primary} />
                     <Text style={[styles.infoText, { color: colors.primary }]}>
-                        {t('usage.infoHint')}
+                        Need extra storage or {'>'}100 seat plans? Contact support@apexis.in.
                     </Text>
                 </View>
 
 
                 {/* Call to action */}
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => router.push('/subscription')}
                     style={[styles.upgradeBtn, { backgroundColor: colors.primary }]}
                 >

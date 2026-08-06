@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getFreemiumLeads, extendOrganizationTrials } from "@/services/superadminService";
+import { getFreemiumLeads, extendOrganizationTrials, getAllLeads } from "@/services/superadminService";
 
 interface Lead {
   id: number;
@@ -31,6 +31,7 @@ interface Lead {
   email: string;
   phone: string;
   company: string;
+  planName?: string;
   installDate: string;
   trialStart: string;
   trialEnd: string;
@@ -100,6 +101,7 @@ const getReminders = (remaining: number) => {
 };
 
 export default function FreemiumLeads() {
+  const [leadType, setLeadType] = useState<"freemium" | "all">("freemium");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -111,12 +113,38 @@ export default function FreemiumLeads() {
   const [extendDays, setExtendDays] = useState("7");
   const [isExtending, setIsExtending] = useState(false);
 
+  const fetchLeadsData = async (type: "freemium" | "all") => {
+    if (type === "all") {
+      const response = await getAllLeads();
+      return response.leads || [];
+    } else {
+      const response = await getFreemiumLeads();
+      return response.leads || [];
+    }
+  };
+
+  const handleToggleLeadType = async (type: "freemium" | "all") => {
+    if (type === leadType) return;
+    setLeadType(type);
+    setLoading(true);
+    try {
+      const data = await fetchLeadsData(type);
+      setLeadsList(data);
+    } catch (error) {
+      console.error("Failed to fetch leads:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
       const response = await getFreemiumLeads();
       setLeadsList(response.leads || []);
       setSelectedIds(new Set());
+      const data = await fetchLeadsData(leadType);
+      setLeadsList(data);
     } catch (error) {
       console.error("Failed to fetch leads:", error);
     } finally {
@@ -127,8 +155,8 @@ export default function FreemiumLeads() {
   useEffect(() => {
     const fetchLeads = async () => {
       try {
-        const response = await getFreemiumLeads();
-        setLeadsList(response.leads || []);
+        const data = await fetchLeadsData(leadType);
+        setLeadsList(data);
       } catch (error) {
         console.error("Failed to fetch leads:", error);
       } finally {
@@ -225,13 +253,13 @@ export default function FreemiumLeads() {
     );
   }
 
-  const totalFreemium = leadsList.length;
+  const totalLeadsCount = leadsList.length;
   const expiring15 = leadsList.filter((lead) => lead.remaining <= 15).length;
   const expiring7 = leadsList.filter((lead) => lead.remaining <= 7).length;
   const converted = leadsList.filter((lead) => lead.converted).length;
 
   const summaryCards = [
-    { title: "Total Freemium Users", value: totalFreemium, icon: Users, accent: "bg-[hsl(24_95%_53%/0.1)] text-[hsl(24_95%_53%)]" },
+    { title: leadType === "all" ? "Total Leads" : "Total Freemium Users", value: totalLeadsCount, icon: Users, accent: "bg-[hsl(24_95%_53%/0.1)] text-[hsl(24_95%_53%)]" },
     { title: "Expiring in 15 Days", value: expiring15, icon: Clock, accent: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
     { title: "Expiring in 7 Days", value: expiring7, icon: AlertTriangle, accent: "bg-red-500/10 text-red-600 dark:text-red-400" },
     { title: "Converted to Paid", value: converted, icon: CreditCard, accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
@@ -242,17 +270,44 @@ export default function FreemiumLeads() {
   return (
     <div className="space-y-6 p-4 md:p-6">
 
-      <div className="flex flex-row justify-between">
-
-
+      <div className="flex flex-row items-center justify-between">
         <div>
-          <h1 className={cn("text-xl font-bold", strongTextClass)}>Freemium Leads</h1>
+          <h1 className={cn("text-xl font-bold", strongTextClass)}>
+            {leadType === "all" ? "All Leads" : "Freemium Leads"}
+          </h1>
           <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
-            Track & convert free trial users into paid subscribers
+            {leadType === "all"
+              ? "Track & analyze all registered leads and subscribers"
+              : "Track & convert free trial users into paid subscribers"}
           </p>
         </div>
 
-        <div className="mr-20 flex justify-center items-center">
+        <div className="mr-20 flex items-center gap-3">
+          <div className="flex items-center rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-1 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)]">
+            <button
+              onClick={() => handleToggleLeadType("freemium")}
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-semibold transition-all duration-200",
+                leadType === "freemium"
+                  ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
+                  : "text-[hsl(30_8%_45%)] hover:text-[hsl(30_10%_15%)] dark:text-[hsl(38_10%_55%)] dark:hover:text-[hsl(38_20%_90%)]"
+              )}
+            >
+              Freemium Leads
+            </button>
+            <button
+              onClick={() => handleToggleLeadType("all")}
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-semibold transition-all duration-200",
+                leadType === "all"
+                  ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
+                  : "text-[hsl(30_8%_45%)] hover:text-[hsl(30_10%_15%)] dark:text-[hsl(38_10%_55%)] dark:hover:text-[hsl(38_20%_90%)]"
+              )}
+            >
+              All Leads
+            </button>
+          </div>
+
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -440,7 +495,14 @@ export default function FreemiumLeads() {
                       </div>
                     </td>
                     <td className={tableCellClass}>
-                      <span className={cn("text-sm", strongTextClass)}>{lead.company || "—"}</span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={cn("text-sm font-medium", strongTextClass)}>{lead.company || "—"}</span>
+                        {lead.planName ? (
+                          <span className="inline-flex items-center rounded border border-[hsl(24_95%_53%/0.3)] bg-[hsl(24_95%_53%/0.1)] px-1.5 py-0.5 text-[10px] font-semibold text-[hsl(24_95%_53%)]">
+                            {lead.planName}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className={tableCellClass}>
                       <div className={cn("space-y-0.5 text-xs", mutedTextClass)}>

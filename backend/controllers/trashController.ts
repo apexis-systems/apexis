@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { getTrashItemsForUser, permanentlyDeleteTrashItem, restoreTrashItem } from "../services/trashService.ts";
+import { getTrashItemsForUser, permanentlyDeleteTrashItem, restoreTrashItem, validateTrashItemRestoreLimit } from "../services/trashService.ts";
 import { files, folders, manuals, projects, rfis, snags } from "../models/index.ts";
 
 const findTrashRecord = async (type: string, id: number) => {
@@ -44,6 +44,17 @@ export const restoreTrash = async (req: Request, res: Response) => {
 
         if (!canManageTrashItem(authUser, type, record)) {
             return res.status(403).json({ error: "Forbidden" });
+        }
+
+        const limitCheck = await validateTrashItemRestoreLimit(type, record, authUser);
+        if (!limitCheck.allowed) {
+            return res.status(limitCheck.status || 403).json({
+                error: limitCheck.message,
+                message: limitCheck.message,
+                code: limitCheck.code || "LIMIT_REACHED",
+                limit: limitCheck.limit,
+                currentUsage: limitCheck.currentUsage,
+            });
         }
 
         await restoreTrashItem(type, Number(id));

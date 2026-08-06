@@ -181,22 +181,32 @@ export default function ProjectDailyReports({ project, userRole }: Props) {
             const fileName = `${base}_daily_report_${dateStr}.pdf`;
             const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
-            const { uri } = await FileSystem.downloadAsync(
-                url,
-                fileUri,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
+            let uri = '';
+            try {
+                const downloadResult = await FileSystem.downloadAsync(
+                    url,
+                    fileUri,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
                     }
-                }
-            );
+                );
+                uri = downloadResult.uri;
 
-            if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(uri);
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(uri);
+                }
+            } catch (e) {
+                console.error('handleShare error:', e);
+            } finally {
+                setSharingId(null);
+                if (uri && uri.startsWith('file://')) {
+                    FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+                }
             }
-        } catch (e) {
-            console.error('handleShare error:', e);
-        } finally {
+        } catch (error) {
+            console.error('confirmShare error:', error);
             setSharingId(null);
         }
     };

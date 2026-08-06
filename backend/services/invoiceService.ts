@@ -220,8 +220,8 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
 
         const tableX = 50;
         const tableW = doc.page.width - 100;
-        const colWidths = [tableW * 0.20, tableW * 0.30, tableW * 0.17, tableW * 0.16, tableW * 0.17];
-        const headers = ['Plan Name', 'Billing Period', 'Unit Price (INR)', 'GST 18%', 'Total (INR)'];
+        const colWidths = [tableW * 0.28, tableW * 0.24, tableW * 0.16, tableW * 0.15, tableW * 0.17];
+        const headers = ['Description', 'Billing Period', 'Unit Price', 'GST 18%', 'Total (INR)'];
 
         const tableStartY = doc.y;
         const radius = 6;
@@ -245,6 +245,9 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         const cgst = totalTax / 2;
         const sgst = totalTax / 2;
 
+        const seatsCount = transaction.seats_purchased || 1;
+        const unitRate = transaction.price_per_seat || 159;
+
         const rowY = tableStartY + headerH;
         const rowRadius = 6;
         doc.save()
@@ -255,7 +258,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
             .restore();
 
         const rowData = [
-            organization?.plan_name || '-',
+            `Seat Subscription (${seatsCount} seat${seatsCount > 1 ? 's' : ''} @ ₹${unitRate}/seat)`,
             formatPeriod(organization?.plan_start_date, organization?.plan_end_date),
             subtotal.toFixed(2),
             totalTax.toFixed(2),
@@ -264,7 +267,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
 
         let cellX = tableX;
         rowData.forEach((val, i) => {
-            doc.font('Helvetica').fontSize(8.5).fillColor(BRAND.ink).text(String(val), cellX + 5, rowY + 8, { width: colWidths[i] - 10, align: i > 1 ? 'right' : 'left' });
+            doc.font('Helvetica').fontSize(8).fillColor(BRAND.ink).text(String(val), cellX + 5, rowY + 8, { width: colWidths[i] - 10, align: i > 1 ? 'right' : 'left' });
             cellX += colWidths[i];
         });
 

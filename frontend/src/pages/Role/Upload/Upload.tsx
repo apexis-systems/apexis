@@ -248,14 +248,16 @@ function UploadInner() {
         if (files.length === 0) { toast.error('Please select at least one file to upload'); return; }
         if (!selectedProject) { toast.error('Please select a project'); return; }
 
+        const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+
         // 1. Check if subscription is locked
         if (usageData?.plan.access?.isLocked) {
             toast.error("Subscription Locked", {
                 description: "Your plan has expired. Please renew to continue uploading files.",
-                action: {
+                action: isAdmin ? {
                     label: "Billing",
                     onClick: () => router.push('/Role/Billing')
-                }
+                } : undefined
             });
             return;
         }
@@ -268,10 +270,10 @@ function UploadInner() {
         if (currentUsedMb + totalSizeMb > limitMb) {
             toast.error("Storage Limit Exceeded", {
                 description: `You are trying to upload ${totalSizeMb.toFixed(2)}MB, but only ${Math.max(0, limitMb - currentUsedMb).toFixed(2)}MB is remaining.`,
-                action: {
+                action: isAdmin ? {
                     label: "Upgrade",
                     onClick: () => router.push('/Role/Billing/Plans')
-                }
+                } : undefined
             });
             return;
         }

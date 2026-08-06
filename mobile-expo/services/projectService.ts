@@ -140,3 +140,14 @@ export const restoreProject = async (id: string | number) => {
         throw error;
     }
 };
+
+export const getProjectPhotosPaginated = async (projectId: string | number, page: number = 1, limit: number = 30) => {
+    try {
+        const response = await PrivateAxios.get(`/projects/${projectId}/photos?page=${page}&limit=${limit}`);
+        return response.data;
+    } catch (error) {
+        console.error("getProjectPhotosPaginated Error", error);
+        throw error;
+    }
+};
+

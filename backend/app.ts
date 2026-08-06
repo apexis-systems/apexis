@@ -26,6 +26,7 @@ import { initIO } from './socket.ts';
 import qrAuthRoutes from "./routes/qrAuthRoutes.ts";
 import analyticsRoutes from "./routes/analyticsRoutes.ts";
 import subscriptionRoutes from "./routes/subscriptionRoutes.ts";
+import webhookRoutes from "./routes/webhookRoutes.ts";
 import systemRoutes from "./routes/systemRoutes.ts";
 import { initializeSystemConfig } from "./controllers/systemController.ts";
 import searchRoutes from "./routes/searchRoutes.ts";
@@ -38,17 +39,22 @@ const io = initIO(httpServer);
 const PORT = process.env.PORT || 5001;
 
 // Middleware
-// Allow all origins
 const corsOptions = {
-    origin: true, // true means reflect request origin, allows all
-    credentials: true, // allow cookies/auth headers
+    origin: true,
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 };
 
-// Apply security and parsing middleware
 app.use(helmet());
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '5000mb' }));
+
+// Preserve rawBody for Razorpay HMAC signature verification
+app.use(express.json({
+    limit: '5000mb',
+    verify: (req: any, res, buf) => {
+        req.rawBody = buf.toString();
+    }
+}));
 app.use(express.urlencoded({ limit: '5000mb', extended: true }));
 
 // Routes
@@ -56,6 +62,7 @@ app.get('/', (req: Request, res: Response) => {
     res.send('Hello, backend is running!');
 });
 
+app.use("/api/webhooks", webhookRoutes);
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/qr", qrAuthRoutes);
@@ -83,7 +90,6 @@ app.use("/api/trash", trashRoutes);
 app.use((err: any, req: Request, res: Response, next: any) => {
     console.error("Unhandled Error:", err);
     
-    // Default to 500 Internal Server Error
     const status = err.status || 500;
     const message = err.message || "Internal Server Error";
     
@@ -98,9 +104,6 @@ const startServer = async () => {
     try {
         await sequelize.authenticate();
         console.log('Database connected successfully.');
-
-        // Automatically create tables based on models (use migrations for production!)
-        // await sequelize.sync(); 
 
         httpServer.listen(PORT, () => {
             console.log(`Server is running on http://localhost:${PORT}`);

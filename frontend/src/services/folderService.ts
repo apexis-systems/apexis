@@ -66,3 +66,53 @@ export const deleteFolder = async (folderId: string | number, forceDelete: boole
     }
 };
 
+export const setFolderPassword = async (folderId: string | number, password: string) => {
+    try {
+        const response = await PrivateAxios.post(`/folders/${folderId}/set-password`, { password });
+        return response.data;
+    } catch (error) {
+        console.error("setFolderPassword Error", error);
+        throw error;
+    }
+};
+
+export const changeFolderPassword = async (folderId: string | number, currentPassword: string, newPassword: string) => {
+    try {
+        const response = await PrivateAxios.post(`/folders/${folderId}/change-password`, { currentPassword, newPassword });
+        return response.data;
+    } catch (error) {
+        console.error("changeFolderPassword Error", error);
+        throw error;
+    }
+};
+
+export const verifyFolderPassword = async (folderId: string | number, password: string) => {
+    try {
+        const response = await PrivateAxios.post(`/folders/${folderId}/verify-password`, { password });
+        return response.data;
+    } catch (error) {
+        console.error("verifyFolderPassword Error", error);
+        throw error;
+    }
+};
+
+export const removeFolderPassword = async (folderId: string | number, currentPassword?: string) => {
+    try {
+        const response = await PrivateAxios.post(`/folders/${folderId}/remove-password`, { currentPassword });
+        return response.data;
+    } catch (error) {
+        console.error("removeFolderPassword Error", error);
+        throw error;
+    }
+};
+
+export const forgotFolderPasswordReset = async (folderId: string | number, data: { email: string; loginPassword: string; newPassword?: string; removeSecurity?: boolean }) => {
+    try {
+        const response = await PrivateAxios.post(`/folders/${folderId}/forgot-password-reset`, data);
+        return response.data;
+    } catch (error) {
+        console.error("forgotFolderPasswordReset Error", error);
+        throw error;
+    }
+};
+

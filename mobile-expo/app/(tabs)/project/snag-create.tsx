@@ -17,7 +17,7 @@ import { createSnag, getAssignees, Assignee } from '@/services/snagService';
 import { useEffect, useCallback, useLayoutEffect } from 'react';
 import { Modal, BackHandler } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
-import { parseApiError } from '@/helpers/apiError';
+import { parseApiError, handleApiErrorWithLimitAlert } from '@/helpers/apiError';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { useAuth } from '@/contexts/AuthContext';
 import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
@@ -47,6 +47,7 @@ export default function SnagCreateScreen() {
     const router = useRouter();
     const navigation = useNavigation();
     const isFocused = useIsFocused();
+    const { user } = useAuth();
     const { colors } = useTheme();
     const insets = useSafeAreaInsets();
     const cameraRef = useRef<CameraView>(null);
@@ -65,6 +66,45 @@ export default function SnagCreateScreen() {
     const [assignees, setAssignees] = useState<Assignee[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
+
+    // Lifecycle-aware temporary file cleanup
+    const capturedPhotoRef = useRef(capturedPhoto);
+    const capturedAudioRef = useRef(capturedAudio);
+
+    useEffect(() => {
+        if (capturedPhotoRef.current && capturedPhotoRef.current.uri !== capturedPhoto?.uri) {
+            const oldUri = capturedPhotoRef.current.uri;
+            if (oldUri.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(oldUri).catch(() => { });
+            }
+        }
+        capturedPhotoRef.current = capturedPhoto;
+    }, [capturedPhoto]);
+
+    useEffect(() => {
+        if (capturedAudioRef.current && capturedAudioRef.current !== capturedAudio) {
+            const oldUri = capturedAudioRef.current;
+            if (oldUri.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(oldUri).catch(() => { });
+            }
+        }
+        capturedAudioRef.current = capturedAudio;
+    }, [capturedAudio]);
+
+    useEffect(() => {
+        return () => {
+            if (capturedPhotoRef.current && capturedPhotoRef.current.uri.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(capturedPhotoRef.current.uri).catch(() => { });
+            }
+            if (capturedAudioRef.current && capturedAudioRef.current.startsWith('file://')) {
+                const { deleteFileAsync } = require('@/services/cacheService');
+                deleteFileAsync(capturedAudioRef.current).catch(() => { });
+            }
+        };
+    }, []);
 
     // Physical Orientation Tracking
     const [physicalOrientation, setPhysicalOrientation] = useState<number>(0);
@@ -126,9 +166,9 @@ export default function SnagCreateScreen() {
     const handleManualZoom = (factor: number) => {
         const z = (factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
         const clamped = Math.max(0, Math.min(1, z));
-        
+
         // Sync everything immediately
-        zoomShared.value = clamped; 
+        zoomShared.value = clamped;
         showZoomLabel(clamped);
     };
 
@@ -304,15 +344,7 @@ export default function SnagCreateScreen() {
                 router.back();
             }
         } catch (error) {
-            const { message, code } = parseApiError(error, 'Failed to create snag. Please try again.');
-            Alert.alert(
-                code === 'LIMIT_REACHED' ? 'Limit Reached' : 'Error',
-                message,
-                code === 'LIMIT_REACHED' ? [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Upgrade', onPress: () => router.push('/subscription') }
-                ] : undefined
-            );
+            handleApiErrorWithLimitAlert(error, 'Failed to create snag. Please try again.', user, router);
         } finally {
             setSubmitting(false);
         }

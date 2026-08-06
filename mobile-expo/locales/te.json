@@ -213,7 +213,12 @@
                 "customOnboarding": "అనుకూల ఆన్‌బోర్డింగ్",
                 "dedicatedSupport": "ప్రత్యేక మద్దతు",
                 "customIntegrations": "అనుకూల ఇంటిగ్రేషన్‌లు",
-                "above100GB": "100GB కంటే ఎక్కువ క్లౌడ్ స్టోరేజ్"
+                "above100GB": "100GB కంటే ఎక్కువ క్లౌడ్ స్టోరేజ్",
+                "unlimitedProjects": "అపరిమిత ప్రాజెక్ట్‌లు",
+                "storage5GBPerProject": "ప్రాజెక్ట్‌కు 5GB స్టోరేజ్",
+                "fullRoleAccess": "పూర్తి రోల్ & పర్మిషన్ యాక్సెస్",
+                "above100Seats": "100 కంటే ఎక్కువ సీట్ల కస్టమ్ కోటా",
+                "customStorage": "కస్టమ్ క్లౌడ్ స్టోరేజ్ కోటా"
             }
         },
         "linkedDevices": {

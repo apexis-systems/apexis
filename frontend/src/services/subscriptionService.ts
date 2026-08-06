@@ -8,7 +8,8 @@ export const createOrder = async (data: {
   amount: number; 
   currency: string; 
   plan_name: string; 
-  plan_cycle: 'monthly' | 'annual' 
+  plan_cycle: 'monthly' | 'annual';
+  seats?: number;
 }) => {
   try {
     const response = await PrivateAxios.post('/subscription/create-order', data);
@@ -20,7 +21,8 @@ export const createOrder = async (data: {
 };
 
 export const verifyPayment = async (data: {
-  razorpay_order_id: string;
+  razorpay_order_id?: string;
+  razorpay_subscription_id?: string;
   razorpay_payment_id: string;
   razorpay_signature: string;
   plan_name: string;
@@ -31,6 +33,16 @@ export const verifyPayment = async (data: {
     return response.data;
   } catch (error) {
     console.error("verifyPayment Error", error);
+    throw error;
+  }
+};
+
+export const cancelAutoPay = async () => {
+  try {
+    const response = await PrivateAxios.post('/subscription/cancel-autopay');
+    return response.data;
+  } catch (error) {
+    console.error("cancelAutoPay Error", error);
     throw error;
   }
 };
@@ -57,10 +69,10 @@ export const getUsage = async () => {
 
 export const downloadInvoice = async (id: number, fileName?: string) => {
   try {
-    const res = await PrivateAxios.get(`/subscription/invoice/${id}`, {
-      responseType: 'blob'
+    const response = await PrivateAxios.get(`/subscription/invoice/${id}`, {
+      responseType: 'blob',
     });
-    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', fileName || `Invoice_${id}.pdf`);
@@ -70,6 +82,26 @@ export const downloadInvoice = async (id: number, fileName?: string) => {
     window.URL.revokeObjectURL(url);
   } catch (error) {
     console.error("downloadInvoice Error", error);
+    throw error;
+  }
+};
+
+export const validateSeatChange = async (targetSeats: number) => {
+  try {
+    const response = await PrivateAxios.post('/subscription/validate-seat-change', { targetSeats });
+    return response.data;
+  } catch (error) {
+    console.error("validateSeatChange Error", error);
+    throw error;
+  }
+};
+
+export const removeProjectMember = async (projectId: number, userId: number) => {
+  try {
+    const response = await PrivateAxios.delete(`/projects/${projectId}/members/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error("removeProjectMember Error", error);
     throw error;
   }
 };

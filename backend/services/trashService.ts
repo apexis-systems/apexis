@@ -3,6 +3,7 @@ import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import db, { comments, files, folders, manuals, organizations, project_members, projects, rfis, sequelize, snags, users } from "../models/index.ts";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { checkStorageLimit } from "../utils/subscriptionAccess.ts";
 
 const TRASH_RETENTION_DAYS = 30;
 
@@ -638,3 +639,70 @@ export const purgeExpiredTrashItems = async () => {
         await permanentlyDeleteTrashItem("snag", Number(snag.id));
     }
 };
+
+export const validateTrashItemRestoreLimit = async (type: string, record: any, authUser: any) => {
+    let projectId: number | null = null;
+    let incomingSizeMb = 0;
+
+    if (type === "project") {
+        projectId = Number(record.id);
+        const fileSum = (await files.sum("file_size_mb", { where: { project_id: projectId }, paranoid: false })) || 0;
+        const manualSum = (await manuals.sum("file_size_mb", { where: { project_id: projectId }, paranoid: false })) || 0;
+        incomingSizeMb = Number(fileSum) + Number(manualSum);
+    } else if (type === "folder") {
+        projectId = Number(record.project_id);
+        const { nestedFiles } = await collectFolderTree(record.id, null);
+        const deletedFiles = nestedFiles.filter((f: any) => f.deletedAt);
+        incomingSizeMb = deletedFiles.reduce((acc: number, f: any) => acc + Math.max(1, Number(f.file_size_mb || 0)), 0);
+    } else if (type === "file" || type === "document" || type === "photo") {
+        projectId = Number(record.project_id);
+        if (record.folder_id) {
+            const parentFolder = await folders.findByPk(record.folder_id, { paranoid: false });
+            if (parentFolder?.deletedAt) {
+                const { nestedFiles } = await collectFolderTree(parentFolder.id, null);
+                const deletedFiles = nestedFiles.filter((f: any) => f.deletedAt);
+                incomingSizeMb = deletedFiles.reduce((acc: number, f: any) => acc + Math.max(1, Number(f.file_size_mb || 0)), 0);
+            } else if (record.deletedAt) {
+                incomingSizeMb = Math.max(1, Number(record.file_size_mb || 0));
+            }
+        } else if (record.deletedAt) {
+            incomingSizeMb = Math.max(1, Number(record.file_size_mb || 0));
+        }
+    } else if (type === "manual") {
+        projectId = Number(record.project_id);
+        if (record.deletedAt) {
+            incomingSizeMb = Math.max(1, Number(record.file_size_mb || 0));
+        }
+    } else if (type === "snag") {
+        projectId = Number(record.project_id);
+        if (record.deletedAt) {
+            let attachmentsCount = 0;
+            if (record.photo_url) attachmentsCount++;
+            if (record.audio_url) attachmentsCount++;
+            if (Array.isArray(record.response_photos)) attachmentsCount += record.response_photos.length;
+            incomingSizeMb = Math.max(1, attachmentsCount);
+        }
+    } else if (type === "rfi") {
+        projectId = Number(record.project_id);
+        if (record.deletedAt) {
+            let attachmentsCount = 0;
+            if (Array.isArray(record.photos)) attachmentsCount += record.photos.length;
+            if (Array.isArray(record.response_photos)) attachmentsCount += record.response_photos.length;
+            incomingSizeMb = Math.max(1, attachmentsCount);
+        }
+    }
+
+    if (!projectId) {
+        return { allowed: true, status: 200, code: "OK" };
+    }
+
+    const project = await projects.findByPk(projectId, { paranoid: false, attributes: ["organization_id"] });
+    const organizationId = project ? Number(project.organization_id) : (authUser?.organization_id ? Number(authUser.organization_id) : null);
+
+    if (!organizationId) {
+        return { allowed: true, status: 200, code: "OK" };
+    }
+
+    return checkStorageLimit(organizationId, incomingSizeMb, projectId, authUser?.role);
+};
+

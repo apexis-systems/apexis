@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import bcrypt from "bcrypt";
 import { folders, files, project_members, activities, users as UsersModel, projects, organizations, project_member_folders, sequelize } from "../models/index.ts";
 import { sendNotification } from "../utils/notificationUtils.ts";
 import { Op, Transaction } from "sequelize";
@@ -133,7 +134,11 @@ export const getFolders = async (req: Request, res: Response) => {
             order: [['createdAt', 'ASC']]
         });
 
-        let result = projectFolders.map((f: any) => f.toJSON());
+        let result = projectFolders.map((f: any) => {
+            const item = f.toJSON();
+            delete item.password_hash;
+            return item;
+        });
         if (authUser && authUser.role !== 'admin' && authUser.role !== 'superadmin') {
             result = result.filter((folder: any) => folder.name.toLowerCase() !== 'confidential');
         }
@@ -461,6 +466,224 @@ export const deleteFolder = async (req: Request, res: Response) => {
     } catch (error) {
         await t.rollback();
         console.error("Delete Folder Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const setFolderPassword = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+        if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: Only Admins can set folder passwords" });
+        }
+
+        const { folderId } = req.params;
+        const { password } = req.body;
+
+        if (!password || password.trim().length === 0) {
+            return res.status(400).json({ error: "Password is required" });
+        }
+
+        const targetFolder = await folders.findByPk(folderId);
+        if (!targetFolder) {
+            return res.status(404).json({ error: "Folder not found" });
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        if (targetFolder.name.toLowerCase() === 'confidential') {
+            await folders.update(
+                { is_password_protected: true, password_hash: passwordHash },
+                { where: { project_id: targetFolder.project_id, name: { [Op.iLike]: 'Confidential' } } }
+            );
+        } else {
+            await targetFolder.update({ is_password_protected: true, password_hash: passwordHash });
+        }
+
+        res.status(200).json({ message: "Folder password set successfully", is_password_protected: true });
+    } catch (error) {
+        console.error("Set Folder Password Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const changeFolderPassword = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+        if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: Only Admins can change folder passwords" });
+        }
+
+        const { folderId } = req.params;
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: "Current and new passwords are required" });
+        }
+
+        const targetFolder = await folders.findByPk(folderId);
+        if (!targetFolder) {
+            return res.status(404).json({ error: "Folder not found" });
+        }
+
+        if (!targetFolder.password_hash) {
+            return res.status(400).json({ error: "Folder does not have a password set" });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, targetFolder.password_hash);
+        if (!isMatch) {
+            return res.status(400).json({ error: "Incorrect current folder password" });
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+
+        if (targetFolder.name.toLowerCase() === 'confidential') {
+            await folders.update(
+                { is_password_protected: true, password_hash: passwordHash },
+                { where: { project_id: targetFolder.project_id, name: { [Op.iLike]: 'Confidential' } } }
+            );
+        } else {
+            await targetFolder.update({ is_password_protected: true, password_hash: passwordHash });
+        }
+
+        res.status(200).json({ message: "Folder password changed successfully" });
+    } catch (error) {
+        console.error("Change Folder Password Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const verifyFolderPassword = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+
+        const { folderId } = req.params;
+        const { password } = req.body;
+
+        if (!password) {
+            return res.status(400).json({ error: "Password is required" });
+        }
+
+        const targetFolder = await folders.findByPk(folderId);
+        if (!targetFolder) {
+            return res.status(404).json({ error: "Folder not found" });
+        }
+
+        if (!targetFolder.is_password_protected || !targetFolder.password_hash) {
+            return res.status(200).json({ success: true, message: "Folder is not password protected" });
+        }
+
+        const isMatch = await bcrypt.compare(password, targetFolder.password_hash);
+        if (!isMatch) {
+            return res.status(400).json({ success: false, error: "Incorrect folder password" });
+        }
+
+        res.status(200).json({ success: true, message: "Folder password verified" });
+    } catch (error) {
+        console.error("Verify Folder Password Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const removeFolderPassword = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+        if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: Only Admins can remove folder passwords" });
+        }
+
+        const { folderId } = req.params;
+        const { currentPassword } = req.body;
+
+        const targetFolder = await folders.findByPk(folderId);
+        if (!targetFolder) {
+            return res.status(404).json({ error: "Folder not found" });
+        }
+
+        if (targetFolder.password_hash && currentPassword) {
+            const isMatch = await bcrypt.compare(currentPassword, targetFolder.password_hash);
+            if (!isMatch) {
+                return res.status(400).json({ error: "Incorrect current folder password" });
+            }
+        }
+
+        if (targetFolder.name.toLowerCase() === 'confidential') {
+            await folders.update(
+                { is_password_protected: false, password_hash: null },
+                { where: { project_id: targetFolder.project_id, name: { [Op.iLike]: 'Confidential' } } }
+            );
+        } else {
+            await targetFolder.update({ is_password_protected: false, password_hash: null });
+        }
+
+        res.status(200).json({ message: "Folder password security removed successfully", is_password_protected: false });
+    } catch (error) {
+        console.error("Remove Folder Password Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const forgotFolderPasswordReset = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser) return res.status(401).json({ error: "Unauthorized" });
+        if (authUser.role !== 'admin' && authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: Only Admins can reset folder passwords" });
+        }
+
+        const { folderId } = req.params;
+        const { email, loginPassword, newPassword, removeSecurity } = req.body;
+
+        if (!email || !loginPassword) {
+            return res.status(400).json({ error: "Email and account login password are required" });
+        }
+
+        const adminUser = await UsersModel.findByPk(authUser.user_id);
+        if (!adminUser) {
+            return res.status(404).json({ error: "User account not found" });
+        }
+
+        if (adminUser.email.toLowerCase() !== email.trim().toLowerCase()) {
+            return res.status(400).json({ error: "Provided email does not match your logged in admin account email" });
+        }
+
+        const isMatch = await bcrypt.compare(loginPassword, adminUser.password);
+        if (!isMatch) {
+            return res.status(400).json({ error: "Invalid account login password" });
+        }
+
+        const targetFolder = await folders.findByPk(folderId);
+        if (!targetFolder) {
+            return res.status(404).json({ error: "Folder not found" });
+        }
+
+        let newHash: string | null = null;
+        let isProtected = false;
+
+        if (!removeSecurity && newPassword && newPassword.trim().length > 0) {
+            newHash = await bcrypt.hash(newPassword, 10);
+            isProtected = true;
+        }
+
+        if (targetFolder.name.toLowerCase() === 'confidential') {
+            await folders.update(
+                { is_password_protected: isProtected, password_hash: newHash },
+                { where: { project_id: targetFolder.project_id, name: { [Op.iLike]: 'Confidential' } } }
+            );
+        } else {
+            await targetFolder.update({ is_password_protected: isProtected, password_hash: newHash });
+        }
+
+        res.status(200).json({
+            message: isProtected ? "Folder password reset successfully" : "Folder password security removed successfully",
+            is_password_protected: isProtected
+        });
+    } catch (error) {
+        console.error("Forgot Folder Password Reset Error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

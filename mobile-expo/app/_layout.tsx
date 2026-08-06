@@ -362,6 +362,14 @@ function RootLayoutNav() {
   }, [isLoggedIn, isAuthLoading, isPendingName, segments, code, hasSeenOnboarding, subscriptionLocked]);
 
   useEffect(() => {
+    const { pruneCacheAsync } = require('@/services/cacheService');
+    const timer = setTimeout(() => {
+      pruneCacheAsync().catch((err: any) => console.warn('[Startup] Failed to prune cache:', err));
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     const checkVersion = async () => {
       try {
         const response = await getSystemConfig();
@@ -426,28 +434,32 @@ function RootLayoutNav() {
   );
 }
 
+import ErrorBoundary from '@/components/shared/ErrorBoundary';
+
+
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { SocketProvider } from '@/contexts/SocketContext';
 import { TourProvider } from '@/contexts/TourContext';
 import { UsageProvider } from '@/contexts/UsageContext';
 import TourOverlay from '@/components/tour/TourOverlay';
-
 function ThemedLayout() {
   const { isDark } = useTheme();
   return (
-    <GluestackUIProvider mode={isDark ? "dark" : "light"}>
-      <AuthProvider>
-        <SocketProvider>
-          <TourProvider>
-            <UsageProvider>
-              <RootLayoutNav />
-              <TourOverlay />
-            </UsageProvider>
-          </TourProvider>
-        </SocketProvider>
-        <StatusBar style={isDark ? "light" : "dark"} />
-      </AuthProvider>
-    </GluestackUIProvider>
+    <ErrorBoundary>
+      <GluestackUIProvider mode={isDark ? "dark" : "light"}>
+        <AuthProvider>
+          <SocketProvider>
+            <TourProvider>
+              <UsageProvider>
+                <RootLayoutNav />
+                <TourOverlay />
+              </UsageProvider>
+            </TourProvider>
+          </SocketProvider>
+          <StatusBar style={isDark ? "light" : "dark"} />
+        </AuthProvider>
+      </GluestackUIProvider>
+    </ErrorBoundary>
   );
 }
 

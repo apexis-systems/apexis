@@ -5,11 +5,14 @@ import { useUsage } from '@/contexts/UsageContext';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+import { useAuth } from '@/contexts/AuthContext';
+
 // In-memory persistent set for dismissed alert messages during app session
 const dismissedAlerts = new Set<string>();
 
 export const UsageAlert: React.FC = () => {
     const { usageData } = useUsage();
+    const { user } = useAuth();
     const router = useRouter();
     const [isDismissed, setIsDismissed] = useState(false);
 
@@ -25,6 +28,7 @@ export const UsageAlert: React.FC = () => {
 
     const { alert } = usageData;
     const isError = alert.severity === 'error';
+    const isAdmin = user?.role === 'admin' || user?.role === 'superadmin' || user?.organization_role === 'admin';
 
     const handleDismiss = () => {
         if (usageData?.alert?.message) {
@@ -50,12 +54,14 @@ export const UsageAlert: React.FC = () => {
             </View>
             
             <View style={styles.actions}>
-                <TouchableOpacity 
-                    style={styles.button}
-                    onPress={() => router.push('/subscription')}
-                >
-                    <Text style={styles.buttonText}>Upgrade</Text>
-                </TouchableOpacity>
+                {isAdmin && (
+                    <TouchableOpacity 
+                        style={styles.button}
+                        onPress={() => router.push('/subscription')}
+                    >
+                        <Text style={styles.buttonText}>Upgrade</Text>
+                    </TouchableOpacity>
+                )}
                 <TouchableOpacity 
                     style={styles.closeButton}
                     onPress={handleDismiss}

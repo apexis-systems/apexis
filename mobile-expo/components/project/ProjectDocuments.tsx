@@ -22,6 +22,7 @@ import { WebView } from 'react-native-webview';
 import { getFolderRFIs, getRFIAssignees, createRFI } from '@/services/rfiService';
 import { getFolderSnags, getAssignees as getSnagAssignees, createSnag } from '@/services/snagService';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { handleApiErrorWithLimitAlert } from '@/helpers/apiError';
 import { getComments, addComment as addCommentApi, deleteComment as deleteCommentApi, updateComment as updateCommentApi, type CommentThread } from '@/services/commentService';
 import { getMemberForTag } from '@/services/projectService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,6 +45,7 @@ import FileInformationModal from '../shared/FileInformationModal';
 import { groupItemsByMonth } from '@/helpers/grouping';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
+import FolderPasswordModal from './FolderPasswordModal';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -126,6 +128,26 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     // View state helpers for nested modals on iOS
     const restoreViewerUrlRef = useRef<string | null>(null);
+
+    // Lifecycle-aware temporary file cleanup
+    const lastOpenedPdfUriRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (pdfViewerUrl && pdfViewerUrl.startsWith('file://')) {
+            lastOpenedPdfUriRef.current = pdfViewerUrl;
+        } else if (!pdfViewerUrl && lastOpenedPdfUriRef.current && !restoreViewerUrlRef.current) {
+            const uriToDelete = lastOpenedPdfUriRef.current;
+            lastOpenedPdfUriRef.current = null;
+            FileSystem.deleteAsync(uriToDelete, { idempotent: true }).catch(() => {});
+        }
+    }, [pdfViewerUrl]);
+
+    useEffect(() => {
+        return () => {
+            if (lastOpenedPdfUriRef.current) {
+                FileSystem.deleteAsync(lastOpenedPdfUriRef.current, { idempotent: true }).catch(() => {});
+            }
+        };
+    }, []);
 
     const openSubModalFromViewer = (openSubModalFn: () => void) => {
         if (pdfViewerUrl) {
@@ -258,8 +280,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             closeCreateSnagModal();
         } catch (error: any) {
             console.error("Create Snag from doc error", error);
-            const errMsg = error.response?.data?.error || "Failed to create snag";
-            Alert.alert("Error", errMsg);
+            handleApiErrorWithLimitAlert(error, "Failed to create snag", user, router, t);
         } finally {
             setSubmittingEntity(false);
         }
@@ -296,8 +317,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             closeCreateRfiModal();
         } catch (error: any) {
             console.error("Create RFI from doc error", error);
-            const errMsg = error.response?.data?.error || "Failed to create RFI";
-            Alert.alert("Error", errMsg);
+            handleApiErrorWithLimitAlert(error, "Failed to create RFI", user, router, t);
         } finally {
             setSubmittingEntity(false);
         }
@@ -483,6 +503,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     const [showMentions, setShowMentions] = useState(false);
     const [showComments, setShowComments] = useState(false);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    // Confidential Folder Password state
+    const [unlockedFolders, setUnlockedFolders] = useState<Set<string | number>>(new Set());
+    const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+    const [targetPasswordFolder, setTargetPasswordFolder] = useState<any>(null);
+    const [passwordModalMode, setPasswordModalMode] = useState<'unlock' | 'set' | 'change' | 'forgot' | 'remove'>('unlock');
 
     useEffect(() => {
         const showSub = Keyboard.addListener(
@@ -1869,6 +1895,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
     };
 
     const handleShare = async (doc: any) => {
+        let uri = '';
         try {
             if (!doc.downloadUrl) return;
             console.log(doc);
@@ -1881,7 +1908,6 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
             let urlToDownload = doc.downloadUrl;
-            let uri = '';
 
             if ((doc.do_not_follow || doc.only_for_reference) && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
                 const data = await downloadFile(doc.id);
@@ -1919,6 +1945,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToShareDocument'));
         } finally {
             setSharing(false);
+            if (uri && uri.startsWith('file://')) {
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+            }
         }
     };
 
@@ -2154,6 +2183,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const handleShareDoc = async (doc: any) => {
         if (!doc) return;
+        let uri = '';
         try {
             setProcessing('sharing');
             const ext = doc.file_name?.split('.').pop() || 'pdf';
@@ -2161,7 +2191,6 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
             // If it's a PDF and marked as 'Do Not Follow', download via backend to apply watermark
             let urlToDownload = doc.downloadUrl;
-            let uri = '';
 
             if ((doc.do_not_follow || doc.only_for_reference) && (doc.file_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf'))) {
                 const data = await downloadFile(doc.id);
@@ -2195,6 +2224,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToShareDocument'));
         } finally {
             setProcessing(null);
+            if (uri && uri.startsWith('file://')) {
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+            }
         }
     };
 
@@ -2616,7 +2648,15 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         <TouchableOpacity
                                             onPress={() => {
                                                 if (isSelectionMode) toggleSelection('folder', folder.id);
-                                                else setSelectedFolder(folder.id);
+                                                else {
+                                                    if (isConfidentialFolder && folder.is_password_protected && !unlockedFolders.has(folder.id)) {
+                                                        setTargetPasswordFolder(folder);
+                                                        setPasswordModalMode('unlock');
+                                                        setPasswordModalVisible(true);
+                                                    } else {
+                                                        setSelectedFolder(folder.id);
+                                                    }
+                                                }
                                             }}
                                             onLongPress={() => handleLongPress('folder', folder.id)}
                                             style={{
@@ -2624,6 +2664,11 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 zIndex: 5,
                                             }}
                                         />
+                                        {folder.is_password_protected && (
+                                            <View style={{ position: 'absolute', top: 6, left: 6, zIndex: 10 }}>
+                                                <Feather name={unlockedFolders.has(folder.id) ? "unlock" : "lock"} size={12} color="#f43f5e" />
+                                            </View>
+                                        )}
                                         <View style={{ marginBottom: 6 }}>
                                             <Feather
                                                 name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : isConfidentialFolder ? "shield" : "folder"}
@@ -2645,7 +2690,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                         {/* Folder Action Menu - Hidden for Clients */}
                                         {!isSelectionMode && user.role !== 'client' && (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
                                             <View style={{ position: 'absolute', top: 6, right: 6, zIndex: 10 }}>
-                                                {!isConfirmationFolder && !isArchiveFolder && !isConfidentialFolder && (
+                                                {(!isConfirmationFolder && !isArchiveFolder && (!isConfidentialFolder || (isConfidentialFolder && (user.role === 'admin' || user.role === 'superadmin')))) && (
                                                     <TouchableOpacity
                                                         onPress={() => {
                                                             setActiveActionFolder(folder);
@@ -3729,6 +3774,44 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 clientVisible={activeActionFolder?.client_visible !== false}
                 folderName={activeActionFolder?.name || ''}
                 processingAction={processing}
+                isConfidentialFolder={activeActionFolder?.name?.toLowerCase() === 'confidential'}
+                isPasswordProtected={!!activeActionFolder?.is_password_protected}
+                onSetPassword={() => {
+                    setTargetPasswordFolder(activeActionFolder);
+                    setPasswordModalMode('set');
+                    setPasswordModalVisible(true);
+                }}
+                onChangePassword={() => {
+                    setTargetPasswordFolder(activeActionFolder);
+                    setPasswordModalMode('change');
+                    setPasswordModalVisible(true);
+                }}
+                onRemovePassword={() => {
+                    setTargetPasswordFolder(activeActionFolder);
+                    setPasswordModalMode('remove');
+                    setPasswordModalVisible(true);
+                }}
+            />
+
+            <FolderPasswordModal
+                visible={passwordModalVisible}
+                folder={targetPasswordFolder}
+                user={user}
+                initialMode={passwordModalMode}
+                onClose={() => setPasswordModalVisible(false)}
+                onSuccess={(action) => {
+                    setPasswordModalVisible(false);
+                    if (targetPasswordFolder) {
+                        if (action === 'unlocked') {
+                            setUnlockedFolders((prev) => new Set(prev).add(targetPasswordFolder.id));
+                            setSelectedFolder(targetPasswordFolder.id);
+                        } else if (action === 'updated') {
+                            setFolders((prev) => prev.map(f => (f.name?.toLowerCase() === 'confidential' ? { ...f, is_password_protected: true } : f)));
+                        } else if (action === 'removed') {
+                            setFolders((prev) => prev.map(f => (f.name?.toLowerCase() === 'confidential' ? { ...f, is_password_protected: false } : f)));
+                        }
+                    }
+                }}
             />
 
             {/* Create RFI Modal */}

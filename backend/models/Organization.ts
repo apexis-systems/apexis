@@ -25,9 +25,19 @@ export default (sequelize: Sequelize) => {
                 defaultValue: "Free",
             },
             plan_price: {
+                type: DataTypes.DECIMAL(10, 2),
+                allowNull: false,
+                defaultValue: 0.00,
+            },
+            seats_purchased: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
-                defaultValue: 0,
+                defaultValue: 1,
+            },
+            price_per_seat: {
+                type: DataTypes.DECIMAL(10, 2),
+                allowNull: false,
+                defaultValue: 159.00,
             },
             plan_id: {
                 type: DataTypes.INTEGER,
@@ -55,6 +65,26 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.BOOLEAN,
                 allowNull: false,
                 defaultValue: false,
+            },
+            razorpay_subscription_id: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                defaultValue: null,
+            },
+            razorpay_plan_id: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                defaultValue: null,
+            },
+            auto_pay_enabled: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            subscription_cycle: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                defaultValue: null,
             },
         },
         {

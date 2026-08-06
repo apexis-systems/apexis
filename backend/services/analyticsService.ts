@@ -308,7 +308,7 @@ export const getFreemiumLeads = async () => {
             model: organizations,
             where: { plan_name: 'Freemium' },
             required: true,
-            attributes: ['id', 'name', 'plan_start_date', 'plan_end_date']
+            attributes: ['id', 'name', 'plan_name', 'plan_start_date', 'plan_end_date']
         }],
         attributes: ['id', 'name', 'email', 'phone_number', 'createdAt'],
         order: [['createdAt', 'DESC']]
@@ -341,6 +341,7 @@ export const getFreemiumLeads = async () => {
             email: u.email,
             phone: u.phone_number || "+91 0000000000",
             company: org?.name || "Individual / Startup",
+            planName: org?.plan_name || "Freemium",
             installDate: u.createdAt,
             trialStart: planStart.toISOString(),
             trialEnd: planEnd.toISOString(),
@@ -352,6 +353,59 @@ export const getFreemiumLeads = async () => {
         };
     }));
 };
+
+export const getAllLeads = async () => {
+    // Fetch all admin users and their organizations regardless of plan
+    const allUsers = await users.findAll({
+        where: { role: 'admin' },
+        include: [{
+            model: organizations,
+            required: false,
+            attributes: ['id', 'name', 'plan_name', 'plan_start_date', 'plan_end_date']
+        }],
+        attributes: ['id', 'name', 'email', 'phone_number', 'createdAt'],
+        order: [['createdAt', 'DESC']]
+    });
+
+    return await Promise.all(allUsers.map(async (u: any) => {
+        const org = u.organization;
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        // Fetch dynamic metrics for each lead
+        const [activityCount, recentActivity, transactionCount] = await Promise.all([
+            activities.count({ where: { user_id: u.id, createdAt: { [Op.gte]: thirtyDaysAgo } } }),
+            activities.count({ where: { user_id: u.id, createdAt: { [Op.gte]: sevenDaysAgo } } }),
+            transactions.count({ where: { organization_id: org?.id, payment_status: 'success' } })
+        ]);
+
+        const createdAt = new Date(u.createdAt);
+        const planStart = org?.plan_start_date ? new Date(org.plan_start_date) : createdAt;
+        const planEnd = org?.plan_end_date ? new Date(org.plan_end_date) : new Date(planStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+        const diffTime = planEnd.getTime() - now.getTime();
+        const remaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone_number || "+91 0000000000",
+            company: org?.name || "Individual / Startup",
+            planName: org?.plan_name || "Freemium",
+            installDate: u.createdAt,
+            trialStart: planStart.toISOString(),
+            trialEnd: planEnd.toISOString(),
+            remaining: remaining > 0 ? remaining : 0,
+            daysUsed: Math.max(0, Math.floor((now.getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24))),
+            activityScore: Math.min(100, Math.floor((activityCount / 30) * 100)), // 30+ activities in 30 days = 100 score
+            isActive: recentActivity > 0, // Active if any activity in last 7 days
+            converted: transactionCount > 0 // True if they've ever made a successful payment
+        };
+    }));
+};
+
 
 export const getSaasGrowthAnalytics = async () => {
     const now = new Date();
@@ -596,19 +650,62 @@ export const getChurnAndRetentionMetrics = async () => {
     };
 };
 
-export const getGlobalActivityFeed = async () => {
+export const getFilteredActivityFeed = async (filters: {
+    companyId?: string | number;
+    type?: string;
+    dateRange?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+} = {}) => {
+    const whereCondition: any = {};
+
+    if (filters.type && filters.type !== "all") {
+        whereCondition.type = filters.type;
+    }
+
+    if (filters.dateRange && filters.dateRange !== "all") {
+        const now = new Date();
+        if (filters.dateRange === "today") {
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            whereCondition.createdAt = { [Op.gte]: startOfDay };
+        } else if (filters.dateRange === "7d") {
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(now.getDate() - 7);
+            whereCondition.createdAt = { [Op.gte]: sevenDaysAgo };
+        } else if (filters.dateRange === "30d") {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(now.getDate() - 30);
+            whereCondition.createdAt = { [Op.gte]: thirtyDaysAgo };
+        }
+    } else if (filters.startDate || filters.endDate) {
+        whereCondition.createdAt = {};
+        if (filters.startDate) whereCondition.createdAt[Op.gte] = new Date(filters.startDate);
+        if (filters.endDate) whereCondition.createdAt[Op.lte] = new Date(filters.endDate);
+    }
+
+    const projectInclude: any = {
+        model: projects,
+        as: 'project',
+        attributes: ['name', 'organization_id']
+    };
+
+    if (filters.companyId && filters.companyId !== "all") {
+        projectInclude.where = { organization_id: Number(filters.companyId) };
+    }
+
     const recentActivities = await activities.findAll({
-        limit: 10,
+        where: whereCondition,
+        limit: filters.limit ? Number(filters.limit) : 25,
         order: [['createdAt', 'DESC']],
-        include: [{
-            model: users,
-            as: 'user',
-            attributes: ['name']
-        }, {
-            model: projects,
-            as: 'project',
-            attributes: ['name']
-        }]
+        include: [
+            {
+                model: users,
+                as: 'user',
+                attributes: ['name']
+            },
+            projectInclude
+        ]
     });
 
     return recentActivities.map((act: any) => {
@@ -628,10 +725,17 @@ export const getGlobalActivityFeed = async () => {
             icon: "Circle",
             text: `${act.user?.name || 'User'} ${verb} in ${act.project?.name || 'a project'}`,
             time: act.createdAt,
-            type: act.type
+            type: act.type,
+            projectId: act.project_id,
+            userId: act.user_id
         };
     });
 };
+
+export const getGlobalActivityFeed = async () => {
+    return getFilteredActivityFeed({ limit: 10 });
+};
+
 
 export const getPlatformInsights = async () => {
     const [rfiCount, snagCount, photoCount, documentCount, chatRoomCount] = await Promise.all([
@@ -734,7 +838,7 @@ export const getCompanyUsageData = async () => {
 
     const companyUsage = await Promise.all(
         orgs.map(async (org: any) => {
-            const [projectCount, userCount, messageCount, snagCount, rfiCount, photoCount, pdfCount] = await Promise.all([
+            const [projectCount, userCount, messageCount, snagCount, rfiCount, photoCount, pdfCount, lastAct] = await Promise.all([
                 projects.count({ where: { organization_id: org.id } }),
                 users.count({ where: { organization_id: org.id } }),
                 chat_messages.count({
@@ -783,6 +887,10 @@ export const getCompanyUsageData = async () => {
                     where: {
                         file_type: 'application/pdf'
                     }
+                }),
+                activities.findOne({
+                    include: [{ model: projects, where: { organization_id: org.id }, required: true }],
+                    order: [['createdAt', 'DESC']]
                 })
             ]);
 
@@ -795,6 +903,8 @@ export const getCompanyUsageData = async () => {
                 tasks: snagCount + rfiCount,
                 photos: photoCount,
                 pdfs: pdfCount,
+                lastActiveRaw: lastAct ? new Date(lastAct.createdAt).getTime() : 0,
+                lastActive: lastAct ? formatRelativeTime(lastAct.createdAt) : "Never",
             };
         })
     );
