@@ -48,13 +48,18 @@ export default function UsageScreen() {
 
         const translationKey = `usage.${label.toLowerCase().replace(/\s+/g, '')}`;
         const translatedLabel = t(translationKey, { defaultValue: label });
+        const isUnlimited = typeof limit === 'number' && limit >= 99999;
+        const limitStr = isUnlimited
+            ? 'Unlimited'
+            : (label === 'Cloud Storage' ? formatFileSize(limit) : `${limit}${unit}`);
+        const effectivePercent = isUnlimited ? 0 : percent;
 
         return (
             <View style={styles.usageItem} key={label}>
                 <View style={styles.usageHeader}>
                     <Text style={[styles.usageLabel, { color: colors.text }]}>{translatedLabel}</Text>
                     <Text style={[styles.usageValue, { color: colors.textMuted }]}>
-                        {label === 'Cloud Storage' ? formatFileSize(current) : `${current}${unit}`} / {label === 'Cloud Storage' ? formatFileSize(limit) : `${limit}${unit}`}
+                        {label === 'Cloud Storage' ? formatFileSize(current) : `${current}${unit}`} / {limitStr}
                     </Text>
                 </View>
 
@@ -63,7 +68,7 @@ export default function UsageScreen() {
                         style={[
                             styles.progressBarFill,
                             {
-                                width: `${percent}%`,
+                                width: `${effectivePercent}%`,
                                 backgroundColor: colors.primary
                             }
                         ]}
@@ -110,8 +115,8 @@ export default function UsageScreen() {
 
                     {renderUsageItem(
                       'Team Seats',
-                      usage.seats_used || usage.contributors,
-                      usage.seats_limit_total || ((usage.seats_purchased || plan.seats_purchased || plan.limits.per_project_contributor_limit || 1) * Math.max(1, usage.projects || 1))
+                      usage.seats_used ?? usage.contributors,
+                      usage.seats_limit_total ?? usage.seats_purchased ?? plan.seats_purchased ?? 1
                     )}
                     {renderUsageItem(
                       'Cloud Storage',

@@ -799,16 +799,22 @@ export default function UploadScreen() {
             setFileQueue(prev => prev.map(it => it.status === 'done' ? it : { ...it, status: 'error' }));
             const { message, code } = parseApiError(error, 'Some files could not be uploaded.');
 
+            const isAdmin = user?.role === 'admin' || user?.role === 'superadmin' || user?.organization_role === 'admin';
+
             let buttons: any = undefined;
             if (code === 'LIMIT_REACHED') {
-                buttons = [
+                buttons = isAdmin ? [
                     { text: t('upload.cancel'), style: 'cancel' },
                     { text: t('upload.upgrade'), onPress: () => router.push('/subscription') }
+                ] : [
+                    { text: t('upload.cancel'), style: 'cancel' }
                 ];
             } else if (code === 'SUBSCRIPTION_LOCKED') {
-                buttons = [
+                buttons = isAdmin ? [
                     { text: t('upload.cancel'), style: 'cancel' },
                     { text: t('upload.billing'), onPress: () => router.push('/subscription') }
+                ] : [
+                    { text: t('upload.cancel'), style: 'cancel' }
                 ];
             }
 

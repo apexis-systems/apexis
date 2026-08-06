@@ -213,7 +213,12 @@
                 "customOnboarding": "कस्टम ऑनबोर्डिंग",
                 "dedicatedSupport": "समर्पित सहायता",
                 "customIntegrations": "कस्टम एकीकरण",
-                "above100GB": "100GB से ऊपर क्लाउड स्टोरेज"
+                "above100GB": "100GB से ऊपर क्लाउड स्टोरेज",
+                "unlimitedProjects": "अनलिमिटेड प्रोजेक्ट्स",
+                "storage5GBPerProject": "प्रति प्रोजेक्ट 5GB स्टोरेज",
+                "fullRoleAccess": "पूर्ण भूमिका और अनुमति पहुंच",
+                "above100Seats": "100 से अधिक सीट कस्टम कोटा",
+                "customStorage": "कस्टम क्लाउड स्टोरेज कोटा"
             }
         },
         "linkedDevices": {

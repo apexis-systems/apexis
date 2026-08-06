@@ -10,7 +10,11 @@ export interface UsageData {
         price_per_seat?: number;
         startDate: string;
         endDate: string;
+        subscription_plan_end_date?: string;
         daysRemaining: number;
+        auto_pay_enabled?: boolean;
+        subscription_cycle?: string;
+        razorpay_subscription_id?: string | null;
         limits: any;
         access?: {
             isExpired: boolean;
@@ -22,8 +26,8 @@ export interface UsageData {
     };
     usage: {
         projects: number;
+        plan_name?: string;
         seats_purchased?: number;
-        seats_per_project?: number;
         seats_limit_total?: number;
         seats_used?: number;
         seats_remaining?: number;
@@ -59,63 +63,74 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [loading, setLoading] = useState(false);
 
     const refreshUsage = useCallback(async () => {
-        if (!user || user.role === 'superadmin') return;
-        setLoading(true);
+        if (!user) {
+            setUsageData(null);
+            return;
+        }
+
         try {
+            setLoading(true);
             const data = await getUsage();
             setUsageData(data);
         } catch (error) {
-            console.error("Failed to fetch usage data mobile:", error);
+            console.error("Failed to fetch subscription usage:", error);
         } finally {
             setLoading(false);
         }
     }, [user]);
 
     useEffect(() => {
-        if (user && user.role !== 'superadmin') {
-            refreshUsage();
-        } else {
-            setUsageData(null);
-        }
-    }, [user, refreshUsage]);
+        refreshUsage();
+    }, [refreshUsage]);
 
     useEffect(() => {
-        if (!socket || !user || user.role === 'superadmin') return;
+        if (!socket || !user) return;
 
-        const onSubscriptionUpdated = (payload: any) => {
-            if (!payload?.organization_id || payload.organization_id === user.organization_id) {
-                refreshUsage();
-            }
+        const handleSubscriptionUpdated = () => {
+            refreshUsage();
         };
 
-        socket.on('subscription-updated', onSubscriptionUpdated);
+        socket.on("subscription-updated", handleSubscriptionUpdated);
         return () => {
-            socket.off('subscription-updated', onSubscriptionUpdated);
+            socket.off("subscription-updated", handleSubscriptionUpdated);
         };
     }, [socket, user, refreshUsage]);
 
-    const checkLimit = (type: any): boolean => {
+    const checkLimit = (type: keyof UsageData['usage'] | 'can_export_reports' | 'can_export_handover'): boolean => {
         if (!usageData) return true;
-        
+
         const { usage, plan } = usageData;
         const limits = plan.limits;
 
-        switch (type) {
-            case 'projects':
-                return usage.projects < limits.project_limit;
-            case 'contributors':
-                return usage.contributors < limits.contributor_limit;
-            case 'clients':
-                return usage.clients < limits.client_limit;
-            case 'snags':
-                return usage.snags < limits.max_snags;
-            case 'rfis':
-                return usage.rfis < limits.max_rfis;
-            case 'storage':
-                return usage.storage_percent < 100;
-            default:
-                return true;
+        if (type === 'projects') {
+            return usage.projects < limits.project_limit;
         }
+        if (type === 'contributors') {
+            const seatsLimitTotal = usage.seats_limit_total ?? usage.seats_purchased ?? plan.seats_purchased ?? 1;
+            const seatsUsed = usage.seats_used ?? usage.contributors;
+            return seatsUsed < seatsLimitTotal;
+        }
+        if (type === 'clients') {
+            return usage.clients < limits.client_limit;
+        }
+        if (type === 'snags') {
+            return usage.snags < limits.max_snags;
+        }
+        if (type === 'rfis') {
+            return usage.rfis < limits.max_rfis;
+        }
+        if (type === 'storage_mb') {
+            const storageLimit = usage.storage_limit_mb ?? limits.storage_limit_mb ?? 100;
+            return usage.storage_mb < storageLimit;
+        }
+        if (type === 'can_export_reports') {
+            return !!limits.can_export_reports;
+        }
+        if (type === 'can_export_handover') {
+            return !!limits.can_export_handover;
+        }
+
+        return true;
     };
 
     return (
@@ -127,7 +142,7 @@ export const UsageProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
 export const useUsage = () => {
     const context = useContext(UsageContext);
-    if (context === undefined) {
+    if (!context) {
         throw new Error('useUsage must be used within a UsageProvider');
     }
     return context;

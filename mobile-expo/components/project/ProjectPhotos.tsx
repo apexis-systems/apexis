@@ -16,6 +16,7 @@ import { getComments, addComment as addCommentApi, deleteComment as deleteCommen
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setActiveProjectContext } from '@/utils/projectSelection';
@@ -33,7 +34,7 @@ import FolderActionMenu from './FolderActionMenu';
 import FolderPasswordModal from './FolderPasswordModal';
 import { getFolderRFIs, getRFIAssignees, createRFI } from '@/services/rfiService';
 import { getFolderSnags, getAssignees as getSnagAssignees, createSnag } from '@/services/snagService';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { handleApiErrorWithLimitAlert } from '@/helpers/apiError';
 
 // Removed local ZoomableImage
 
@@ -378,8 +379,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             checkAndRestoreViewer();
         } catch (error: any) {
             console.error("Create Snag from photo error", error);
-            const errMsg = error.response?.data?.error || "Failed to create snag";
-            Alert.alert("Error", errMsg);
+            handleApiErrorWithLimitAlert(error, "Failed to create snag", user, router, t);
         } finally {
             setSubmittingEntity(false);
         }
@@ -417,8 +417,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             checkAndRestoreViewer();
         } catch (error: any) {
             console.error("Create RFI from photo error", error);
-            const errMsg = error.response?.data?.error || "Failed to create RFI";
-            Alert.alert("Error", errMsg);
+            handleApiErrorWithLimitAlert(error, "Failed to create RFI", user, router, t);
         } finally {
             setSubmittingEntity(false);
         }

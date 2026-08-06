@@ -60,12 +60,17 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
 
     if (!visible) return null;
 
-    const exceededProjects = projects.filter((p) => p.teamMemberCount > targetSeats);
-    const isFullyCompliant = exceededProjects.length === 0;
+    // Calculate total contributor memberships across all projects in the organization
+    const totalContributors = projects.reduce(
+        (sum, p) => sum + p.members.filter((m) => m.role === 'contributor').length,
+        0
+    );
+    const isFullyCompliant = totalContributors <= targetSeats;
+    const exceededByTotal = Math.max(0, totalContributors - targetSeats);
 
     const handleDeleteMember = async (projectId: number, userId: number, memberName: string) => {
         Alert.alert(
-            "Remove Team Member",
+            "Remove Contributor",
             `Are you sure you want to remove ${memberName} from this project?`,
             [
                 { text: "Cancel", style: "cancel" },
@@ -79,7 +84,7 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                             setRefreshing(true);
                             await onRefreshValidation();
                         } catch (error: any) {
-                            const msg = error.response?.data?.error || "Failed to remove member";
+                            const msg = error.response?.data?.error || "Failed to remove contributor";
                             Alert.alert("Error", msg);
                         } finally {
                             setDeletingUserId(null);
@@ -103,10 +108,10 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.modalTitle, { color: colors.text }]}>
-                                    Manage Members ({targetSeats} Seats)
+                                    Manage Contributors ({targetSeats} Seats)
                                 </Text>
                                 <Text style={[styles.modalSub, { color: colors.textMuted }]}>
-                                    Reduce team members to fit target seat limit
+                                    Reduce contributor seats across projects to fit your target limit of {targetSeats} seat(s)
                                 </Text>
                             </View>
                             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -121,45 +126,17 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                             <View style={[styles.banner, { backgroundColor: '#10B98115', borderColor: '#10B98140' }]}>
                                 <Feather name="check-circle" size={18} color="#10B981" />
                                 <Text style={[styles.bannerText, { color: '#10B981' }]}>
-                                    All projects satisfy the target limit of {targetSeats} seats!
+                                    Total organization contributors ({totalContributors}) satisfies target limit of {targetSeats} seat(s)!
                                 </Text>
                             </View>
                         ) : (
                             <View style={[styles.banner, { backgroundColor: '#F59E0B15', borderColor: '#F59E0B40' }]}>
                                 <Feather name="alert-triangle" size={18} color="#F59E0B" />
                                 <Text style={[styles.bannerText, { color: '#D97706' }]}>
-                                    {exceededProjects.length} project(s) exceed {targetSeats} seats limit. Remove members below.
+                                    Organization has {totalContributors} total contributor(s) across projects. Remove {exceededByTotal} contributor(s) below.
                                 </Text>
                             </View>
                         )}
-                    </View>
-
-                    {/* Role Filter Chips */}
-                    <View style={styles.filterRow}>
-                        {['all', 'contributor', 'consultant', 'vendor', 'client'].map((role) => {
-                            const selected = activeFilter === role;
-                            return (
-                                <TouchableOpacity
-                                    key={role}
-                                    onPress={() => setActiveFilter(role)}
-                                    style={[
-                                        styles.filterChip,
-                                        selected
-                                            ? { backgroundColor: colors.primary }
-                                            : { backgroundColor: colors.background, borderColor: colors.border },
-                                    ]}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.filterChipText,
-                                            { color: selected ? '#FFFFFF' : colors.textMuted },
-                                        ]}
-                                    >
-                                        {role === 'all' ? 'All' : role}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
                     </View>
 
                     {refreshing && (
@@ -172,13 +149,8 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                     {/* Scrollable Project Cards */}
                     <ScrollView contentContainerStyle={styles.scrollContent}>
                         {projects.map((project) => {
-                            const teamCount = project.teamMemberCount;
-                            const isExceeded = teamCount > targetSeats;
-
-                            const filteredMembers = project.members.filter((m) => {
-                                if (activeFilter === 'all') return true;
-                                return m.role === activeFilter;
-                            });
+                            const contributorMembers = project.members.filter((m) => m.role === 'contributor');
+                            const contributorCount = contributorMembers.length;
 
                             return (
                                 <View
@@ -187,7 +159,7 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                                         styles.projectCard,
                                         {
                                             backgroundColor: colors.background,
-                                            borderColor: isExceeded ? '#F59E0B80' : colors.border,
+                                            borderColor: colors.border,
                                         },
                                     ]}
                                 >
@@ -207,27 +179,27 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                                         <View
                                             style={[
                                                 styles.badge,
-                                                { backgroundColor: isExceeded ? '#EF444415' : '#10B98115' },
+                                                { backgroundColor: colors.primary + '15' },
                                             ]}
                                         >
                                             <Text
                                                 style={[
                                                     styles.badgeText,
-                                                    { color: isExceeded ? '#EF4444' : '#10B981' },
+                                                    { color: colors.primary },
                                                 ]}
                                             >
-                                                {teamCount} / {targetSeats} Seats
+                                                {contributorCount} {contributorCount === 1 ? 'Contributor' : 'Contributors'}
                                             </Text>
                                         </View>
                                     </View>
 
-                                    {/* Members List */}
-                                    {filteredMembers.length === 0 ? (
+                                    {/* Members List (Only Contributors) */}
+                                    {contributorMembers.length === 0 ? (
                                         <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                                            No members in this project for selected filter.
+                                            No contributors in this project.
                                         </Text>
                                     ) : (
-                                        filteredMembers.map((member) => {
+                                        contributorMembers.map((member) => {
                                             const isDeleting = deletingUserId === member.user_id;
 
                                             return (
@@ -247,7 +219,7 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                                                         </Text>
                                                         <View style={styles.memberSubRow}>
                                                             <Text style={[styles.memberRole, { color: colors.primary }]}>
-                                                                {member.role.toUpperCase()}
+                                                                CONTRIBUTOR
                                                             </Text>
                                                             <Text
                                                                 style={[styles.memberContact, { color: colors.textMuted }]}
@@ -289,7 +261,7 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                             ]}
                         >
                             <Text style={styles.proceedBtnText}>
-                                {isFullyCompliant ? 'Proceed to Payment / Upgrade' : 'Remove Members to Enable Upgrade'}
+                                {isFullyCompliant ? 'Proceed to Payment / Upgrade' : 'Remove Contributors to Enable Upgrade'}
                             </Text>
                             {isFullyCompliant && <Feather name="arrow-right" size={18} color="#FFFFFF" />}
                         </TouchableOpacity>

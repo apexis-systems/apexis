@@ -72,7 +72,7 @@ const FilePaperclip = ({ size = 20, color, bgColor = '#ffffff' }: { size?: numbe
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { Assignee } from '@/services/snagService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
-import { parseApiError } from '@/helpers/apiError';
+import { parseApiError, handleApiErrorWithLimitAlert } from '@/helpers/apiError';
 import MobileFolderPickerDialog from './MobileFolderPickerDialog';
 import VoiceNoteRecorder from '@/components/chat/VoiceNoteRecorder';
 import VoiceNotePlayer from '@/components/chat/VoiceNotePlayer';
@@ -1188,8 +1188,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('handleCreateRFI error', err);
-      const { message, code } = parseApiError(err, t('projectRfi.failedToCreate'));
-      Alert.alert(code === 'LIMIT_REACHED' ? t('projectRfi.limitReached') : t('projectRfi.error'), message);
+      handleApiErrorWithLimitAlert(err, t('projectRfi.failedToCreate'), user, router, t);
     } finally {
 
       setSubmitting(false);
@@ -1241,7 +1240,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('handleUpdateRFI error', err);
-      Alert.alert(t('projectRfi.error'), t('projectReports.weekly.failedGenerate')); // Reusing for consistency or use failedToCreate
+      handleApiErrorWithLimitAlert(err, t('projectRfi.failedToCreate'), user, router, t);
     } finally {
 
       setSubmitting(false);
@@ -1313,7 +1312,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       if (onUpdate) onUpdate();
     } catch (err) {
       console.error('handleUpdateResponse error', err);
-      Alert.alert(t('projectRfi.error'), t('projectRfi.failedToSendMessage'));
+      handleApiErrorWithLimitAlert(err, t('projectRfi.failedToSendMessage'), user, router, t);
     } finally {
 
       setUpdatingResponse(false);
@@ -1368,7 +1367,7 @@ export default function ProjectRFI({ project, user, onUpdate, initialRfiId }: Pr
       setMessageAttachment(null);
     } catch (err) {
       console.error('sendConversationMessage error', err);
-      Alert.alert(t('projectRfi.error'), t('projectRfi.failedToUpdateResponse'));
+      handleApiErrorWithLimitAlert(err, t('projectRfi.failedToUpdateResponse'), user, router, t);
     } finally {
       setUpdatingResponse(false);
     }

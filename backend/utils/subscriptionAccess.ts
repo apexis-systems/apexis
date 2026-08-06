@@ -1,4 +1,4 @@
-import { organizations, plans, users, projects, project_members, files, Sequelize } from "../models/index.ts";
+import { organizations, plans, users, projects, project_members, files, manuals, Sequelize } from "../models/index.ts";
 import { Op } from "sequelize";
 
 export const SUBSCRIPTION_GRACE_DAYS = 4;
@@ -72,57 +72,43 @@ export const checkMemberLimit = async (
     };
   }
 
-  const isContributorType = role === "contributor" || role === "consultant" || role === "vendor";
-  const mappedRole = isContributorType ? "contributor" : "client";
-  const roleQuery = isContributorType ? ["contributor", "consultant", "vendor"] : ["client"];
+  // Only "contributor" role consumes seats. Client, consultant, and vendor roles do not consume seats and are unlimited.
+  if (role !== "contributor") {
+    return {
+      allowed: true,
+      status: 200,
+      code: "OK",
+      limit: 999999,
+      currentUsage: 0,
+    };
+  }
 
-  const limit =
-    mappedRole === "contributor"
-      ? (org.seats_purchased || org.plan?.contributor_limit || 1)
-      : (org.plan?.client_limit || 999);
+  const limit = org.seats_purchased || org.plan?.contributor_limit || 1;
+
+  const orgProjectIds = (
+    await projects.findAll({
+      where: { organization_id: org.id },
+      attributes: ["id"],
+    })
+  ).map((p: any) => p.id);
 
   let currentUsage = 0;
 
-  if (projectId) {
-    // Count seats specifically in this target project
-    const memberCount = await project_members.count({
+  if (orgProjectIds.length > 0) {
+    currentUsage = await project_members.count({
       where: {
-        project_id: projectId,
-        role: { [Op.in]: roleQuery },
+        project_id: { [Op.in]: orgProjectIds },
+        role: "contributor",
       },
     });
-    currentUsage = memberCount;
-  } else {
-    // Find max seats used in any single project of this organization
-    const orgProjectIds = (
-      await projects.findAll({
-        where: { organization_id: org.id },
-        attributes: ["id"],
-      })
-    ).map((p: any) => p.id);
-
-    if (orgProjectIds.length > 0) {
-      const counts: any[] = await project_members.findAll({
-        where: {
-          project_id: { [Op.in]: orgProjectIds },
-          role: { [Op.in]: roleQuery },
-        },
-        attributes: ["project_id", [Sequelize.fn("COUNT", Sequelize.col("user_id")), "count"]],
-        group: ["project_id"],
-        raw: true,
-      });
-
-      currentUsage = counts.reduce((max, item) => Math.max(max, Number(item.count || 0)), 0);
-    }
   }
 
   if (currentUsage >= limit) {
-    const roleLabel = mappedRole === "contributor" ? "Project team seats" : "Client";
     return {
       allowed: false,
       status: 403,
       code: "LIMIT_REACHED",
-      message: `${roleLabel} limit reached (${limit} seat(s) allowed per project). Upgrade your seat count to add more members.`,
+      message: `Organization contributor seat limit reached (${limit} seat(s) allowed across organization). Upgrade your seats to add more contributors.`,
       limit,
       currentUsage,
     };
@@ -139,16 +125,21 @@ export const checkMemberLimit = async (
 
 export const checkProjectLimit = async (organizationId: number) => {
   const org = await getOrganizationWithPlan(organizationId);
-  if (!org || !org.plan) {
+  if (!org) {
     return {
       allowed: false,
       status: 404,
       code: "PLAN_NOT_FOUND",
-      message: "Organization or Plan not found",
+      message: "Organization not found",
     };
   }
 
-  const limit = org.plan.project_limit;
+  const isPaidPlan = Boolean(org.plan_name && !["freemium", "free"].includes(org.plan_name.toLowerCase()));
+  if (isPaidPlan) {
+    return { allowed: true, status: 200, code: "OK", limit: 999999, currentUsage: 0 };
+  }
+
+  const limit = org.plan?.project_limit || 10;
   const currentUsage = await projects.count({
     where: { organization_id: organizationId },
   });
@@ -158,7 +149,7 @@ export const checkProjectLimit = async (organizationId: number) => {
       allowed: false,
       status: 403,
       code: "LIMIT_REACHED",
-      message: `Project limit reached (${limit}) for your ${org.plan.name} plan.`,
+      message: `Project limit reached (${limit}) for Freemium plan. Please upgrade to create more projects.`,
       limit,
       currentUsage,
     };
@@ -183,19 +174,25 @@ export const checkStorageLimit = async (
     };
   }
 
-  // Storage limit check: prioritize organization's specific limit, fallback to plan limit, then default 5000 MB
-  const limitMb = org.storage_limit_mb || org.plan?.storage_limit_mb || 5000;
+  // Storage limit check: prioritize organization's specific storage_limit_mb if set, else plan limit / defaults
+  const isPaidPlan = Boolean(org.plan_name && !["freemium", "free"].includes(org.plan_name.toLowerCase()));
+  let limitMb = org.storage_limit_mb || org.plan?.storage_limit_mb || (isPaidPlan ? 5120 : 2048);
+  if (!isPaidPlan && !org.storage_limit_mb) {
+    limitMb = 2048;
+  }
   let currentUsedMb = 0;
 
   if (projectId) {
-    const fileSumMb = (await files.sum("file_size_mb", { where: { project_id: projectId } })) || 0;
-    currentUsedMb = Number(fileSumMb);
+    const fileSumMb = (await files.sum("file_size_mb", { where: { project_id: projectId }, paranoid: false })) || 0;
+    const manualSumMb = (await manuals.sum("file_size_mb", { where: { project_id: projectId }, paranoid: false })) || 0;
+    currentUsedMb = Number(fileSumMb) + Number(manualSumMb);
   } else {
-    // If no specific project ID provided, check max project storage across org projects
+    // If no specific project ID provided, check max project storage across org projects (including trashed items)
     const orgProjectIds = (
       await projects.findAll({
         where: { organization_id: organizationId },
         attributes: ["id"],
+        paranoid: false,
       })
     ).map((p: any) => p.id);
 
@@ -205,9 +202,27 @@ export const checkStorageLimit = async (
         attributes: ["project_id", [Sequelize.fn("SUM", Sequelize.col("file_size_mb")), "sum_size"]],
         group: ["project_id"],
         raw: true,
+        paranoid: false,
       });
 
-      currentUsedMb = counts.reduce((max, item) => Math.max(max, Number(item.sum_size || 0)), 0);
+      const manualCounts: any[] = await manuals.findAll({
+        where: { project_id: { [Op.in]: orgProjectIds } },
+        attributes: ["project_id", [Sequelize.fn("SUM", Sequelize.col("file_size_mb")), "sum_size"]],
+        group: ["project_id"],
+        raw: true,
+        paranoid: false,
+      });
+
+      const projectTotals = new Map<number, number>();
+      counts.forEach((item) => {
+        projectTotals.set(Number(item.project_id), Number(item.sum_size || 0));
+      });
+      manualCounts.forEach((item) => {
+        const existing = projectTotals.get(Number(item.project_id)) || 0;
+        projectTotals.set(Number(item.project_id), existing + Number(item.sum_size || 0));
+      });
+
+      currentUsedMb = Array.from(projectTotals.values()).reduce((max, size) => Math.max(max, size), 0);
     } else {
       currentUsedMb = org.storage_used_mb || 0;
     }

@@ -219,8 +219,6 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
         }
 
         const now = new Date();
-        const endDate = new Date();
-        endDate.setDate(now.getDate() + 60);
 
         // Find the Freemium plan (synced from our seeds)
         let plan = await plans.findOne({ 
@@ -232,8 +230,8 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
             plan = await plans.create({
                 name: "Freemium",
                 price: 0,
-                storage_limit_mb: 2000,
-                duration_days: 60,
+                storage_limit_mb: 2048,
+                duration_days: 45,
                 project_limit: 10,
                 contributor_limit: 50,
                 client_limit: 25,
@@ -244,6 +242,9 @@ export const adminVerifyOtp = async (req: Request, res: Response) => {
                 can_export_handover: false,
             });
         }
+
+        const endDate = new Date();
+        endDate.setDate(now.getDate() + (plan.duration_days || 45));
 
         const organization = await organizations.create({
             name: organization_name,

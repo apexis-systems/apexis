@@ -50,6 +50,16 @@ export const verifyPayment = async (data: any) => {
     }
 };
 
+export const cancelAutoPay = async () => {
+    try {
+        const response = await PrivateAxios.post('/subscription/cancel-autopay');
+        return response.data;
+    } catch (error) {
+        console.error("cancelAutoPay Error", error);
+        throw error;
+    }
+};
+
 export const getInvoiceDownloadUrl = (id: number) => {
     return `${PrivateAxios.defaults.baseURL}/subscription/invoice/${id}`;
 };

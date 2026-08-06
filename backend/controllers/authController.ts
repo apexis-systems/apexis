@@ -238,7 +238,7 @@ export const projectLogin = async (req: Request, res: Response) => {
                 if (!memberLimit.allowed) {
                     return res.status(memberLimit.status).json({
                         error: "Limit Reached",
-                        message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
+                        message: memberLimit.message || `Organization seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
                         code: memberLimit.code,
                     });
                 }
@@ -290,7 +290,7 @@ export const projectLogin = async (req: Request, res: Response) => {
             if (!memberLimit.allowed) {
                 return res.status(memberLimit.status).json({
                     error: "Limit Reached",
-                    message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
+                    message: memberLimit.message || `Organization seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
                     code: memberLimit.code,
                 });
             }
@@ -575,7 +575,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
                 if (!memberLimit.allowed) {
                     return res.status(memberLimit.status).json({
                         error: "Limit Reached",
-                        message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
+                        message: memberLimit.message || `Organization seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
                         code: memberLimit.code,
                     });
                 }
@@ -621,7 +621,7 @@ export const completePublicSignup = async (req: Request, res: Response) => {
             if (!memberLimit.allowed) {
                 return res.status(memberLimit.status).json({
                     error: "Limit Reached",
-                    message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
+                    message: memberLimit.message || `Organization seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
                     code: memberLimit.code,
                 });
             }
