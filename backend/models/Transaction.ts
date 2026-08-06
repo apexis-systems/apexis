@@ -62,6 +62,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
                 unique: true,
             },
+            razorpay_subscription_id: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                defaultValue: null,
+            },
         },
         {
             tableName: "transactions",

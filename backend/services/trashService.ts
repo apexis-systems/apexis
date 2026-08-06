@@ -646,8 +646,8 @@ export const validateTrashItemRestoreLimit = async (type: string, record: any, a
 
     if (type === "project") {
         projectId = Number(record.id);
-        const fileSum = (await files.sum("file_size_mb", { where: { project_id: projectId } })) || 0;
-        const manualSum = (await manuals.sum("file_size_mb", { where: { project_id: projectId } })) || 0;
+        const fileSum = (await files.sum("file_size_mb", { where: { project_id: projectId }, paranoid: false })) || 0;
+        const manualSum = (await manuals.sum("file_size_mb", { where: { project_id: projectId }, paranoid: false })) || 0;
         incomingSizeMb = Number(fileSum) + Number(manualSum);
     } else if (type === "folder") {
         projectId = Number(record.project_id);

@@ -27,6 +27,10 @@ export interface User {
         subscription_plan_end_date?: string;
         subscription_grace_end_date?: string;
         subscription_grace_days_remaining?: number;
+        subscription_cycle?: string;
+        auto_pay_enabled?: boolean;
+        razorpay_subscription_id?: string | null;
+        razorpay_plan_id?: string | null;
         restrict_onboarding?: boolean;
     };
 }

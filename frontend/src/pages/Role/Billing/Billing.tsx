@@ -15,9 +15,8 @@ import {
   Loader2,
   Minus,
   Plus,
-  Mail,
-  HardDrive,
-  ShieldCheck,
+  RefreshCw,
+  XCircle,
 } from "lucide-react";
 import { useUsage } from "@/contexts/UsageContext";
 import { Progress } from "@/components/ui/progress";
@@ -30,6 +29,7 @@ import { getMe } from "@/services/authService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatFileSize } from "@/lib/format";
 import { ProjectMemberManagementModal } from "@/components/subscription/ProjectMemberManagementModal";
+import { SubscriptionNoticeModal } from "@/components/subscription/SubscriptionNoticeModal";
 
 const plans = [
   {
@@ -80,11 +80,16 @@ const Billing = () => {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [selectedSeats, setSelectedSeats] = useState<number>(5);
+  const [cancellingAutoPay, setCancellingAutoPay] = useState(false);
 
   // Member management modal state
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [validationProjects, setValidationProjects] = useState<any[]>([]);
   const [pendingPlan, setPendingPlan] = useState<any | null>(null);
+
+  // Subscription change notice modal state
+  const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
+  const [pendingNoticePlan, setPendingNoticePlan] = useState<any | null>(null);
 
   useEffect(() => {
     if (user && (user.role === "admin" || user.role === "superadmin")) {
@@ -116,9 +121,12 @@ const Billing = () => {
 
   const unitPrice = billingCycle === "annual" ? 99 : 159;
 
+  const currentPlanName = usageData?.plan?.name || usageData?.usage?.plan_name || user?.organization?.plan_name || "";
+  const isPaidPlan = Boolean(currentPlanName && !["freemium", "free"].includes(currentPlanName.toLowerCase()));
   const activeSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
   const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
-  const isPlanActive = (usageData?.plan?.daysRemaining || 0) > 0;
+  const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
+  const isAutoPayActive = usageData?.plan?.auto_pay_enabled || false;
 
   const handleSeatChange = (delta: number) => {
     setSelectedSeats((prev) => {
@@ -154,6 +162,28 @@ const Billing = () => {
     }
   };
 
+  const handleCancelAutoPay = async () => {
+    if (!window.confirm("Are you sure you want to cancel Razorpay AutoPay? Your plan will remain active until the end of the current billing cycle, but will not automatically renew.")) {
+      return;
+    }
+
+    setCancellingAutoPay(true);
+    try {
+      const res = await subscriptionService.cancelAutoPay();
+      if (res.success) {
+        toast.success(res.message || "AutoPay cancelled successfully.");
+        await refreshUsage();
+        loadTransactions();
+      } else {
+        toast.error(res.error || "Failed to cancel AutoPay");
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Failed to cancel AutoPay");
+    } finally {
+      setCancellingAutoPay(false);
+    }
+  };
+
   const executeCheckout = async (plan: any) => {
     setLoading(plan.key);
     try {
@@ -184,7 +214,7 @@ const Billing = () => {
         seats: selectedSeats,
       });
 
-      if (orderData?.is_downgrade) {
+      if (orderData?.is_downgrade && !orderData?.is_subscription) {
         toast.success(orderData.message || `Seats updated to ${selectedSeats} seats.`);
         loadTransactions();
         await refreshUsage();
@@ -204,31 +234,25 @@ const Billing = () => {
         return;
       }
 
-      const { order } = orderData;
-      if (!order?.id || !order?.amount || !order?.currency) {
-        throw new Error("Invalid payment order received from server.");
-      }
-
       const appIconUrl = `${window.location.origin}/app-icon.png`;
 
-      const options = {
+      // Razorpay Checkout Options: Support both Subscription flow and Order flow
+      let options: any = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         image: appIconUrl,
-        amount: order.amount,
-        currency: order.currency,
         name: "Apexis",
-        description: `${plan.name} (${selectedSeats} Seats)`,
-        order_id: order.id,
+        description: `${plan.name} (${selectedSeats} Seats · ${billingCycle})`,
         handler: async (response: any) => {
           try {
             await subscriptionService.verifyPayment({
               razorpay_order_id: response.razorpay_order_id,
+              razorpay_subscription_id: response.razorpay_subscription_id || orderData.subscriptionId,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
               plan_name: plan.name,
               plan_cycle: plan.key === "onetime" ? "monthly" : billingCycle,
             });
-            toast.success(t('payment_success') || "Payment successful!");
+            toast.success(t('payment_success') || "Payment successful! AutoPay active.");
             loadTransactions();
             await refreshUsage();
             try {
@@ -256,6 +280,18 @@ const Billing = () => {
         },
       };
 
+      if (orderData.is_subscription) {
+        // AutoPay Subscription mandate flow
+        options.subscription_id = orderData.subscriptionId;
+      } else if (orderData.order) {
+        // Mid-cycle prorated upgrade order flow
+        options.order_id = orderData.order.id;
+        options.amount = orderData.order.amount;
+        options.currency = orderData.order.currency;
+      } else {
+        throw new Error("Invalid payment order/subscription response from server.");
+      }
+
       const rzp = new (window as any).Razorpay(options);
       rzp.on("payment.failed", (response: any) => {
         const message = response?.error?.description || t('payment_failed');
@@ -281,12 +317,23 @@ const Billing = () => {
 
     setLoading(plan.key);
     try {
-      // Validate seat change against active project member density
       const validation = await subscriptionService.validateSeatChange(selectedSeats);
       if (!validation.valid) {
         setValidationProjects(validation.projects || []);
         setPendingPlan(plan);
         setIsMemberModalOpen(true);
+        setLoading(null);
+        return;
+      }
+
+      // If user has an active plan and is changing seats or cycle, show Notice Modal first
+      const activeCycle = usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly";
+      const isCycleChanged = activeCycle !== billingCycle;
+      const isSeatChanged = selectedSeats !== activeSeats;
+
+      if (isPlanActive && (isCycleChanged || isSeatChanged)) {
+        setPendingNoticePlan(plan);
+        setIsNoticeModalOpen(true);
         setLoading(null);
         return;
       }
@@ -324,7 +371,7 @@ const Billing = () => {
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-black text-foreground tracking-tight">{t("billing")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {t('billing_subtitle')} & Seat-Wise Subscription Management
+          {t('billing_subtitle')} & Razorpay AutoPay Subscription Management
         </p>
       </div>
 
@@ -461,7 +508,7 @@ const Billing = () => {
                           <p className="text-[11px] text-orange-600 font-bold mt-1">
                             {isUpgrade
                               ? `Prorated Upgrade (+${addedSeats} seat${addedSeats > 1 ? 's' : ''}, ${remainingDays}d remaining): ₹${proratedTotal.toLocaleString("en-IN")}`
-                              : `Total (${selectedSeats} seats): ₹${totalBilled.toLocaleString("en-IN")}`}
+                              : `AutoPay Billing (${selectedSeats} seats): ₹${totalBilled.toLocaleString("en-IN")}`}
                           </p>
                         );
                       })()}
@@ -482,24 +529,34 @@ const Billing = () => {
                   {(() => {
                     const currentPlanName =
                       usageData?.plan?.name || user?.organization?.plan_name;
-                    const isCurrentPlan = currentPlanName === plan.name;
+                    const activeCycle = usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly";
+                    
+                    const isCurrentPlanName = currentPlanName === plan.name;
+                    const isSameCycle = activeCycle === billingCycle;
+                    const isSameSeats = selectedSeats === activeSeats;
+                    const isCurrentPlan = isCurrentPlanName && isSameCycle && isSameSeats;
+
+                    const isCycleChanged = isPlanActive && !isSameCycle;
                     const isUpgrade = isPlanActive && selectedSeats > activeSeats;
                     const isDowngrade = isPlanActive && selectedSeats < activeSeats;
-                    const isSeatChanged = selectedSeats !== activeSeats;
                     const addedSeats = selectedSeats - activeSeats;
                     const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
                     const dailyRatePerSeat = billingCycle === "annual" ? (99 * 12) / 365 : 159 / 30;
                     const proratedCost = Math.round(addedSeats * dailyRatePerSeat * remainingDays);
                     const proratedTotal = Math.max(1, Math.min(fullCycleCost, proratedCost));
 
-                    const isDisabled = loading !== null || (isCurrentPlan && !isSeatChanged);
+                    const isDisabled = loading !== null || isCurrentPlan;
 
                     let btnText = "";
                     if (loading === plan.key) {
                       btnText = t('processing');
-                    } else if (isCurrentPlan && isUpgrade) {
+                    } else if (isCurrentPlanName && isCycleChanged) {
+                      btnText = billingCycle === "annual"
+                        ? `Switch to Annual Billing (₹${(selectedSeats * 99 * 12).toLocaleString("en-IN")}/yr)`
+                        : `Switch to Monthly Billing (₹${(selectedSeats * 159).toLocaleString("en-IN")}/mo)`;
+                    } else if (isCurrentPlanName && isUpgrade) {
                       btnText = `Upgrade to ${selectedSeats} Seats (₹${proratedTotal.toLocaleString("en-IN")})`;
-                    } else if (isCurrentPlan && isDowngrade) {
+                    } else if (isCurrentPlanName && isDowngrade) {
                       btnText = `Update to ${selectedSeats} Seats (₹${totalBilled.toLocaleString("en-IN")})`;
                     } else if (isCurrentPlan) {
                       btnText = t('current_plan');
@@ -533,7 +590,7 @@ const Billing = () => {
           {usageData && (
             <div className="space-y-8">
               <div className="p-8 rounded-3xl border border-border bg-card/50 backdrop-blur-md">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                   <div className="flex items-center gap-4">
                     <div className="p-3 rounded-2xl bg-orange-100 dark:bg-orange-500/10 text-orange-600">
                       <LayoutGrid className="h-6 w-6" />
@@ -547,13 +604,40 @@ const Billing = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="px-5 py-2 rounded-2xl bg-muted/50 border border-border">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">
-                      {t('plan_validity')}
-                    </span>
-                    <span className="text-sm font-bold">
-                      {new Date(usageData.plan.endDate).toLocaleDateString()}
-                    </span>
+
+                  <div className="flex items-center gap-3">
+                    {/* AutoPay Status & Cancel Button */}
+                    {isAutoPayActive ? (
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center gap-1.5">
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          AutoPay Active ({usageData.plan.subscription_cycle === "annual" ? "Annual" : "Monthly"})
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCancelAutoPay}
+                          disabled={cancellingAutoPay}
+                          className="h-8 text-xs font-semibold border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        >
+                          {cancellingAutoPay ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5 mr-1" />}
+                          Cancel AutoPay
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="px-3 py-1.5 rounded-full bg-slate-500/10 border border-slate-500/30 text-slate-500 font-bold text-xs">
+                        AutoPay Inactive
+                      </span>
+                    )}
+
+                    <div className="px-4 py-1.5 rounded-2xl bg-muted/50 border border-border text-right">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">
+                        {t('plan_validity')}
+                      </span>
+                      <span className="text-sm font-bold">
+                        {new Date(usageData.plan.endDate).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -570,14 +654,14 @@ const Billing = () => {
                         </p>
                       </div>
                       <span className="text-xs font-medium text-muted-foreground">
-                        {t('limit')}: {usageData.plan.limits.project_limit}
+                        {t('limit')}: {usageData.plan.limits.project_limit >= 99999 ? (t('unlimited') || 'Unlimited') : usageData.plan.limits.project_limit}
                       </span>
                     </div>
                     <Progress
                       value={
-                        (usageData.usage.projects /
-                          usageData.plan.limits.project_limit) *
-                        100
+                        usageData.plan.limits.project_limit >= 99999
+                          ? 0
+                          : (usageData.usage.projects / usageData.plan.limits.project_limit) * 100
                       }
                       className="h-2"
                     />
@@ -783,9 +867,48 @@ const Billing = () => {
         onProceed={async () => {
           setIsMemberModalOpen(false);
           if (pendingPlan) {
-            await executeCheckout(pendingPlan);
+            const activeCycle = usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly";
+            const isCycleChanged = activeCycle !== billingCycle;
+            const isSeatChanged = selectedSeats !== activeSeats;
+            if (isPlanActive && (isCycleChanged || isSeatChanged)) {
+              setPendingNoticePlan(pendingPlan);
+              setIsNoticeModalOpen(true);
+            } else {
+              await executeCheckout(pendingPlan);
+            }
           }
         }}
+      />
+
+      {/* Subscription Update & Email Notice Modal */}
+      <SubscriptionNoticeModal
+        isOpen={isNoticeModalOpen}
+        onClose={() => setIsNoticeModalOpen(false)}
+        onConfirm={async () => {
+          setIsNoticeModalOpen(false);
+          if (pendingNoticePlan) {
+            await executeCheckout(pendingNoticePlan);
+          }
+        }}
+        planName={pendingNoticePlan?.name || "Starter"}
+        targetSeats={selectedSeats}
+        billingCycle={billingCycle}
+        currentSeats={activeSeats}
+        currentCycle={usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly"}
+        isUpgrade={isPlanActive && selectedSeats > activeSeats}
+        isDowngrade={isPlanActive && selectedSeats < activeSeats}
+        isCycleChanged={isPlanActive && (usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly") !== billingCycle}
+        planEndDate={usageData?.plan?.endDate || usageData?.plan?.subscription_plan_end_date || user?.organization?.plan_end_date || user?.organization?.subscription_plan_end_date}
+        proratedAmount={(() => {
+          if (isPlanActive && selectedSeats > activeSeats) {
+            const addedSeats = selectedSeats - activeSeats;
+            const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
+            const dailyRatePerSeat = billingCycle === "annual" ? (99 * 12) / 365 : 159 / 30;
+            const proratedCost = Math.round(addedSeats * dailyRatePerSeat * remainingDays);
+            return Math.max(1, Math.min(fullCycleCost, proratedCost));
+          }
+          return 0;
+        })()}
       />
     </div>
   );

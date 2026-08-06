@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
   transactions,
@@ -18,10 +17,8 @@ import { Op } from "sequelize";
 import { getIO } from "../socket.ts";
 import { generateInvoice } from "../services/invoiceService.ts";
 import { getSubscriptionAccessState } from "../utils/subscriptionAccess.ts";
+import razorpay, { RAZORPAY_KEY_ID } from "../config/razorpayConfig.ts";
 
-/**
- * Razorpay controller for handling subscriptions
- */
 const GST_RATE = 0.18;
 const RAZORPAY_MAX_ORDER_AMOUNT_INR = 500000;
 
@@ -51,7 +48,6 @@ export const createOrder = async (req: Request, res: Response) => {
   try {
     const { organization_id, user_id } = (req as any).user;
     const { amount, currency, plan_name, plan_cycle, seats } = req.body;
-    const requestedAmount = Number(amount);
     const seatsCount = Math.max(1, parseInt(seats || 1, 10));
 
     if (seatsCount > 100) {
@@ -77,146 +73,351 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const now = new Date();
     const endDate = org.plan_end_date ? new Date(org.plan_end_date) : null;
-    const isPlanActive = endDate && endDate.getTime() > now.getTime();
+    const isPaidPlan = Boolean(org.plan_name && !["freemium", "free"].includes(org.plan_name.toLowerCase()) && org.razorpay_subscription_id);
+    const isPlanActive = Boolean(isPaidPlan && endDate && endDate.getTime() > now.getTime());
 
-    let normalizedAmount = 0;
-    let isUpgrade = false;
-    let addedSeats = 0;
-    let remainingDays = 0;
+    // Validate that requested seatsCount can accommodate existing active contributors in the org
+    const orgProjects = await projects.findAll({
+      where: { organization_id },
+      attributes: ["id", "name"],
+    });
 
-    if (seatsCount < currentSeats && isPlanActive) {
-      // Organization-wide seat check: Ensure total contributor memberships across all projects do not exceed target seat count
-      const orgProjects = await projects.findAll({
-        where: { organization_id },
-        attributes: ["id", "name"],
+    const projectIds = orgProjects.map((p: any) => p.id);
+    if (projectIds.length > 0) {
+      const totalContributors = await project_members.count({
+        where: {
+          project_id: { [Op.in]: projectIds },
+          role: "contributor",
+        },
       });
 
-      const projectIds = orgProjects.map((p: any) => p.id);
-      if (projectIds.length > 0) {
-        const totalContributors = await project_members.count({
-          where: {
-            project_id: { [Op.in]: projectIds },
-            role: "contributor",
-          },
+      if (totalContributors > seatsCount) {
+        return res.status(400).json({
+          message: `Cannot set seat count to ${seatsCount} because your organization currently has ${totalContributors} total active contributors across projects. Please remove contributors first.`,
         });
+      }
+    }
 
-        if (totalContributors > seatsCount) {
-          return res.status(400).json({
-            message: `Cannot decrease to ${seatsCount} seats because your organization currently has ${totalContributors} total active contributors across projects. Please remove contributors first.`,
+    // 1. DOWNGRADE FLOW (Decreasing seats on active plan)
+    if (seatsCount < currentSeats && isPlanActive) {
+
+      // Try updating existing subscription quantity first (works for Card payments)
+      let directUpdateSuccess = false;
+      if (org.razorpay_subscription_id) {
+        try {
+          await razorpay.subscriptions.update(org.razorpay_subscription_id, {
+            quantity: seatsCount,
+            schedule_change_at: "cycle_end",
           });
+          directUpdateSuccess = true;
+        } catch (subErr: any) {
+          console.warn("[Razorpay Direct Sub Update Notice - Falling back to Future Sub scheduling]:", subErr?.error?.description || subErr?.message || subErr);
         }
       }
 
-      // Update organization seats directly (No payment required for prepaid seat reduction)
-      await organizations.update(
-        { seats_purchased: seatsCount },
-        { where: { id: organization_id } }
-      );
+      if (directUpdateSuccess) {
+        await organizations.update(
+          { seats_purchased: seatsCount },
+          { where: { id: organization_id } }
+        );
 
-      // Create transaction audit log for seat reduction
+        await transactions.create({
+          organization_id,
+          user_id,
+          subscription_tier: "Seat Reduction",
+          subscription_cycle: plan_cycle,
+          seats_purchased: seatsCount,
+          price_per_seat: unitPrice,
+          payment_amount: 0,
+          payment_order_id: `downgrade_org_${organization_id}_${Date.now()}`,
+          payment_status: "success",
+          razorpay_subscription_id: org.razorpay_subscription_id,
+        });
+
+        try {
+          const orgUsers = await users.findAll({
+            where: { organization_id },
+            attributes: ["id"],
+          });
+          const io = getIO();
+          for (const u of orgUsers as any[]) {
+            io.to(`user-${String(u.id)}`).emit("subscription-updated", {
+              organization_id,
+              plan_name: org.plan_name,
+              plan_cycle,
+              subscription_end_date: org.plan_end_date,
+              updated_at: new Date().toISOString(),
+            });
+          }
+        } catch (socketError) {
+          console.error("Failed to emit subscription-updated socket event:", socketError);
+        }
+
+        return res.status(200).json({
+          is_downgrade: true,
+          is_subscription: false,
+          seats: seatsCount,
+          message: `Seats count successfully updated to ${seatsCount}. Next cycle will bill for ${seatsCount} seats.`,
+        });
+      }
+
+      // Fallback for UPI AutoPay: Create future subscription starting at cycle end
+      const startAtTimestamp = Math.floor(new Date(org.plan_end_date).getTime() / 1000);
+      const pricePerSeatInPaise = plan_cycle === "annual" ? 99 * 12 * 100 : 159 * 100;
+      const planPeriod = plan_cycle === "annual" ? "yearly" : "monthly";
+
+      const razorpayPlan = await razorpay.plans.create({
+        period: planPeriod,
+        interval: 1,
+        item: {
+          name: `Apexis ${plan_cycle === "annual" ? "Annual" : "Monthly"} Seat Plan (${seatsCount} Seats)`,
+          amount: pricePerSeatInPaise,
+          currency: "INR",
+          description: `Automated recurring seat subscription (${plan_cycle})`,
+        },
+      });
+
+      const subscription = await razorpay.subscriptions.create({
+        plan_id: razorpayPlan.id,
+        total_count: plan_cycle === "annual" ? 10 : 100,
+        quantity: seatsCount,
+        start_at: startAtTimestamp,
+        customer_notify: 1,
+        notes: {
+          organization_id: String(organization_id),
+          user_id: String(user_id),
+          plan_cycle,
+          is_downgrade: "true",
+        },
+      });
+
       await transactions.create({
         organization_id,
-        user_id: user_id,
-        subscription_tier: "Seat Reduction",
+        user_id,
+        subscription_tier: "Seat Reduction (AutoPay Mandate)",
         subscription_cycle: plan_cycle,
         seats_purchased: seatsCount,
         price_per_seat: unitPrice,
         payment_amount: 0,
-        payment_order_id: `downgrade_org_${organization_id}_${Date.now()}`,
-        payment_status: "success",
+        payment_order_id: subscription.id,
+        payment_status: "pending",
+        razorpay_subscription_id: subscription.id,
       });
 
-      // Real-time socket notification
-      try {
-        const orgUsers = await users.findAll({
-          where: { organization_id },
-          attributes: ["id"],
-        });
-        const io = getIO();
-        for (const u of orgUsers as any[]) {
-          io.to(`user-${String(u.id)}`).emit("subscription-updated", {
-            organization_id,
-            plan_name: org.plan_name,
-            plan_cycle,
-            subscription_end_date: org.plan_end_date,
-            updated_at: new Date().toISOString(),
-          });
-        }
-      } catch (socketError) {
-        console.error("Failed to emit subscription-updated socket event:", socketError);
-      }
-
-      return res.status(200).json({
+      return res.status(201).json({
+        is_subscription: true,
         is_downgrade: true,
-        is_upgrade: false,
+        subscriptionId: subscription.id,
+        keyId: RAZORPAY_KEY_ID,
         seats: seatsCount,
-        message: `Seats count successfully updated to ${seatsCount}.`,
+        amount: 0,
+        amountInPaise: 0,
+        plan_cycle,
+        message: `Please authorize the new ${seatsCount}-seat AutoPay mandate for your next renewal cycle starting ${new Date(org.plan_end_date).toLocaleDateString()}.`,
       });
     }
 
-    if (seatsCount > currentSeats) {
-      isUpgrade = true;
-      addedSeats = seatsCount - currentSeats;
-
-      if (isPlanActive && endDate) {
-        const diffMs = endDate.getTime() - now.getTime();
-        remainingDays = Math.max(1, Math.ceil(diffMs / (1000 * 3600 * 24)));
-      } else {
-        remainingDays = plan_cycle === "annual" ? 365 : 30;
-      }
+    // 2. MID-CYCLE UPGRADE FLOW (Increasing seats on active plan)
+    if (seatsCount > currentSeats && isPlanActive) {
+      const addedSeats = seatsCount - currentSeats;
+      const remainingDays = endDate ? Math.max(1, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 3600 * 24))) : 30;
 
       const fullCycleCost = plan_cycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
       const dailyRatePerSeat = plan_cycle === "annual" ? (99 * 12) / 365 : 159 / 30;
       const proratedCost = Math.round(addedSeats * dailyRatePerSeat * remainingDays);
+      const normalizedAmount = Math.max(1, Math.min(fullCycleCost, proratedCost));
 
-      normalizedAmount = Math.max(1, Math.min(fullCycleCost, proratedCost));
-    } else {
-      normalizedAmount = plan_cycle === "annual" ? seatsCount * 99 * 12 : seatsCount * 159;
-    }
+      if (normalizedAmount > RAZORPAY_MAX_ORDER_AMOUNT_INR) {
+        return res.status(400).json({
+          message: `Amount exceeds Razorpay maximum allowed per order (INR ${RAZORPAY_MAX_ORDER_AMOUNT_INR.toLocaleString("en-IN")}).`,
+        });
+      }
 
-    if (normalizedAmount > RAZORPAY_MAX_ORDER_AMOUNT_INR) {
-      return res.status(400).json({
-        message: `Amount exceeds Razorpay maximum allowed per order (INR ${RAZORPAY_MAX_ORDER_AMOUNT_INR.toLocaleString("en-IN")}).`,
+      // Try updating existing subscription quantity first (works for Card payments)
+      let directUpdateSuccess = false;
+      if (org.razorpay_subscription_id) {
+        try {
+          await razorpay.subscriptions.update(org.razorpay_subscription_id, {
+            quantity: seatsCount,
+            schedule_change_at: "cycle_end",
+          });
+          directUpdateSuccess = true;
+        } catch (subErr: any) {
+          console.warn("[Razorpay Direct Sub Update Notice - Falling back to Future Sub scheduling]:", subErr?.error?.description || subErr?.message || subErr);
+        }
+      }
+
+      if (directUpdateSuccess) {
+        // One-time order for prorated mid-cycle upgrade payment
+        const options = {
+          amount: Math.round(normalizedAmount * 100), // paise
+          currency,
+          receipt: `receipt_org_${organization_id}_${Date.now()}`,
+        };
+        const order = await razorpay.orders.create(options);
+
+        await transactions.create({
+          organization_id,
+          user_id,
+          subscription_tier: "Seat Upgrade",
+          subscription_cycle: plan_cycle,
+          seats_purchased: seatsCount,
+          price_per_seat: unitPrice,
+          payment_amount: normalizedAmount,
+          payment_order_id: order.id,
+          payment_status: "pending",
+          razorpay_subscription_id: org.razorpay_subscription_id,
+        });
+
+        return res.status(201).json({
+          is_subscription: false,
+          is_upgrade: true,
+          order,
+          seats: seatsCount,
+          added_seats: addedSeats,
+          remaining_days: remainingDays,
+          unit_price: unitPrice,
+          amount: normalizedAmount,
+        });
+      }
+
+      // Fallback for UPI AutoPay: Create new Subscription with start_at & addons
+      const startAtTimestamp = Math.floor(new Date(org.plan_end_date).getTime() / 1000);
+      const pricePerSeatInPaise = plan_cycle === "annual" ? 99 * 12 * 100 : 159 * 100;
+      const planPeriod = plan_cycle === "annual" ? "yearly" : "monthly";
+
+      const razorpayPlan = await razorpay.plans.create({
+        period: planPeriod,
+        interval: 1,
+        item: {
+          name: `Apexis ${plan_cycle === "annual" ? "Annual" : "Monthly"} Seat Plan (${seatsCount} Seats)`,
+          amount: pricePerSeatInPaise,
+          currency: "INR",
+          description: `Automated recurring seat subscription (${plan_cycle})`,
+        },
+      });
+
+      const subscription = await razorpay.subscriptions.create({
+        plan_id: razorpayPlan.id,
+        total_count: plan_cycle === "annual" ? 10 : 100,
+        quantity: seatsCount,
+        start_at: startAtTimestamp,
+        customer_notify: 1,
+        addons: normalizedAmount > 0 ? [
+          {
+            item: {
+              name: `Mid-cycle Prorated Seat Upgrade (${addedSeats} added seat(s), ${remainingDays} days remaining)`,
+              amount: Math.round(normalizedAmount * 100),
+              currency: "INR",
+            }
+          }
+        ] : [],
+        notes: {
+          organization_id: String(organization_id),
+          user_id: String(user_id),
+          plan_cycle,
+          is_upgrade: "true",
+        },
+      });
+
+      await transactions.create({
+        organization_id,
+        user_id,
+        subscription_tier: "Seat Upgrade (AutoPay Mandate)",
+        subscription_cycle: plan_cycle,
+        seats_purchased: seatsCount,
+        price_per_seat: unitPrice,
+        payment_amount: normalizedAmount,
+        payment_order_id: subscription.id,
+        payment_status: "pending",
+        razorpay_subscription_id: subscription.id,
+      });
+
+      return res.status(201).json({
+        is_subscription: true,
+        is_upgrade: true,
+        subscriptionId: subscription.id,
+        keyId: RAZORPAY_KEY_ID,
+        seats: seatsCount,
+        added_seats: addedSeats,
+        remaining_days: remainingDays,
+        unit_price: unitPrice,
+        amount: normalizedAmount,
+        amountInPaise: Math.round(normalizedAmount * 100),
+        plan_cycle,
       });
     }
 
-    const razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID!,
-      key_secret: process.env.RAZORPAY_KEY_SECRET!,
+    // 3. NEW SUBSCRIPTION FLOW (Fresh Plan, Renewal, or Billing Cycle Switch Monthly <-> Annual)
+    const startAtTimestamp = isPlanActive && org?.plan_end_date && new Date(org.plan_end_date).getTime() > now.getTime()
+      ? Math.floor(new Date(org.plan_end_date).getTime() / 1000)
+      : undefined;
+
+    const pricePerSeatInPaise = plan_cycle === "annual" ? 99 * 12 * 100 : 159 * 100;
+    const planPeriod = plan_cycle === "annual" ? "yearly" : "monthly";
+
+    // Create Razorpay Plan for recurring billing
+    const razorpayPlan = await razorpay.plans.create({
+      period: planPeriod,
+      interval: 1,
+      item: {
+        name: `Apexis ${plan_cycle === "annual" ? "Annual" : "Monthly"} Seat Plan`,
+        amount: pricePerSeatInPaise, // per seat amount in paise
+        currency: "INR",
+        description: `Automated recurring seat subscription (${plan_cycle})`,
+      },
     });
 
-    const options = {
-      amount: Math.round(normalizedAmount * 100), // convert to paise
-      currency,
-      receipt: `receipt_org_${organization_id}_${Date.now()}`,
+    // Create Razorpay Subscription with seat quantity
+    const subscriptionOptions: any = {
+      plan_id: razorpayPlan.id,
+      total_count: plan_cycle === "annual" ? 10 : 100, // 10 years max for annual, 100 billing cycles max for monthly (Razorpay limit)
+      quantity: seatsCount,
+      customer_notify: 1,
+      notes: {
+        organization_id: String(organization_id),
+        user_id: String(user_id),
+        plan_cycle,
+      },
     };
 
-    const order = await razorpay.orders.create(options);
+    if (startAtTimestamp) {
+      subscriptionOptions.start_at = startAtTimestamp;
+    }
 
-    // Create initial transaction record
+    const subscription = await razorpay.subscriptions.create(subscriptionOptions);
+
+    await org.update({
+      razorpay_plan_id: razorpayPlan.id,
+      subscription_cycle: plan_cycle,
+    });
+
+    const initialAmount = plan_cycle === "annual" ? seatsCount * 99 * 12 : seatsCount * 159;
+
     await transactions.create({
       organization_id,
-      user_id: user_id,
-      subscription_tier: isUpgrade ? "Seat Upgrade" : (plan_name || "Seat Subscription"),
+      user_id,
+      subscription_tier: plan_name || "Seat Subscription",
       subscription_cycle: plan_cycle,
       seats_purchased: seatsCount,
       price_per_seat: unitPrice,
-      payment_amount: normalizedAmount,
-      payment_order_id: order.id,
+      payment_amount: initialAmount,
+      payment_order_id: subscription.id,
       payment_status: "pending",
+      razorpay_subscription_id: subscription.id,
     });
 
-    res.status(201).json({
-      order,
+    return res.status(201).json({
+      is_subscription: true,
+      subscriptionId: subscription.id,
+      keyId: RAZORPAY_KEY_ID,
       seats: seatsCount,
-      added_seats: addedSeats,
-      is_upgrade: isUpgrade,
-      remaining_days: remainingDays,
-      unit_price: unitPrice,
-      amount: normalizedAmount,
+      amount: initialAmount,
+      amountInPaise: Math.round(initialAmount * 100),
+      plan_cycle,
     });
   } catch (error: any) {
-    console.error("Error creating order:", error);
+    console.error("Error creating order/subscription:", error);
     const statusCode = error?.statusCode || error?.status || 500;
     const message =
       error?.error?.description ||
@@ -232,38 +433,57 @@ export const createOrder = async (req: Request, res: Response) => {
   }
 };
 
-
 export const verifyPayment = async (req: Request, res: Response) => {
   try {
     const {
       razorpay_order_id,
       razorpay_payment_id,
+      razorpay_subscription_id,
       razorpay_signature,
       plan_name,
       plan_cycle,
     } = req.body;
     const { organization_id } = (req as any).user;
 
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ message: "Missing payment details" });
+    const subOrOrderId = razorpay_subscription_id || razorpay_order_id;
+
+    if (!subOrOrderId || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ message: "Missing payment verification details" });
     }
 
-    // Verify signature
-    const shasum = crypto.createHmac(
-      "sha256",
-      process.env.RAZORPAY_KEY_SECRET!,
-    );
-    shasum.update(`${razorpay_order_id}|${razorpay_payment_id}`);
-    const digest = shasum.digest("hex");
+    // Verify HMAC SHA-256 signature
+    let signatureVerified = false;
 
-    if (digest !== razorpay_signature) {
+    if (razorpay_subscription_id) {
+      // Razorpay Subscription signature format: razorpay_payment_id|razorpay_subscription_id
+      const hmac = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!);
+      hmac.update(`${razorpay_payment_id}|${razorpay_subscription_id}`);
+      signatureVerified = hmac.digest("hex") === razorpay_signature;
+    }
+
+    if (!signatureVerified && razorpay_order_id) {
+      // Razorpay Order signature format: razorpay_order_id|razorpay_payment_id
+      const hmac = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!);
+      hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+      signatureVerified = hmac.digest("hex") === razorpay_signature;
+    }
+
+    if (!signatureVerified) {
       return res.status(400).json({ message: "Invalid payment signature" });
     }
 
     // Update transaction
     const transaction = await transactions.findOne({
-      where: { payment_order_id: razorpay_order_id },
+      where: {
+        organization_id,
+        [Op.or]: [
+          { payment_order_id: subOrOrderId },
+          { razorpay_subscription_id: subOrOrderId },
+        ],
+      },
+      order: [["created_at", "DESC"]],
     });
+
     if (!transaction) {
       return res.status(404).json({ message: "Transaction record not found" });
     }
@@ -276,33 +496,21 @@ export const verifyPayment = async (req: Request, res: Response) => {
       payment_signature: razorpay_signature,
       payment_status: "success",
       invoice_number: invoiceNumber,
+      razorpay_subscription_id: razorpay_subscription_id || (transaction as any).razorpay_subscription_id,
     });
 
     const org = await organizations.findByPk(organization_id);
+    const selectedPlan = await plans.findOne({ where: { name: plan_name } });
 
-    // Update organization subscription
-    // Support case-insensitive plan matching
-    const selectedPlan = await plans.findOne({
-      where: {
-        name: plan_name,
-      },
-    });
-
-    if (!selectedPlan) {
-      console.error(`Plan not found: ${plan_name}`);
-      return res.status(404).json({ message: "Plan not found in database" });
-    }
-
-    const isUpgrade = (transaction as any).subscription_tier === "Seat Upgrade";
     const now = new Date();
     const existingEndDate = org?.plan_end_date ? new Date(org.plan_end_date) : null;
-    const isPlanActive = existingEndDate && existingEndDate.getTime() > now.getTime();
+    const isPlanActive = Boolean(existingEndDate && existingEndDate.getTime() > now.getTime());
+    const isMidCycleChange = isPlanActive && Boolean(existingEndDate);
 
     let planStartDate = new Date();
     let planEndDate = new Date();
 
-    if (isUpgrade && isPlanActive && existingEndDate) {
-      // Preserve existing dates on prorated seat upgrade
+    if (isMidCycleChange && existingEndDate) {
       planStartDate = org?.plan_start_date ? new Date(org.plan_start_date) : new Date();
       planEndDate = existingEndDate;
     } else {
@@ -316,6 +524,22 @@ export const verifyPayment = async (req: Request, res: Response) => {
     const seatsPurchased = (transaction as any).seats_purchased || 1;
     const pricePerSeat = (transaction as any).price_per_seat || (plan_cycle === "annual" ? 99 : 159);
 
+    const newSubId = razorpay_subscription_id || (transaction as any).razorpay_subscription_id;
+    const oldSubId = org?.razorpay_subscription_id;
+
+    if (newSubId && oldSubId && newSubId !== oldSubId) {
+      try {
+        const fetchedOldSub = await razorpay.subscriptions.fetch(oldSubId);
+        const cancelAtCycleEnd = Boolean(fetchedOldSub.paid_count && fetchedOldSub.paid_count > 0);
+        await razorpay.subscriptions.cancel(oldSubId, cancelAtCycleEnd);
+        console.log(`[AutoPay Replacement]: Cancelled old subscription ${oldSubId} (cancelAtCycleEnd: ${cancelAtCycleEnd}) in favor of ${newSubId}`);
+      } catch (cancelErr: any) {
+        console.warn("[AutoPay Replacement Notice]: Failed to cancel old subscription", cancelErr?.error?.description || cancelErr?.message || cancelErr);
+      }
+    }
+
+    const newStorageLimit = selectedPlan?.storage_limit_mb || 5120;
+
     await organizations.update(
       {
         plan_id: selectedPlan ? selectedPlan.id : 1,
@@ -325,11 +549,15 @@ export const verifyPayment = async (req: Request, res: Response) => {
         price_per_seat: Number(pricePerSeat),
         plan_start_date: planStartDate,
         plan_end_date: planEndDate,
+        storage_limit_mb: newStorageLimit,
+        razorpay_subscription_id: razorpay_subscription_id || org?.razorpay_subscription_id,
+        auto_pay_enabled: razorpay_subscription_id ? true : org?.auto_pay_enabled || false,
+        subscription_cycle: plan_cycle || org?.subscription_cycle,
       },
       { where: { id: organization_id } },
     );
 
-    // Real-time sync: notify all org users to refresh plan/usage immediately.
+    // Real-time sync: notify all org users
     try {
       const orgUsers = await users.findAll({
         where: { organization_id },
@@ -339,29 +567,91 @@ export const verifyPayment = async (req: Request, res: Response) => {
       for (const u of orgUsers as any[]) {
         io.to(`user-${String(u.id)}`).emit("subscription-updated", {
           organization_id,
-          plan_name: selectedPlan.name,
+          plan_name: selectedPlan ? selectedPlan.name : "Seat Subscription",
           plan_cycle,
           subscription_end_date: planEndDate,
           updated_at: new Date().toISOString(),
         });
       }
     } catch (socketError) {
-      console.error(
-        "Failed to emit subscription-updated socket event:",
-        socketError,
-      );
+      console.error("Failed to emit subscription-updated socket event:", socketError);
     }
 
     res.status(200).json({
-      message: "Payment verified and subscription updated",
+      message: "Payment verified and Razorpay AutoPay subscription active",
       transaction,
       subscription_end_date: planEndDate,
+      auto_pay_enabled: true,
     });
   } catch (error: any) {
     console.error("Error verifying payment:", error);
-    res
-      .status(500)
-      .json({ message: "Internal server error", error: error.message });
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+export const cancelAutoPaySubscription = async (req: Request, res: Response) => {
+  try {
+    const { organization_id, user_id } = (req as any).user;
+    const org = await organizations.findByPk(organization_id);
+
+    if (!org) {
+      return res.status(404).json({ error: "Organization not found" });
+    }
+
+    if (!org.razorpay_subscription_id || !org.auto_pay_enabled) {
+      return res.status(400).json({ error: "No active Razorpay AutoPay subscription to cancel" });
+    }
+
+    try {
+      await razorpay.subscriptions.cancel(org.razorpay_subscription_id, true);
+    } catch (razorpayErr: any) {
+      console.warn("[Razorpay Cancel Notice]:", razorpayErr?.error?.description || razorpayErr?.message || razorpayErr);
+    }
+
+    await org.update({
+      auto_pay_enabled: false,
+    });
+
+    await transactions.create({
+      organization_id,
+      user_id,
+      subscription_tier: "AutoPay Cancelled",
+      subscription_cycle: org.subscription_cycle || "monthly",
+      seats_purchased: org.seats_purchased || 1,
+      price_per_seat: org.price_per_seat || 159,
+      payment_amount: 0,
+      payment_order_id: `cancel_autopay_${org.id}_${Date.now()}`,
+      payment_status: "success",
+      razorpay_subscription_id: org.razorpay_subscription_id,
+    });
+
+    try {
+      const orgUsers = await users.findAll({
+        where: { organization_id },
+        attributes: ["id"],
+      });
+      const io = getIO();
+      for (const u of orgUsers as any[]) {
+        io.to(`user-${String(u.id)}`).emit("subscription-updated", {
+          organization_id,
+          plan_name: org.plan_name,
+          plan_cycle: org.subscription_cycle,
+          subscription_end_date: org.plan_end_date,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    } catch (socketError) {
+      console.error("Failed to emit socket event after cancel:", socketError);
+    }
+
+    res.json({
+      success: true,
+      message: `AutoPay recurring debit cancelled. Your current plan access remains active until ${new Date(org.plan_end_date).toLocaleDateString()}.`,
+      organization: org,
+    });
+  } catch (error: any) {
+    console.error("Error cancelling AutoPay:", error);
+    res.status(500).json({ error: error.message || "Failed to cancel AutoPay" });
   }
 };
 
@@ -375,9 +665,7 @@ export const getTransactions = async (req: Request, res: Response) => {
     res.status(200).json(history);
   } catch (error: any) {
     console.error("Error fetching transactions:", error);
-    res
-      .status(500)
-      .json({ message: "Internal server error", error: error.message });
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -385,7 +673,6 @@ export const getUsage = async (req: Request, res: Response) => {
   try {
     let { organization_id } = (req as any).user;
 
-    // Fallback if organization_id is null/missing (Global Role view)
     if (!organization_id) {
       const user = await users.findByPk((req as any).user.user_id, {
         attributes: ["organization_id"],
@@ -407,13 +694,10 @@ export const getUsage = async (req: Request, res: Response) => {
 
     const plan = org.plan;
 
-    // 1. Calculate Project Usage
     const projectCount = await projects.count({
       where: { organization_id: org.id },
     });
 
-    // 2. Calculate Member Usage
-    // Comprehensive counting: include users associated via project_members OR organization_id
     const orgProjects = await projects.findAll({
       where: { organization_id: org.id },
       attributes: ["id", "name"],
@@ -435,8 +719,6 @@ export const getUsage = async (req: Request, res: Response) => {
     const contributorCount = await getMemberCount("contributor");
     const clientCount = await getMemberCount("client");
 
-    // 3. Calculate Snag & RFI Usage (across all projects)
-
     const snagCount = await snags.count({
       where: { project_id: { [Op.in]: projectIds } },
     });
@@ -444,128 +726,47 @@ export const getUsage = async (req: Request, res: Response) => {
       where: { project_id: { [Op.in]: projectIds } },
     });
 
-    // 4. Proactive Alert Logic (Expiry & Per-Project Storage)
     const now = new Date();
     const expiryDate = new Date(org.plan_end_date);
-    const diffDays = Math.ceil(
-      (expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24),
-    );
+    const diffDays = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
     const access = getSubscriptionAccessState(org.plan_end_date, now);
 
-    // Organization-wide contributor seats limit (purchased seats directly apply to total org contributors)
     const effectiveProjectCount = Math.max(1, projectCount);
-    const perProjectStorageLimitMb = org.storage_limit_mb || org.plan?.storage_limit_mb || 5000;
+    const isPaidPlan = Boolean(org.plan_name && !["freemium", "free"].includes(org.plan_name.toLowerCase()));
+    let perProjectStorageLimitMb = org.storage_limit_mb || org.plan?.storage_limit_mb || (isPaidPlan ? 5120 : 2048);
+    if (!isPaidPlan && !org.storage_limit_mb) {
+      perProjectStorageLimitMb = 2048;
+    }
     const seatsPurchased = org.seats_purchased || 1;
 
     const totalSeatsLimit = seatsPurchased;
-    const totalStorageLimitMb = perProjectStorageLimitMb * effectiveProjectCount;
-
+    const totalStorageLimitMb = isPaidPlan ? perProjectStorageLimitMb * effectiveProjectCount : 2048;
     const storageUsagePercent = Math.min(100, (org.storage_used_mb / totalStorageLimitMb) * 100);
 
-    // Check per-project storage usage against per-project limit
-    let exceededProjects: string[] = [];
-    if (projectIds.length > 0) {
-      const projectStorageCounts: any[] = await files.findAll({
-        where: { project_id: { [Op.in]: projectIds } },
-        attributes: ["project_id", [Sequelize.fn("SUM", Sequelize.col("file_size_mb")), "sum_size"]],
-        group: ["project_id"],
-        raw: true,
-      });
-
-      const manualStorageCounts: any[] = await manuals.findAll({
-        where: { project_id: { [Op.in]: projectIds } },
-        attributes: ["project_id", [Sequelize.fn("SUM", Sequelize.col("file_size_mb")), "sum_size"]],
-        group: ["project_id"],
-        raw: true,
-      });
-
-      const projectStorageMap: Record<number, number> = {};
-      projectStorageCounts.forEach((item: any) => {
-        projectStorageMap[Number(item.project_id)] = Number(item.sum_size || 0);
-      });
-      manualStorageCounts.forEach((item: any) => {
-        const current = projectStorageMap[Number(item.project_id)] || 0;
-        projectStorageMap[Number(item.project_id)] = current + Number(item.sum_size || 0);
-      });
-
-      let userProjectIds: Set<number> | null = null;
-      const userRole = (req as any).user?.role;
-      const userId = (req as any).user?.user_id;
-      const isAllowedRoleForStorageAlert = ["admin", "superadmin", "contributor"].includes(userRole);
-
-      if (userRole !== "admin" && userRole !== "superadmin") {
-        const memberships = await project_members.findAll({
-          where: { user_id: userId },
-          attributes: ["project_id"],
-          raw: true,
-        });
-        userProjectIds = new Set(memberships.map((m: any) => Number(m.project_id)));
-      }
-
-      if (isAllowedRoleForStorageAlert) {
-        exceededProjects = orgProjects
-          .filter((p: any) => {
-            if (userProjectIds && !userProjectIds.has(Number(p.id))) {
-              return false;
-            }
-            return (projectStorageMap[p.id] || 0) >= perProjectStorageLimitMb;
-          })
-          .map((p: any) => p.name);
-      }
-    }
-
     let alert = null;
-    const userRole = (req as any).user?.role;
-    const isAllowedRoleForStorageAlert = ["admin", "superadmin"].includes(userRole);
-
-    if (diffDays <= 10 || exceededProjects.length > 0 || (isAllowedRoleForStorageAlert && storageUsagePercent >= 90)) {
-      if (access.isLocked) {
-        alert = {
-          type: "expiry",
-          severity: "error",
-          message:
-            "Your grace period has ended. Please renew now to restore full access.",
-        };
-      } else if (diffDays <= 0) {
-        alert = {
-          type: "expiry",
-          severity: "warning",
-          message:
-            `Your plan has expired. Grace period: ${access.graceDaysRemaining} day(s) remaining.`,
-        };
-      } else if (exceededProjects.length > 0 && isAllowedRoleForStorageAlert) {
-        const projectNamesStr = exceededProjects.join(", ");
-        const projectText = exceededProjects.length === 1 ? `the ${projectNamesStr} project` : `projects: ${projectNamesStr}`;
-        const isAdmin = userRole === "admin" || userRole === "superadmin";
-        const actionText = isAdmin
-          ? "Contact support@apexis.in for more storage."
-          : "Please contact your project Admin to increase the storage.";
-
-        alert = {
-          type: "storage",
-          severity: "error",
-          message: `Storage limit reached in ${projectText}. ${actionText}`,
-        };
-      } else if (
-        diffDays <= 10 &&
-        (storageUsagePercent < 90 || diffDays < 100 - storageUsagePercent)
-      ) {
-        alert = {
-          type: "expiry",
-          severity: "warning",
-          message: `Your plan expires in ${diffDays} days. Upgrade now to avoid service interruption.`,
-        };
-      } else if (isAllowedRoleForStorageAlert && storageUsagePercent >= 90) {
-        alert = {
-          type: "storage",
-          severity: "warning",
-          message: `You have used ${Math.round(storageUsagePercent)}% of your total storage limit. Contact support@apexis.in for more storage.`,
-        };
-      }
+    if (access.isLocked) {
+      alert = {
+        type: "expiry",
+        severity: "error",
+        message: "Your grace period has ended. Please renew now to restore full access.",
+      };
+    } else if (diffDays <= 0) {
+      alert = {
+        type: "expiry",
+        severity: "warning",
+        message: `Your plan has expired. Grace period: ${access.graceDaysRemaining} day(s) remaining.`,
+      };
+    } else if (diffDays <= 10) {
+      alert = {
+        type: "expiry",
+        severity: "warning",
+        message: `Your plan expires in ${diffDays} days. AutoPay will bill on renewal.`,
+      };
     }
 
     const effectiveLimits = plan ? {
       ...plan.toJSON(),
+      project_limit: isPaidPlan ? 999999 : (plan.project_limit || 10),
       contributor_limit: totalSeatsLimit,
       storage_limit_mb: totalStorageLimitMb,
       per_project_storage_limit_mb: perProjectStorageLimitMb,
@@ -573,7 +774,7 @@ export const getUsage = async (req: Request, res: Response) => {
       contributor_limit: totalSeatsLimit,
       storage_limit_mb: totalStorageLimitMb,
       per_project_storage_limit_mb: perProjectStorageLimitMb,
-      project_limit: 999999,
+      project_limit: isPaidPlan ? 999999 : 10,
       client_limit: 999,
       max_snags: 9999,
       max_rfis: 9999,
@@ -590,6 +791,9 @@ export const getUsage = async (req: Request, res: Response) => {
         startDate: org.plan_start_date,
         endDate: org.plan_end_date,
         daysRemaining: Math.max(0, diffDays),
+        auto_pay_enabled: org.auto_pay_enabled || false,
+        subscription_cycle: org.subscription_cycle || "monthly",
+        razorpay_subscription_id: org.razorpay_subscription_id,
         limits: effectiveLimits,
         access: {
           isExpired: access.isExpired,
@@ -635,7 +839,6 @@ export const getPlans = async (req: Request, res: Response) => {
   }
 };
 
-
 export const getInvoice = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -650,8 +853,8 @@ export const getInvoice = async (req: Request, res: Response) => {
 
     const buffer = await generateInvoice(Number(id));
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=Invoice_${transaction.invoice_number || id}.pdf`);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=Invoice_${transaction.invoice_number || id}.pdf`);
     res.send(buffer);
   } catch (error) {
     console.error("Error fetching invoice:", error);

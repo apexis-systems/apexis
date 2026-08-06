@@ -125,16 +125,21 @@ export const checkMemberLimit = async (
 
 export const checkProjectLimit = async (organizationId: number) => {
   const org = await getOrganizationWithPlan(organizationId);
-  if (!org || !org.plan) {
+  if (!org) {
     return {
       allowed: false,
       status: 404,
       code: "PLAN_NOT_FOUND",
-      message: "Organization or Plan not found",
+      message: "Organization not found",
     };
   }
 
-  const limit = org.plan.project_limit;
+  const isPaidPlan = Boolean(org.plan_name && !["freemium", "free"].includes(org.plan_name.toLowerCase()));
+  if (isPaidPlan) {
+    return { allowed: true, status: 200, code: "OK", limit: 999999, currentUsage: 0 };
+  }
+
+  const limit = org.plan?.project_limit || 10;
   const currentUsage = await projects.count({
     where: { organization_id: organizationId },
   });
@@ -144,7 +149,7 @@ export const checkProjectLimit = async (organizationId: number) => {
       allowed: false,
       status: 403,
       code: "LIMIT_REACHED",
-      message: `Project limit reached (${limit}) for your ${org.plan.name} plan.`,
+      message: `Project limit reached (${limit}) for Freemium plan. Please upgrade to create more projects.`,
       limit,
       currentUsage,
     };
@@ -169,20 +174,25 @@ export const checkStorageLimit = async (
     };
   }
 
-  // Storage limit check: prioritize organization's specific limit, fallback to plan limit, then default 5000 MB
-  const limitMb = org.storage_limit_mb || org.plan?.storage_limit_mb || 5000;
+  // Storage limit check: prioritize organization's specific storage_limit_mb if set, else plan limit / defaults
+  const isPaidPlan = Boolean(org.plan_name && !["freemium", "free"].includes(org.plan_name.toLowerCase()));
+  let limitMb = org.storage_limit_mb || org.plan?.storage_limit_mb || (isPaidPlan ? 5120 : 2048);
+  if (!isPaidPlan && !org.storage_limit_mb) {
+    limitMb = 2048;
+  }
   let currentUsedMb = 0;
 
   if (projectId) {
-    const fileSumMb = (await files.sum("file_size_mb", { where: { project_id: projectId } })) || 0;
-    const manualSumMb = (await manuals.sum("file_size_mb", { where: { project_id: projectId } })) || 0;
+    const fileSumMb = (await files.sum("file_size_mb", { where: { project_id: projectId }, paranoid: false })) || 0;
+    const manualSumMb = (await manuals.sum("file_size_mb", { where: { project_id: projectId }, paranoid: false })) || 0;
     currentUsedMb = Number(fileSumMb) + Number(manualSumMb);
   } else {
-    // If no specific project ID provided, check max project storage across org projects
+    // If no specific project ID provided, check max project storage across org projects (including trashed items)
     const orgProjectIds = (
       await projects.findAll({
         where: { organization_id: organizationId },
         attributes: ["id"],
+        paranoid: false,
       })
     ).map((p: any) => p.id);
 
@@ -192,6 +202,7 @@ export const checkStorageLimit = async (
         attributes: ["project_id", [Sequelize.fn("SUM", Sequelize.col("file_size_mb")), "sum_size"]],
         group: ["project_id"],
         raw: true,
+        paranoid: false,
       });
 
       const manualCounts: any[] = await manuals.findAll({
@@ -199,6 +210,7 @@ export const checkStorageLimit = async (
         attributes: ["project_id", [Sequelize.fn("SUM", Sequelize.col("file_size_mb")), "sum_size"]],
         group: ["project_id"],
         raw: true,
+        paranoid: false,
       });
 
       const projectTotals = new Map<number, number>();

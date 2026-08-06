@@ -113,13 +113,18 @@ export const checkLimit = (type: LimitType) => {
       let errorMessage = "Plan limit reached";
 
       switch (type) {
-        case "project":
+        case "project": {
+          const isPaidPlan = Boolean(org.plan_name && !["freemium", "free"].includes(org.plan_name.toLowerCase()));
+          if (isPaidPlan) {
+            break;
+          }
           currentUsage = await projects.count({
             where: { organization_id: org.id },
           });
-          limit = plan.project_limit;
-          errorMessage = `You have reached the limit of ${limit} projects for your ${plan.name} plan.`;
+          limit = plan?.project_limit || 10;
+          errorMessage = `You have reached the limit of ${limit} projects for your Freemium plan. Please upgrade to create more projects.`;
           break;
+        }
 
         case "storage": {
           const uploadReq = req as AuthRequest & {

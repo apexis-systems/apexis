@@ -26,8 +26,10 @@ import {
   createOrder,
   verifyPayment,
   validateSeatChange,
+  cancelAutoPay,
 } from "@/services/subscriptionService";
 import { ProjectMemberManagementModal } from "@/components/subscription/ProjectMemberManagementModal";
+import { SubscriptionNoticeModal } from "@/components/subscription/SubscriptionNoticeModal";
 import { getMe } from "@/services/authService";
 let RazorpayCheckout: any = null;
 try {
@@ -82,12 +84,6 @@ const PLAN_DETAILS: Record<
   },
 };
 
-
-const gstAmount = (baseAmount: number): number =>
-  Number((baseAmount * GST_RATE).toFixed(2));
-const payableAmount = (baseAmount: number): number =>
-  Number((baseAmount + gstAmount(baseAmount)).toFixed(2));
-
 export default function SubscriptionScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -102,6 +98,7 @@ export default function SubscriptionScreen() {
   const [availablePlans, setAvailablePlans] = useState<any[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [cancellingAutoPay, setCancellingAutoPay] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const appIconUri = Image.resolveAssetSource(
     require("../assets/images/app-icon.png"),
@@ -119,6 +116,10 @@ export default function SubscriptionScreen() {
   const [validationProjects, setValidationProjects] = useState<any[]>([]);
   const [pendingPlan, setPendingPlan] = useState<any | null>(null);
 
+  // Subscription change notice modal state
+  const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
+  const [pendingNoticePlan, setPendingNoticePlan] = useState<any | null>(null);
+
   const handleRefreshValidation = async () => {
     try {
       const res = await validateSeatChange(selectedSeats);
@@ -127,6 +128,36 @@ export default function SubscriptionScreen() {
     } catch (error) {
       console.error("Error refreshing mobile seat validation", error);
     }
+  };
+
+  const handleCancelAutoPay = () => {
+    Alert.alert(
+      "Cancel AutoPay",
+      "Are you sure you want to cancel Razorpay AutoPay? Your current plan will remain active until the end of the billing cycle.",
+      [
+        { text: "Keep AutoPay", style: "cancel" },
+        {
+          text: "Cancel AutoPay",
+          style: "destructive",
+          onPress: async () => {
+            setCancellingAutoPay(true);
+            try {
+              const res = await cancelAutoPay();
+              if (res.success) {
+                Alert.alert("Success", res.message || "AutoPay cancelled successfully.");
+                await refreshUsage();
+              } else {
+                Alert.alert("Error", res.error || "Failed to cancel AutoPay");
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err?.response?.data?.error || "Failed to cancel AutoPay");
+            } finally {
+              setCancellingAutoPay(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const fetchPlans = async () => {
@@ -184,9 +215,11 @@ export default function SubscriptionScreen() {
 
     setProcessingPayment(true);
     try {
+      const currentPlanName = usageData?.plan?.name || usageData?.usage?.plan_name || "";
+      const isPaidPlan = Boolean(currentPlanName && !["freemium", "free"].includes(currentPlanName.toLowerCase()));
       const currentSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
       const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
-      const isPlanActive = (usageData?.plan?.daysRemaining || 0) > 0;
+      const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
       const isUpgrade = isPlanActive && selectedSeats > currentSeats;
 
       let estimatedAmount = 0;
@@ -208,7 +241,7 @@ export default function SubscriptionScreen() {
         seats: selectedSeats,
       });
 
-      if (orderData?.is_downgrade) {
+      if (orderData?.is_downgrade && !orderData?.is_subscription) {
         Alert.alert(t('common.success') || "Success", orderData.message || `Seats updated to ${selectedSeats} seats.`);
         await refreshUsage();
         try {
@@ -227,18 +260,11 @@ export default function SubscriptionScreen() {
         return;
       }
 
-      if (!orderData?.order?.id || !orderData.order.amount) {
-        throw new Error("Invalid payment order received from server.");
-      }
-
-      const options = {
-        description: isUpgrade ? `Add ${selectedSeats - currentSeats} Seats (${remainingDays} days remaining)` : `${plan.name} Subscription`,
+      let options: any = {
+        description: isUpgrade ? `Add ${selectedSeats - currentSeats} Seats (${remainingDays} days remaining)` : `${plan.name} AutoPay Subscription`,
         image: appIconUri,
-        currency: "INR",
         key: razorpayKey,
-        amount: orderData.order.amount,
         name: "Apexis",
-        order_id: orderData.order.id,
         prefill: {
           email: user?.email || "",
           contact: user?.phone_number || "",
@@ -247,17 +273,24 @@ export default function SubscriptionScreen() {
         theme: { color: colors.primary },
       };
 
-      const data: any = await RazorpayCheckout.open(options);
-      if (
-        !data?.razorpay_order_id ||
-        !data?.razorpay_payment_id ||
-        !data?.razorpay_signature
-      ) {
-        throw new Error("Payment response is missing required details.");
+      if (orderData.is_subscription) {
+        // AutoPay Subscription Checkout
+        options.subscription_id = orderData.subscriptionId;
+      } else if (orderData.order?.id) {
+        // One-time order for prorated seat upgrade
+        options.order_id = orderData.order.id;
+        options.currency = "INR";
+        options.amount = orderData.order.amount;
+      } else {
+        throw new Error("Invalid payment order/subscription response from server.");
       }
+
+      const data: any = await RazorpayCheckout.open(options);
+
       try {
         await verifyPayment({
           razorpay_order_id: data.razorpay_order_id,
+          razorpay_subscription_id: data.razorpay_subscription_id || orderData.subscriptionId,
           razorpay_payment_id: data.razorpay_payment_id,
           razorpay_signature: data.razorpay_signature,
           plan_name: plan.name,
@@ -278,7 +311,7 @@ export default function SubscriptionScreen() {
         }
 
         await refreshUsage();
-        Alert.alert(t('common.success') || 'Success', t('subscription.successUpgrade'));
+        Alert.alert(t('common.success') || 'Success', t('subscription.successUpgrade') || "Payment verified! Razorpay AutoPay active.");
       } catch (e: any) {
         const message =
           e?.response?.data?.message ||
@@ -331,6 +364,21 @@ export default function SubscriptionScreen() {
         return;
       }
 
+      const currentPlanName = usageData?.plan?.name || usageData?.usage?.plan_name || "";
+      const isPaidPlan = Boolean(currentPlanName && !["freemium", "free"].includes(currentPlanName.toLowerCase()));
+      const currentSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
+      const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
+      const activeCycle = usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly";
+      const isCycleChanged = activeCycle !== billingCycle;
+      const isSeatChanged = selectedSeats !== currentSeats;
+
+      if (isPlanActive && (isCycleChanged || isSeatChanged)) {
+        setPendingNoticePlan(plan);
+        setIsNoticeModalOpen(true);
+        setProcessingPayment(false);
+        return;
+      }
+
       await executeCheckout(plan);
     } catch (error) {
       console.error("Pre-checkout seat validation error in mobile", error);
@@ -357,15 +405,14 @@ export default function SubscriptionScreen() {
     );
   }
 
-
   const { plan, usage } = usageData;
+  const isAutoPayActive = plan.auto_pay_enabled || false;
   const selectedPlanDetails = selectedPlan
     ? PLAN_DETAILS[selectedPlan.name] || {
         subtitleKey: "subscription.plans.oneTimeSubtitle",
         featureKeys: [],
       }
     : null;
-
 
   return (
     <SafeAreaView
@@ -396,7 +443,6 @@ export default function SubscriptionScreen() {
           {t('subscription.title')}
         </Text>
         <TouchableOpacity
-
           onPress={() => router.push("/transactions")}
           style={styles.headerIconBtn}>
           <MaterialCommunityIcons
@@ -428,7 +474,6 @@ export default function SubscriptionScreen() {
                 {t('subscription.currentActivePlan')}
               </Text>
               <Text style={[styles.planName, { color: colors.text }]}>
-
                 {plan.name}
               </Text>
             </View>
@@ -461,7 +506,29 @@ export default function SubscriptionScreen() {
                 {plan.daysRemaining} {t('subscription.days')}
               </Text>
             </View>
+          </View>
 
+          {/* AutoPay Status & Cancel Button */}
+          <View style={{ marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: `${colors.primary}20`, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Feather name={isAutoPayActive ? "refresh-cw" : "minus-circle"} size={14} color={isAutoPayActive ? "#10B981" : colors.textMuted} />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: isAutoPayActive ? "#10B981" : colors.textMuted }}>
+                {isAutoPayActive ? `AutoPay Active (${plan.subscription_cycle === "annual" ? "Annual" : "Monthly"})` : "AutoPay Inactive"}
+              </Text>
+            </View>
+
+            {isAutoPayActive && (
+              <TouchableOpacity
+                disabled={cancellingAutoPay}
+                onPress={handleCancelAutoPay}
+                style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "#EF444415", borderWidth: 1, borderColor: "#EF444430" }}>
+                {cancellingAutoPay ? (
+                  <ActivityIndicator size="small" color="#EF4444" />
+                ) : (
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#EF4444" }}>Cancel AutoPay</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -489,13 +556,11 @@ export default function SubscriptionScreen() {
             const totalAnnual = effectivePrice * 12;
 
             const isEnterprise = isEnterprisePlan(p);
-            const period = p.name === "One-Time Buy" || isEnterprise ? "" : "/mo";
             const buttonLabel = isCurrent
               ? t('subscription.current')
               : isEnterprise
                 ? t('subscription.contactSales')
                 : t('subscription.viewDetails');
-
 
             return (
               <TouchableOpacity
@@ -551,7 +616,6 @@ export default function SubscriptionScreen() {
                          {t('subscription.billedAnnually', { amount: totalAnnual.toLocaleString("en-IN") })}
                        </Text>
                      )}
-
                   </View>
                   {!isEnterprise && (
                     <Text
@@ -564,7 +628,6 @@ export default function SubscriptionScreen() {
                       {t('subscription.inclGst')}
                     </Text>
                   )}
-
                 </View>
 
                 <View
@@ -578,7 +641,6 @@ export default function SubscriptionScreen() {
                       borderWidth: 1,
                     },
                   ]}>
-
                   <Text
                     style={[
                       styles.selectBtnText,
@@ -601,7 +663,6 @@ export default function SubscriptionScreen() {
              {t('subscription.havingIssues')}
            </Text>
          </TouchableOpacity>
-
       </ScrollView>
 
       <Modal
@@ -682,9 +743,11 @@ export default function SubscriptionScreen() {
                     </View>
 
                     {!isEnterprisePlan(selectedPlan) && (() => {
+                      const currentPlanName = usageData?.plan?.name || usageData?.usage?.plan_name || "";
+                      const isPaidPlan = Boolean(currentPlanName && !["freemium", "free"].includes(currentPlanName.toLowerCase()));
                       const activeSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
                       const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
-                      const isPlanActive = (usageData?.plan?.daysRemaining || 0) > 0;
+                      const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
                       const isSeatUpgrade = isPlanActive && selectedSeats > activeSeats;
                       const addedSeats = selectedSeats - activeSeats;
                       const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
@@ -750,7 +813,6 @@ export default function SubscriptionScreen() {
                     )}
                   </View>
 
-
                    <View
                     style={[
                       styles.featureCard,
@@ -783,16 +845,24 @@ export default function SubscriptionScreen() {
                       </View>
                     ))}
                   </View>
-
                 </ScrollView>
 
                 {(() => {
+                  const currentPlanName = usageData?.plan?.name || usageData?.usage?.plan_name || "";
+                  const activeCycle = usageData?.plan?.subscription_cycle || "monthly";
+                  const isPaidPlan = Boolean(currentPlanName && !["freemium", "free"].includes(currentPlanName.toLowerCase()));
                   const activeSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
                   const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
-                  const isPlanActive = (usageData?.plan?.daysRemaining || 0) > 0;
+                  const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
+                  
+                  const isCurrentPlanName = selectedPlan.name === plan.name;
+                  const isSameCycle = activeCycle === billingCycle;
+                  const isSameSeats = selectedSeats === activeSeats;
+                  const isCurrentPlan = isCurrentPlanName && isSameCycle && isSameSeats;
+
+                  const isCycleChanged = isPlanActive && !isSameCycle;
                   const isUpgrade = isPlanActive && selectedSeats > activeSeats;
                   const isDowngrade = isPlanActive && selectedSeats < activeSeats;
-                  const isSeatChanged = selectedSeats !== activeSeats;
                   const addedSeats = selectedSeats - activeSeats;
                   const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
                   const dailyRatePerSeat = billingCycle === "annual" ? (99 * 12) / 365 : 159 / 30;
@@ -801,22 +871,25 @@ export default function SubscriptionScreen() {
                     ? Math.max(1, Math.min(fullCycleCost, proratedCost))
                     : (billingCycle === "annual" ? selectedSeats * 99 * 12 : selectedSeats * 159);
 
-                  const isCurrent = selectedPlan.name === plan.name;
-                  const isDisabled = processingPayment || (isCurrent && !isSeatChanged);
+                  const isDisabled = processingPayment || isCurrentPlan;
 
                   let btnText = "";
                   if (processingPayment) {
                     btnText = t('subscription.processing') || "Processing...";
                   } else if (isEnterprisePlan(selectedPlan)) {
                     btnText = t('subscription.contactSales');
-                  } else if (isUpgrade) {
+                  } else if (isCurrentPlanName && isCycleChanged) {
+                    btnText = billingCycle === "annual"
+                      ? `Switch to Annual Plan (₹${(selectedSeats * 99 * 12).toLocaleString("en-IN")}/yr)`
+                      : `Switch to Monthly Plan (₹${(selectedSeats * 159).toLocaleString("en-IN")}/mo)`;
+                  } else if (isCurrentPlanName && isUpgrade) {
                     btnText = `Upgrade to ${selectedSeats} Seats (₹${calcTotal.toLocaleString("en-IN")})`;
-                  } else if (isDowngrade) {
+                  } else if (isCurrentPlanName && isDowngrade) {
                     btnText = `Update to ${selectedSeats} Seats (₹${calcTotal.toLocaleString("en-IN")})`;
-                  } else if (isCurrent) {
+                  } else if (isCurrentPlan) {
                     btnText = t('subscription.currentPlan');
                   } else {
-                    btnText = `Buy Plan (${selectedSeats} Seat${selectedSeats > 1 ? 's' : ''} · ₹${calcTotal.toLocaleString("en-IN")})`;
+                    btnText = `Subscribe with AutoPay (${selectedSeats} Seat${selectedSeats > 1 ? 's' : ''} · ₹${calcTotal.toLocaleString("en-IN")})`;
                   }
 
                   return (
@@ -868,9 +941,55 @@ export default function SubscriptionScreen() {
         onProceed={async () => {
           setIsMemberModalOpen(false);
           if (pendingPlan) {
-            await executeCheckout(pendingPlan);
+            const currentPlanName = usageData?.plan?.name || usageData?.usage?.plan_name || "";
+            const isPaidPlan = Boolean(currentPlanName && !["freemium", "free"].includes(currentPlanName.toLowerCase()));
+            const currentSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
+            const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
+            const activeCycle = usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly";
+            const isCycleChanged = activeCycle !== billingCycle;
+            const isSeatChanged = selectedSeats !== currentSeats;
+            if (isPlanActive && (isCycleChanged || isSeatChanged)) {
+              setPendingNoticePlan(pendingPlan);
+              setIsNoticeModalOpen(true);
+            } else {
+              await executeCheckout(pendingPlan);
+            }
           }
         }}
+      />
+
+      <SubscriptionNoticeModal
+        visible={isNoticeModalOpen}
+        onClose={() => setIsNoticeModalOpen(false)}
+        onConfirm={async () => {
+          setIsNoticeModalOpen(false);
+          if (pendingNoticePlan) {
+            await executeCheckout(pendingNoticePlan);
+          }
+        }}
+        planName={pendingNoticePlan?.name || "Starter"}
+        targetSeats={selectedSeats}
+        billingCycle={billingCycle}
+        currentSeats={usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1}
+        currentCycle={usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly"}
+        isUpgrade={Boolean(usageData?.plan?.daysRemaining && usageData.plan.daysRemaining > 0 && selectedSeats > (usageData?.plan?.seats_purchased || 1))}
+        isDowngrade={Boolean(usageData?.plan?.daysRemaining && usageData.plan.daysRemaining > 0 && selectedSeats < (usageData?.plan?.seats_purchased || 1))}
+        isCycleChanged={Boolean(usageData?.plan?.daysRemaining && usageData.plan.daysRemaining > 0 && (usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly") !== billingCycle)}
+        planEndDate={usageData?.plan?.endDate || usageData?.plan?.subscription_plan_end_date || user?.organization?.plan_end_date || user?.organization?.subscription_plan_end_date}
+        proratedAmount={(() => {
+          const currentSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
+          const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
+          const isPaidPlan = Boolean(usageData?.plan?.name && !["freemium", "free"].includes(String(usageData.plan.name).toLowerCase()));
+          const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
+          if (isPlanActive && selectedSeats > currentSeats) {
+            const addedSeats = selectedSeats - currentSeats;
+            const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
+            const dailyRatePerSeat = billingCycle === "annual" ? (99 * 12) / 365 : 159 / 30;
+            const proratedCost = Math.round(addedSeats * dailyRatePerSeat * remainingDays);
+            return Math.max(1, Math.min(fullCycleCost, proratedCost));
+          }
+          return 0;
+        })()}
       />
     </SafeAreaView>
   );
@@ -919,106 +1038,71 @@ const styles = StyleSheet.create({
   planHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
+    alignItems: "flex-start",
   },
   planBadge: {
-    fontSize: 10,
+    fontSize: 12,
+    textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 4,
   },
   planName: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "800",
   },
   iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    alignItems: "center",
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     justifyContent: "center",
+    alignItems: "center",
   },
   planDates: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.05)",
+    marginTop: 20,
     paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0, 0, 0, 0.05)",
   },
   dateItem: {
     flex: 1,
   },
   dateLabel: {
-    fontSize: 10,
-    color: "#888",
-    fontWeight: "600",
+    fontSize: 12,
+    color: "#64748B",
     marginBottom: 4,
   },
   dateValue: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#888",
-    marginBottom: 12,
-    letterSpacing: 1,
-    paddingHorizontal: 4,
-  },
-  usageCard: {
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    marginBottom: 32,
-    gap: 20,
-  },
-  usageItem: {
-    width: "100%",
-  },
-  usageHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  usageLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  usageValue: {
-    fontSize: 12,
-  },
-  progressBarBg: {
-    height: 6,
-    borderRadius: 3,
-    width: "100%",
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: "100%",
-    borderRadius: 3,
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 16,
   },
   toggleContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 20,
     gap: 12,
-    marginBottom: 24,
-    backgroundColor: "rgba(0,0,0,0.03)",
-    paddingVertical: 12,
-    borderRadius: 16,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    color: "#64748B",
   },
   toggleSwitch: {
-    width: 48,
-    height: 24,
-    borderRadius: 12,
+    width: 50,
+    height: 28,
+    borderRadius: 14,
     padding: 2,
     justifyContent: "center",
   },
   toggleCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: "white",
   },
   toggleCircleMonthly: {
@@ -1027,106 +1111,94 @@ const styles = StyleSheet.create({
   toggleCircleAnnual: {
     alignSelf: "flex-end",
   },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#666",
-  },
   plansList: {
-    gap: 12,
-    marginBottom: 32,
+    gap: 16,
   },
-
   availablePlanCard: {
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1,
   },
   availablePlanInfo: {
     flex: 1,
   },
   availablePlanName: {
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 2,
   },
   availablePlanSubtitle: {
     fontSize: 12,
-    marginTop: 4,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   availablePlanPrice: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#f97316",
-    marginTop: 2,
+    fontSize: 22,
+    fontWeight: "800",
   },
   selectBtn: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
   },
   selectBtnText: {
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   supportLink: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    marginTop: 32,
     paddingTop: 24,
     borderTopWidth: 1,
   },
   supportText: {
-    fontSize: 12,
+    fontSize: 13,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.35)",
   },
   modalBackdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   modalSheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
-    borderBottomWidth: 0,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 24,
-    maxHeight: "82%",
+    padding: 20,
+    maxHeight: "85%",
   },
   modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
     alignSelf: "center",
-    width: 44,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: "rgba(127,127,127,0.35)",
     marginBottom: 16,
   },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 18,
+    marginBottom: 16,
   },
   modalPlanName: {
-    fontSize: 24,
-    fontWeight: "900",
+    fontSize: 20,
+    fontWeight: "800",
   },
   modalPlanSubtitle: {
-    fontSize: 13,
-    marginTop: 4,
+    fontSize: 12,
+    marginTop: 2,
   },
   modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1134,77 +1206,62 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   modalContentInner: {
-    paddingBottom: 12,
-    gap: 14,
+    paddingBottom: 16,
   },
   modalPriceCard: {
-    borderRadius: 20,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    padding: 18,
+    marginBottom: 16,
   },
   modalPriceRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 6,
-    marginBottom: 8,
+    alignItems: "baseline",
   },
   modalPrice: {
     fontSize: 28,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   modalPeriod: {
-    fontSize: 13,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  modalMetaText: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  modalPayable: {
-    fontSize: 13,
-    fontWeight: "800",
-    marginTop: 6,
+    fontSize: 14,
+    marginLeft: 6,
   },
   featureCard: {
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
   },
   featureTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 14,
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 12,
   },
   featureRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   featureIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 1,
   },
   featureText: {
-    flex: 1,
     fontSize: 13,
-    lineHeight: 19,
-    fontWeight: "600",
+    flex: 1,
   },
   modalActionBtn: {
-    marginTop: 8,
+    paddingVertical: 16,
     borderRadius: 16,
-    paddingVertical: 15,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
+    marginTop: 16,
   },
   modalActionText: {
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "700",
   },
 });

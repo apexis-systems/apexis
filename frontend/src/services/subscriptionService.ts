@@ -21,7 +21,8 @@ export const createOrder = async (data: {
 };
 
 export const verifyPayment = async (data: {
-  razorpay_order_id: string;
+  razorpay_order_id?: string;
+  razorpay_subscription_id?: string;
   razorpay_payment_id: string;
   razorpay_signature: string;
   plan_name: string;
@@ -32,6 +33,16 @@ export const verifyPayment = async (data: {
     return response.data;
   } catch (error) {
     console.error("verifyPayment Error", error);
+    throw error;
+  }
+};
+
+export const cancelAutoPay = async () => {
+  try {
+    const response = await PrivateAxios.post('/subscription/cancel-autopay');
+    return response.data;
+  } catch (error) {
+    console.error("cancelAutoPay Error", error);
     throw error;
   }
 };

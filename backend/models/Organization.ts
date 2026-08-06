@@ -66,6 +66,26 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: false,
             },
+            razorpay_subscription_id: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                defaultValue: null,
+            },
+            razorpay_plan_id: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                defaultValue: null,
+            },
+            auto_pay_enabled: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            subscription_cycle: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                defaultValue: null,
+            },
         },
         {
             tableName: "organizations",
