@@ -615,17 +615,17 @@ const Billing = () => {
                           Team Seats
                         </span>
                         <p className="text-2xl font-black">
-                          {usageData.usage.seats_used || usageData.usage.contributors}
+                          {usageData.usage.seats_used ?? usageData.usage.contributors}
                         </p>
                       </div>
                       <span className="text-xs font-medium text-muted-foreground">
-                        Limit: {usageData.usage.seats_limit_total || ((usageData.usage.seats_purchased || usageData.plan.seats_purchased || 1) * Math.max(1, usageData.usage.projects || 1))}
+                        Limit: {usageData.usage.seats_limit_total ?? usageData.usage.seats_purchased ?? usageData.plan.seats_purchased ?? 1}
                       </span>
                     </div>
                     <Progress
                       value={
-                        ((usageData.usage.seats_used || usageData.usage.contributors) /
-                          (usageData.usage.seats_limit_total || ((usageData.usage.seats_purchased || usageData.plan.seats_purchased || 1) * Math.max(1, usageData.usage.projects || 1)))) *
+                        ((usageData.usage.seats_used ?? usageData.usage.contributors) /
+                          Math.max(1, usageData.usage.seats_limit_total ?? usageData.usage.seats_purchased ?? usageData.plan.seats_purchased ?? 1)) *
                         100
                       }
                       className="h-2"

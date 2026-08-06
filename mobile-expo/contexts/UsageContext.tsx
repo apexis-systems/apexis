@@ -23,7 +23,6 @@ export interface UsageData {
     usage: {
         projects: number;
         seats_purchased?: number;
-        seats_per_project?: number;
         seats_limit_total?: number;
         seats_used?: number;
         seats_remaining?: number;

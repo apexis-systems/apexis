@@ -72,57 +72,43 @@ export const checkMemberLimit = async (
     };
   }
 
-  const isContributorType = role === "contributor" || role === "consultant" || role === "vendor";
-  const mappedRole = isContributorType ? "contributor" : "client";
-  const roleQuery = isContributorType ? ["contributor", "consultant", "vendor"] : ["client"];
+  // Only "contributor" role consumes seats. Client, consultant, and vendor roles do not consume seats and are unlimited.
+  if (role !== "contributor") {
+    return {
+      allowed: true,
+      status: 200,
+      code: "OK",
+      limit: 999999,
+      currentUsage: 0,
+    };
+  }
 
-  const limit =
-    mappedRole === "contributor"
-      ? (org.seats_purchased || org.plan?.contributor_limit || 1)
-      : (org.plan?.client_limit || 999);
+  const limit = org.seats_purchased || org.plan?.contributor_limit || 1;
+
+  const orgProjectIds = (
+    await projects.findAll({
+      where: { organization_id: org.id },
+      attributes: ["id"],
+    })
+  ).map((p: any) => p.id);
 
   let currentUsage = 0;
 
-  if (projectId) {
-    // Count seats specifically in this target project
-    const memberCount = await project_members.count({
+  if (orgProjectIds.length > 0) {
+    currentUsage = await project_members.count({
       where: {
-        project_id: projectId,
-        role: { [Op.in]: roleQuery },
+        project_id: { [Op.in]: orgProjectIds },
+        role: "contributor",
       },
     });
-    currentUsage = memberCount;
-  } else {
-    // Find max seats used in any single project of this organization
-    const orgProjectIds = (
-      await projects.findAll({
-        where: { organization_id: org.id },
-        attributes: ["id"],
-      })
-    ).map((p: any) => p.id);
-
-    if (orgProjectIds.length > 0) {
-      const counts: any[] = await project_members.findAll({
-        where: {
-          project_id: { [Op.in]: orgProjectIds },
-          role: { [Op.in]: roleQuery },
-        },
-        attributes: ["project_id", [Sequelize.fn("COUNT", Sequelize.col("user_id")), "count"]],
-        group: ["project_id"],
-        raw: true,
-      });
-
-      currentUsage = counts.reduce((max, item) => Math.max(max, Number(item.count || 0)), 0);
-    }
   }
 
   if (currentUsage >= limit) {
-    const roleLabel = mappedRole === "contributor" ? "Project team seats" : "Client";
     return {
       allowed: false,
       status: 403,
       code: "LIMIT_REACHED",
-      message: `${roleLabel} limit reached (${limit} seat(s) allowed per project). Upgrade your seat count to add more members.`,
+      message: `Organization contributor seat limit reached (${limit} seat(s) allowed across organization). Upgrade your seats to add more contributors.`,
       limit,
       currentUsage,
     };

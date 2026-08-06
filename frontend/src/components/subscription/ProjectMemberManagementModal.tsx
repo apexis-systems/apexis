@@ -54,13 +54,17 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
   onProceed,
 }) => {
   const [deletingMemberId, setDeletingMemberId] = useState<number | null>(null);
-  const [activeRoleFilter, setActiveRoleFilter] = useState<string>("all");
   const [refreshing, setRefreshing] = useState(false);
 
   if (!isOpen) return null;
 
-  const exceededProjects = projects.filter((p) => p.teamMemberCount > targetSeats);
-  const isFullyCompliant = exceededProjects.length === 0;
+  // Calculate total contributor memberships across all projects in the organization
+  const totalContributors = projects.reduce(
+    (sum, p) => sum + p.members.filter((m) => m.role === "contributor").length,
+    0
+  );
+  const isFullyCompliant = totalContributors <= targetSeats;
+  const exceededByTotal = Math.max(0, totalContributors - targetSeats);
 
   const handleDeleteMember = async (projectId: number, userId: number, memberName: string) => {
     setDeletingMemberId(userId);
@@ -89,10 +93,10 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
             </div>
             <div>
               <h2 className="text-xl font-bold text-foreground">
-                Manage Project Members for {targetSeats} Seat Limit
+                Manage Contributors ({targetSeats} Seats)
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Remove team members to comply with your target limit of {targetSeats} seat(s) per project.
+                Reduce contributor seats across projects to fit your target limit of {targetSeats} seat(s).
               </p>
             </div>
           </div>
@@ -109,62 +113,35 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
           {isFullyCompliant ? (
             <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
               <CheckCircle2 className="h-5 w-5 shrink-0" />
-              <span>All projects comply with the target limit of {targetSeats} seats! You can proceed to update your subscription.</span>
+              <span>Total organization contributors ({totalContributors}) satisfies your target limit of {targetSeats} seat(s)!</span>
             </div>
           ) : (
             <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs font-semibold">
               <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
               <span>
-                {exceededProjects.length} project(s) currently exceed the target limit of {targetSeats} seats. Please remove team members below.
+                Organization has {totalContributors} total contributor(s) across projects. Please remove {exceededByTotal} contributor(s) below to decrease to {targetSeats} seat(s).
               </span>
             </div>
           )}
         </div>
 
-        {/* Role Filter Buttons */}
-        <div className="px-6 pt-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {["all", "contributor", "consultant", "vendor", "client"].map((role) => (
-              <button
-                key={role}
-                onClick={() => setActiveRoleFilter(role)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all ${
-                  activeRoleFilter === role
-                    ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
-                {role === "all" ? "All Roles" : role}
-              </button>
-            ))}
+        {refreshing && (
+          <div className="px-6 pt-3 flex items-center gap-1.5 text-xs text-orange-500 font-semibold animate-pulse">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Updating...
           </div>
-          {refreshing && (
-            <div className="flex items-center gap-1.5 text-xs text-orange-500 font-semibold animate-pulse">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Updating...
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Modal Scrollable Body */}
         <div className="p-6 flex-1 overflow-y-auto space-y-6">
           {projects.map((project) => {
-            const teamCount = project.teamMemberCount;
-            const isExceeded = teamCount > targetSeats;
-
-            const filteredMembers = project.members.filter((m) => {
-              if (activeRoleFilter === "all") return true;
-              return m.role === activeRoleFilter;
-            });
+            const contributorMembers = project.members.filter((m) => m.role === "contributor");
+            const contributorCount = contributorMembers.length;
 
             return (
               <div
                 key={project.id}
-                className={`rounded-2xl border transition-all ${
-                  isExceeded
-                    ? "border-amber-500/40 bg-amber-500/5 dark:bg-amber-950/10"
-                    : "border-border bg-card"
-                }`}
+                className="rounded-2xl border border-border bg-card transition-all"
               >
                 {/* Project Header */}
                 <div className="p-4 border-b border-border/60 flex items-center justify-between bg-muted/20">
@@ -181,34 +158,22 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-black ${
-                        isExceeded
-                          ? "bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30"
-                          : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30"
-                      }`}
-                    >
-                      Team Seats: {teamCount} / {targetSeats}
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-orange-500/10 text-orange-600 border border-orange-500/20">
+                      {contributorCount} {contributorCount === 1 ? "Contributor" : "Contributors"}
                     </span>
-                    {isExceeded && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold">
-                        Remove {teamCount - targetSeats} member(s)
-                      </span>
-                    )}
                   </div>
                 </div>
 
-                {/* Project Members List */}
+                {/* Project Members List (Only Contributors) */}
                 <div className="p-4">
-                  {filteredMembers.length === 0 ? (
+                  {contributorMembers.length === 0 ? (
                     <p className="text-xs text-muted-foreground text-center py-3">
-                      No members match the selected role filter in this project.
+                      No contributors in this project.
                     </p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {filteredMembers.map((member) => {
+                      {contributorMembers.map((member) => {
                         const isDeleting = deletingMemberId === member.user_id;
-                        const isTeamRole = ["contributor", "consultant", "vendor"].includes(member.role);
 
                         return (
                           <div
@@ -222,17 +187,11 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                               <div className="min-w-0">
                                 <p className="text-xs font-bold text-foreground truncate">{member.name}</p>
                                 <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                                  <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">
                                     {member.email || member.phone_number || "No contact"}
                                   </span>
-                                  <span
-                                    className={`px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded ${
-                                      isTeamRole
-                                        ? "bg-orange-500/10 text-orange-600"
-                                        : "bg-blue-500/10 text-blue-600"
-                                    }`}
-                                  >
-                                    {member.role}
+                                  <span className="px-1.5 py-0.2 text-[9px] font-extrabold uppercase rounded bg-orange-500/10 text-orange-600">
+                                    CONTRIBUTOR
                                   </span>
                                 </div>
                               </div>
@@ -244,7 +203,7 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                               onClick={() => handleDeleteMember(project.id, member.user_id, member.name)}
                               disabled={isDeleting}
                               className="h-8 w-8 rounded-lg hover:bg-red-500/10 hover:text-red-600 text-muted-foreground shrink-0 ml-2"
-                              title="Remove member from project"
+                              title="Remove contributor from project"
                             >
                               {isDeleting ? (
                                 <Loader2 className="h-4 w-4 animate-spin text-red-500" />
@@ -278,7 +237,7 @@ export const ProjectMemberManagementModal: React.FC<ProjectMemberManagementModal
                 : "bg-muted text-muted-foreground cursor-not-allowed"
             }`}
           >
-            {isFullyCompliant ? "Proceed to Payment / Upgrade" : `Remove Members to Enable Upgrade`}
+            {isFullyCompliant ? "Proceed to Payment / Upgrade" : `Remove Contributors to Enable Upgrade`}
           </Button>
         </div>
       </div>

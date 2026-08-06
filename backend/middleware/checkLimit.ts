@@ -173,7 +173,7 @@ export const checkLimit = (type: LimitType) => {
           if (!limitCheck.allowed) {
             return res.status(403).json({
               error: "Limit Reached",
-              message: limitCheck.message || `This project seats are full (${org.seats_purchased || 1} seats purchased). Please upgrade your seats to add more team members.`,
+              message: limitCheck.message || `Organization seats are full (${org.seats_purchased || 1} seats purchased). Please upgrade your seats to add more team members.`,
               code: "LIMIT_REACHED",
               limit: limitCheck.limit,
               currentUsage: limitCheck.currentUsage,

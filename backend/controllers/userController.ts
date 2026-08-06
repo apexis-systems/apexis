@@ -136,7 +136,7 @@ export const inviteUser = async (req: Request, res: Response) => {
                 if (!memberLimit.allowed) {
                     return res.status(403).json({
                         error: "Limit Reached",
-                        message: `This project seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
+                        message: memberLimit.message || `Organization seats are full (${memberLimit.limit} seats purchased). Please upgrade your seats to add more team members.`,
                         code: memberLimit.code,
                     });
                 }

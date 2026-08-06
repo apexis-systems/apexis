@@ -110,8 +110,8 @@ export default function UsageScreen() {
 
                     {renderUsageItem(
                       'Team Seats',
-                      usage.seats_used || usage.contributors,
-                      usage.seats_limit_total || ((usage.seats_purchased || plan.seats_purchased || plan.limits.per_project_contributor_limit || 1) * Math.max(1, usage.projects || 1))
+                      usage.seats_used ?? usage.contributors,
+                      usage.seats_limit_total ?? usage.seats_purchased ?? plan.seats_purchased ?? 1
                     )}
                     {renderUsageItem(
                       'Cloud Storage',

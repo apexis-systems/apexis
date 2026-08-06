@@ -85,7 +85,7 @@ export const createOrder = async (req: Request, res: Response) => {
     let remainingDays = 0;
 
     if (seatsCount < currentSeats && isPlanActive) {
-      // Member density check: Ensure no project exceeds requested new seat limit
+      // Organization-wide seat check: Ensure total contributor memberships across all projects do not exceed target seat count
       const orgProjects = await projects.findAll({
         where: { organization_id },
         attributes: ["id", "name"],
@@ -93,21 +93,16 @@ export const createOrder = async (req: Request, res: Response) => {
 
       const projectIds = orgProjects.map((p: any) => p.id);
       if (projectIds.length > 0) {
-        const counts: any[] = await project_members.findAll({
+        const totalContributors = await project_members.count({
           where: {
             project_id: { [Op.in]: projectIds },
-            role: { [Op.in]: ["contributor", "consultant", "vendor"] },
+            role: "contributor",
           },
-          attributes: ["project_id", [Sequelize.fn("COUNT", Sequelize.col("user_id")), "count"]],
-          group: ["project_id"],
-          raw: true,
         });
 
-        const exceeded = counts.find((c: any) => Number(c.count) > seatsCount);
-        if (exceeded) {
-          const projectObj = orgProjects.find((p: any) => p.id === Number(exceeded.project_id));
+        if (totalContributors > seatsCount) {
           return res.status(400).json({
-            message: `Cannot decrease to ${seatsCount} seats because project '${projectObj?.name || "Target Project"}' currently has ${exceeded.count} active team members. Please remove members first.`,
+            message: `Cannot decrease to ${seatsCount} seats because your organization currently has ${totalContributors} total active contributors across projects. Please remove contributors first.`,
           });
         }
       }
@@ -428,20 +423,13 @@ export const getUsage = async (req: Request, res: Response) => {
     const projectIds = orgProjects.map((p: any) => p.id);
 
     const getMemberCount = async (role: "contributor" | "client") => {
-      const roleQuery = role === "contributor" ? ["contributor", "consultant", "vendor"] : ["client"];
       if (projectIds.length === 0) return 0;
-
-      const counts: any[] = await project_members.findAll({
+      return await project_members.count({
         where: {
           project_id: { [Op.in]: projectIds },
-          role: { [Op.in]: roleQuery },
+          role: role,
         },
-        attributes: ["project_id", [Sequelize.fn("COUNT", Sequelize.col("user_id")), "count"]],
-        group: ["project_id"],
-        raw: true,
       });
-
-      return counts.reduce((max, item) => Math.max(max, Number(item.count || 0)), 0);
     };
 
     const contributorCount = await getMemberCount("contributor");
@@ -464,12 +452,12 @@ export const getUsage = async (req: Request, res: Response) => {
     );
     const access = getSubscriptionAccessState(org.plan_end_date, now);
 
-    // Calculate multipliers based on project count (each project receives seatsPurchased & perProjectStorageLimitMb)
+    // Organization-wide contributor seats limit (purchased seats directly apply to total org contributors)
     const effectiveProjectCount = Math.max(1, projectCount);
     const perProjectStorageLimitMb = org.storage_limit_mb || org.plan?.storage_limit_mb || 5000;
     const seatsPurchased = org.seats_purchased || 1;
 
-    const totalSeatsLimit = seatsPurchased * effectiveProjectCount;
+    const totalSeatsLimit = seatsPurchased;
     const totalStorageLimitMb = perProjectStorageLimitMb * effectiveProjectCount;
 
     const storageUsagePercent = Math.min(100, (org.storage_used_mb / totalStorageLimitMb) * 100);
@@ -579,12 +567,10 @@ export const getUsage = async (req: Request, res: Response) => {
     const effectiveLimits = plan ? {
       ...plan.toJSON(),
       contributor_limit: totalSeatsLimit,
-      per_project_contributor_limit: seatsPurchased,
       storage_limit_mb: totalStorageLimitMb,
       per_project_storage_limit_mb: perProjectStorageLimitMb,
     } : {
       contributor_limit: totalSeatsLimit,
-      per_project_contributor_limit: seatsPurchased,
       storage_limit_mb: totalStorageLimitMb,
       per_project_storage_limit_mb: perProjectStorageLimitMb,
       project_limit: 999999,
@@ -616,7 +602,6 @@ export const getUsage = async (req: Request, res: Response) => {
       usage: {
         projects: projectCount,
         seats_purchased: seatsPurchased,
-        seats_per_project: seatsPurchased,
         seats_limit_total: totalSeatsLimit,
         seats_used: contributorCount,
         seats_remaining: Math.max(0, totalSeatsLimit - contributorCount),
@@ -719,40 +704,31 @@ export const validateSeatChange = async (req: Request, res: Response) => {
           profile_pic: pm.user?.profile_pic || null,
         }));
 
-        const teamMemberCount = formattedMembers.filter((m: any) =>
-          ["contributor", "consultant", "vendor"].includes(m.role)
-        ).length;
-
+        const contributorCount = formattedMembers.filter((m: any) => m.role === "contributor").length;
         const clientCount = formattedMembers.filter((m: any) => m.role === "client").length;
-
-        const isExceeded = teamMemberCount > targetSeats;
 
         return {
           id: project.id,
           name: project.name,
           description: project.description,
-          teamMemberCount,
+          contributorCount,
+          teamMemberCount: contributorCount,
           clientCount,
-          targetSeats,
-          exceeded: isExceeded,
-          exceededBy: Math.max(0, teamMemberCount - targetSeats),
           members: formattedMembers,
         };
       })
     );
 
-    const hasExceededProjects = projectDetails.some((p) => p.exceeded);
-    const maxTeamMembersInAnyProject = projectDetails.reduce(
-      (max, p) => Math.max(max, p.teamMemberCount),
-      0
-    );
+    const totalContributors = projectDetails.reduce((sum, p) => sum + p.contributorCount, 0);
+    const isExceeded = totalContributors > targetSeats;
 
     return res.status(200).json({
-      valid: !hasExceededProjects,
+      valid: !isExceeded,
       targetSeats,
-      maxTeamMembersInAnyProject,
+      totalContributors,
+      exceeded: isExceeded,
+      exceededBy: Math.max(0, totalContributors - targetSeats),
       projects: projectDetails,
-      exceededProjects: projectDetails.filter((p) => p.exceeded),
     });
   } catch (error: any) {
     console.error("Error validating seat change:", error);
