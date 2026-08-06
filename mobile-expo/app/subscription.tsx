@@ -33,9 +33,9 @@ import { SubscriptionNoticeModal } from "@/components/subscription/SubscriptionN
 import { getMe } from "@/services/authService";
 let RazorpayCheckout: any = null;
 try {
-    RazorpayCheckout = require("react-native-razorpay").default;
+  RazorpayCheckout = require("react-native-razorpay").default;
 } catch {
-    // Not available in Expo Go — requires a development build
+  // Not available in Expo Go — requires a development build
 }
 
 const PLAN_ORDER = ["Starter", "Enterprise"];
@@ -409,9 +409,9 @@ export default function SubscriptionScreen() {
   const isAutoPayActive = plan.auto_pay_enabled || false;
   const selectedPlanDetails = selectedPlan
     ? PLAN_DETAILS[selectedPlan.name] || {
-        subtitleKey: "subscription.plans.oneTimeSubtitle",
-        featureKeys: [],
-      }
+      subtitleKey: "subscription.plans.oneTimeSubtitle",
+      featureKeys: [],
+    }
     : null;
 
   return (
@@ -517,7 +517,7 @@ export default function SubscriptionScreen() {
               </Text>
             </View>
 
-            {isAutoPayActive && (
+            {/* {isAutoPayActive && (
               <TouchableOpacity
                 disabled={cancellingAutoPay}
                 onPress={handleCancelAutoPay}
@@ -528,7 +528,7 @@ export default function SubscriptionScreen() {
                   <Text style={{ fontSize: 11, fontWeight: "700", color: "#EF4444" }}>Cancel AutoPay</Text>
                 )}
               </TouchableOpacity>
-            )}
+            )} */}
           </View>
         </View>
 
@@ -581,11 +581,11 @@ export default function SubscriptionScreen() {
                   </Text>
                   <Text
                     style={[
-                       styles.availablePlanSubtitle,
-                       { color: colors.textMuted },
-                     ]}>
-                     {t(PLAN_DETAILS[p.name]?.subtitleKey || "subscription.tapToView")}
-                   </Text>
+                      styles.availablePlanSubtitle,
+                      { color: colors.textMuted },
+                    ]}>
+                    {t(PLAN_DETAILS[p.name]?.subtitleKey || "subscription.tapToView")}
+                  </Text>
 
                   <View
                     style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -594,11 +594,11 @@ export default function SubscriptionScreen() {
                         style={[
                           styles.availablePlanPrice,
                           { color: colors.primary },
-                         ]}>
-                         {isEnterprise
-                           ? t('subscription.customPricing')
-                           : `₹${effectivePrice.toLocaleString("en-IN")}`}
-                       </Text>
+                        ]}>
+                        {isEnterprise
+                          ? t('subscription.customPricing')
+                          : `₹${effectivePrice.toLocaleString("en-IN")}`}
+                      </Text>
 
                       {!isEnterprise && (
                         <Text
@@ -611,11 +611,11 @@ export default function SubscriptionScreen() {
                         </Text>
                       )}
                     </View>
-                     {isAnnual && !isEnterprise && (
-                       <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "600" }}>
-                         {t('subscription.billedAnnually', { amount: totalAnnual.toLocaleString("en-IN") })}
-                       </Text>
-                     )}
+                    {isAnnual && !isEnterprise && (
+                      <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "600" }}>
+                        {t('subscription.billedAnnually', { amount: totalAnnual.toLocaleString("en-IN") })}
+                      </Text>
+                    )}
                   </View>
                   {!isEnterprise && (
                     <Text
@@ -657,12 +657,12 @@ export default function SubscriptionScreen() {
         {/* Support */}
         <TouchableOpacity
           style={[styles.supportLink, { borderTopColor: colors.border }]}
-           onPress={() => Linking.openURL("mailto:support@apexis.in")}>
-           <Feather name="help-circle" size={16} color={colors.textMuted} />
-           <Text style={[styles.supportText, { color: colors.textMuted }]}>
-             {t('subscription.havingIssues')}
-           </Text>
-         </TouchableOpacity>
+          onPress={() => Linking.openURL("mailto:support@apexis.in")}>
+          <Feather name="help-circle" size={16} color={colors.textMuted} />
+          <Text style={[styles.supportText, { color: colors.textMuted }]}>
+            {t('subscription.havingIssues')}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <Modal
@@ -723,13 +723,13 @@ export default function SubscriptionScreen() {
                     <View style={styles.modalPriceRow}>
                       <Text
                         style={[
-                           styles.modalPrice,
-                           { color: colors.primary },
-                         ]}>
-                         {isEnterprisePlan(selectedPlan)
-                           ? t('subscription.customPricing')
-                           : `₹${(billingCycle === "annual" ? 99 : 159).toLocaleString("en-IN")}`}
-                       </Text>
+                          styles.modalPrice,
+                          { color: colors.primary },
+                        ]}>
+                        {isEnterprisePlan(selectedPlan)
+                          ? t('subscription.customPricing')
+                          : `₹${(billingCycle === "annual" ? 99 : 159).toLocaleString("en-IN")}`}
+                      </Text>
 
                       {!isEnterprisePlan(selectedPlan) && (
                         <Text
@@ -813,7 +813,7 @@ export default function SubscriptionScreen() {
                     )}
                   </View>
 
-                   <View
+                  <View
                     style={[
                       styles.featureCard,
                       { backgroundColor: colors.surface },
@@ -854,7 +854,7 @@ export default function SubscriptionScreen() {
                   const activeSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
                   const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
                   const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
-                  
+
                   const isCurrentPlanName = selectedPlan.name === plan.name;
                   const isSameCycle = activeCycle === billingCycle;
                   const isSameSeats = selectedSeats === activeSeats;
