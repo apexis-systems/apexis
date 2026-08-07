@@ -11,6 +11,7 @@ import {
   Building2,
   ClipboardList,
   DollarSign,
+  FileText,
   HeartPulse,
   IndianRupee,
   LayoutDashboard,
@@ -67,6 +68,7 @@ export const superadminNavItems: SuperadminNavItem[] = [
   { href: "/superadmin/users", label: "Users", icon: Users },
   { href: "/superadmin/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/superadmin/teams", label: "Teams", icon: ShieldCheck },
+  { href: "/superadmin/blogs", label: "Blogs", icon: FileText },
 ];
 
 export const canAccessSuperadminAccounts = (user: SuperadminAccessUser) =>

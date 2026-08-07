@@ -94,7 +94,7 @@ const drawBrandedFooter = (doc: any, pageIndex: number, totalPages: number, invo
     doc.fontSize(7);
     const proFooterW = doc.widthOfString('PRO™');
     const wb = apexFooterW + proFooterW;
-    
+
     doc.font(brandFont).fontSize(10).text('APEXIS', m.left + wp, textY - 2.5, { lineBreak: false });
     doc.fontSize(7).text('PRO™', m.left + wp + apexFooterW, textY - 0.5, { lineBreak: false });
 
@@ -149,7 +149,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         const rightColX = 350;
 
         // --- 2. Company Details (Left) ---
-        doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.ink).text('APEXISpro™ Systems Private Limited', leftColX);
+        doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.ink).text('APEXIS Systems Private Limited', leftColX);
         doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted);
         doc.text('H.No. 10-5-37, Rose Residency');
         doc.text('Masab Tank, Hyderabad – 500028');
@@ -171,18 +171,38 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
             return `${s} – ${e}`;
         };
 
+        const txStartDate = transaction.created_at ? new Date(transaction.created_at) : new Date();
+        const cycle = (transaction.subscription_cycle || '').toLowerCase();
+        let txEndDate: Date;
+
+        if (
+            organization?.plan_end_date &&
+            new Date(organization.plan_end_date).getTime() > txStartDate.getTime() &&
+            (organization?.subscription_cycle || '').toLowerCase() === cycle
+        ) {
+            txEndDate = new Date(organization.plan_end_date);
+        } else {
+            txEndDate = new Date(txStartDate);
+            if (cycle === 'annual') {
+                txEndDate.setFullYear(txEndDate.getFullYear() + 1);
+            } else {
+                txEndDate.setMonth(txEndDate.getMonth() + 1);
+            }
+        }
+        const billingPeriodStr = formatPeriod(txStartDate, txEndDate);
+
         let currY = startY;
         drawDetailLine('Invoice No.', transaction.invoice_number || 'PENDING', currY);
         currY += 18;
         drawDetailLine('Invoice Date', formatDate(transaction.created_at), currY);
         currY += 18;
-        drawDetailLine('Billing Period', formatPeriod(organization?.plan_start_date, organization?.plan_end_date), currY);
+        drawDetailLine('Billing Period', billingPeriodStr, currY);
         currY += 18;
-        drawDetailLine('Plan Name', organization?.plan_name || 'Professional', currY);
+        drawDetailLine('Plan Name', organization?.plan_name || 'Starter', currY);
         currY += 18;
         drawDetailLine('Renewal Cycle', transaction.subscription_cycle || 'Monthly', currY);
         currY += 18;
-        const dueDate = organization?.plan_end_date ? new Date(new Date(organization.plan_end_date).getTime() + (4 * 24 * 60 * 60 * 1000)) : null;
+        const dueDate = new Date(txEndDate.getTime() + (3 * 24 * 60 * 60 * 1000));
         drawDetailLine('Due Date', formatDate(dueDate), currY);
 
         // doc.y = startY + 120;
@@ -259,7 +279,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
 
         const rowData = [
             `Seat Subscription (${seatsCount} seat${seatsCount > 1 ? 's' : ''} @ ₹${unitRate}/seat)`,
-            formatPeriod(organization?.plan_start_date, organization?.plan_end_date),
+            billingPeriodStr,
             subtotal.toFixed(2),
             totalTax.toFixed(2),
             grandTotal.toFixed(2)
@@ -306,7 +326,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         };
 
         drawPayLine('Bank Name', 'HDFC Bank Ltd', 50, payY);
-        drawPayLine('Account Name', 'APEXISpro™ Systems Private Limited', 50 + payColW, payY);
+        drawPayLine('Account Name', 'APEXIS Systems Private Limited', 50 + payColW, payY);
         drawPayLine('Account Number', '50200118128748', 50, payY + 18);
         drawPayLine('IFSC Code', 'HDFC0009817', 50 + payColW, payY + 18);
         drawPayLine('Branch', 'Bankhouse Banjarahills', 50, payY + 36);
@@ -325,7 +345,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
 
 
         doc.moveDown(0.2);
-        doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text('For APEXISpro™ Systems Private Limited', 50);
+        doc.font('Helvetica').fontSize(9).fillColor(BRAND.muted).text('For APEXIS Systems Private Limited', 50);
 
         // --- Signature Image ---
         if (fs.existsSync(ASSETS.signature)) {

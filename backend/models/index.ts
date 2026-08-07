@@ -231,6 +231,10 @@ db.organizations.hasMany(db.transactions, { foreignKey: 'organization_id' });
 db.transactions.belongsTo(db.users, { foreignKey: 'user_id' });
 db.users.hasMany(db.transactions, { foreignKey: 'user_id' });
 
+// User <-> Blog (Author)
+db.blogs.belongsTo(db.users, { foreignKey: 'created_by', as: 'author' });
+db.users.hasMany(db.blogs, { foreignKey: 'created_by' });
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
@@ -260,6 +264,7 @@ export const file_snag_links = db.file_snag_links;
 export const project_member_folders = db.project_member_folders;
 export const blocked_users = db.blocked_users;
 export const file_flag_history = db.file_flag_history;
+export const blogs = db.blogs;
 
 export { sequelize, Sequelize };
 export default db;

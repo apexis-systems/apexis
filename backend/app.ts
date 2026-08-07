@@ -31,6 +31,8 @@ import systemRoutes from "./routes/systemRoutes.ts";
 import { initializeSystemConfig } from "./controllers/systemController.ts";
 import searchRoutes from "./routes/searchRoutes.ts";
 import trashRoutes from "./routes/trashRoutes.ts";
+import blogRoutes from "./routes/blogRoutes.ts";
+import blogPublicRoutes from "./routes/blogPublicRoutes.ts";
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -85,6 +87,8 @@ app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/system", systemRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/trash", trashRoutes);
+app.use("/api/blogs", blogRoutes);
+app.use("/api/public/blogs", blogPublicRoutes);
 
 // Global Error Handler
 app.use((err: any, req: Request, res: Response, next: any) => {

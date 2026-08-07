@@ -451,10 +451,10 @@ const Billing = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {plans.map((plan) => {
               const isAnnual = billingCycle === "annual" && plan.key !== "enterprise";
-              const totalBilled = plan.key === "enterprise" 
-                ? 0 
-                : isAnnual 
-                  ? selectedSeats * 99 * 12 
+              const totalBilled = plan.key === "enterprise"
+                ? 0
+                : isAnnual
+                  ? selectedSeats * 99 * 12
                   : selectedSeats * 159;
 
               return (
@@ -530,7 +530,7 @@ const Billing = () => {
                     const currentPlanName =
                       usageData?.plan?.name || user?.organization?.plan_name;
                     const activeCycle = usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly";
-                    
+
                     const isCurrentPlanName = currentPlanName === plan.name;
                     const isSameCycle = activeCycle === billingCycle;
                     const isSameSeats = selectedSeats === activeSeats;
@@ -613,7 +613,7 @@ const Billing = () => {
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                           AutoPay Active ({usageData.plan.subscription_cycle === "annual" ? "Annual" : "Monthly"})
                         </span>
-                        <Button
+                        {/* <Button
                           variant="outline"
                           size="sm"
                           onClick={handleCancelAutoPay}
@@ -622,7 +622,7 @@ const Billing = () => {
                         >
                           {cancellingAutoPay ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5 mr-1" />}
                           Cancel AutoPay
-                        </Button>
+                        </Button> */}
                       </div>
                     ) : (
                       <span className="px-3 py-1.5 rounded-full bg-slate-500/10 border border-slate-500/30 text-slate-500 font-bold text-xs">
