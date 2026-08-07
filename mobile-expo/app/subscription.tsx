@@ -930,67 +930,68 @@ export default function SubscriptionScreen() {
             )}
           </View>
         </View>
+        <ProjectMemberManagementModal
+          visible={isMemberModalOpen}
+          onClose={() => setIsMemberModalOpen(false)}
+          targetSeats={selectedSeats}
+          projects={validationProjects}
+          onRefreshValidation={handleRefreshValidation}
+          onProceed={async () => {
+            setIsMemberModalOpen(false);
+            if (pendingPlan) {
+              const currentPlanName = usageData?.plan?.name || usageData?.usage?.plan_name || "";
+              const isPaidPlan = Boolean(currentPlanName && !["freemium", "free"].includes(currentPlanName.toLowerCase()));
+              const currentSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
+              const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
+              const activeCycle = usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly";
+              const isCycleChanged = activeCycle !== billingCycle;
+              const isSeatChanged = selectedSeats !== currentSeats;
+              if (isPlanActive && (isCycleChanged || isSeatChanged)) {
+                setPendingNoticePlan(pendingPlan);
+                setIsNoticeModalOpen(true);
+              } else {
+                await executeCheckout(pendingPlan);
+              }
+            }
+          }}
+        />
+
+        <SubscriptionNoticeModal
+          visible={isNoticeModalOpen}
+          onClose={() => setIsNoticeModalOpen(false)}
+          onConfirm={async () => {
+            setIsNoticeModalOpen(false);
+            if (pendingNoticePlan) {
+              await executeCheckout(pendingNoticePlan);
+            }
+          }}
+          planName={pendingNoticePlan?.name || "Starter"}
+          targetSeats={selectedSeats}
+          billingCycle={billingCycle}
+          currentSeats={usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1}
+          currentCycle={usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly"}
+          isUpgrade={Boolean(usageData?.plan?.daysRemaining && usageData.plan.daysRemaining > 0 && selectedSeats > (usageData?.plan?.seats_purchased || 1))}
+          isDowngrade={Boolean(usageData?.plan?.daysRemaining && usageData.plan.daysRemaining > 0 && selectedSeats < (usageData?.plan?.seats_purchased || 1))}
+          isCycleChanged={Boolean(usageData?.plan?.daysRemaining && usageData.plan.daysRemaining > 0 && (usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly") !== billingCycle)}
+          planEndDate={usageData?.plan?.endDate || usageData?.plan?.subscription_plan_end_date || user?.organization?.plan_end_date || user?.organization?.subscription_plan_end_date}
+          proratedAmount={(() => {
+            const currentSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
+            const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
+            const isPaidPlan = Boolean(usageData?.plan?.name && !["freemium", "free"].includes(String(usageData.plan.name).toLowerCase()));
+            const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
+            if (isPlanActive && selectedSeats > currentSeats) {
+              const addedSeats = selectedSeats - currentSeats;
+              const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
+              const dailyRatePerSeat = billingCycle === "annual" ? (99 * 12) / 365 : 159 / 30;
+              const proratedCost = Math.round(addedSeats * dailyRatePerSeat * remainingDays);
+              return Math.max(1, Math.min(fullCycleCost, proratedCost));
+            }
+            return 0;
+          })()}
+        />
       </Modal>
 
-      <ProjectMemberManagementModal
-        visible={isMemberModalOpen}
-        onClose={() => setIsMemberModalOpen(false)}
-        targetSeats={selectedSeats}
-        projects={validationProjects}
-        onRefreshValidation={handleRefreshValidation}
-        onProceed={async () => {
-          setIsMemberModalOpen(false);
-          if (pendingPlan) {
-            const currentPlanName = usageData?.plan?.name || usageData?.usage?.plan_name || "";
-            const isPaidPlan = Boolean(currentPlanName && !["freemium", "free"].includes(currentPlanName.toLowerCase()));
-            const currentSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
-            const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
-            const activeCycle = usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly";
-            const isCycleChanged = activeCycle !== billingCycle;
-            const isSeatChanged = selectedSeats !== currentSeats;
-            if (isPlanActive && (isCycleChanged || isSeatChanged)) {
-              setPendingNoticePlan(pendingPlan);
-              setIsNoticeModalOpen(true);
-            } else {
-              await executeCheckout(pendingPlan);
-            }
-          }
-        }}
-      />
 
-      <SubscriptionNoticeModal
-        visible={isNoticeModalOpen}
-        onClose={() => setIsNoticeModalOpen(false)}
-        onConfirm={async () => {
-          setIsNoticeModalOpen(false);
-          if (pendingNoticePlan) {
-            await executeCheckout(pendingNoticePlan);
-          }
-        }}
-        planName={pendingNoticePlan?.name || "Starter"}
-        targetSeats={selectedSeats}
-        billingCycle={billingCycle}
-        currentSeats={usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1}
-        currentCycle={usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly"}
-        isUpgrade={Boolean(usageData?.plan?.daysRemaining && usageData.plan.daysRemaining > 0 && selectedSeats > (usageData?.plan?.seats_purchased || 1))}
-        isDowngrade={Boolean(usageData?.plan?.daysRemaining && usageData.plan.daysRemaining > 0 && selectedSeats < (usageData?.plan?.seats_purchased || 1))}
-        isCycleChanged={Boolean(usageData?.plan?.daysRemaining && usageData.plan.daysRemaining > 0 && (usageData?.plan?.subscription_cycle || user?.organization?.subscription_cycle || "monthly") !== billingCycle)}
-        planEndDate={usageData?.plan?.endDate || usageData?.plan?.subscription_plan_end_date || user?.organization?.plan_end_date || user?.organization?.subscription_plan_end_date}
-        proratedAmount={(() => {
-          const currentSeats = usageData?.plan?.seats_purchased || usageData?.usage?.seats_purchased || 1;
-          const remainingDays = Math.max(1, usageData?.plan?.daysRemaining || 30);
-          const isPaidPlan = Boolean(usageData?.plan?.name && !["freemium", "free"].includes(String(usageData.plan.name).toLowerCase()));
-          const isPlanActive = isPaidPlan && (usageData?.plan?.daysRemaining || 0) > 0;
-          if (isPlanActive && selectedSeats > currentSeats) {
-            const addedSeats = selectedSeats - currentSeats;
-            const fullCycleCost = billingCycle === "annual" ? addedSeats * 99 * 12 : addedSeats * 159;
-            const dailyRatePerSeat = billingCycle === "annual" ? (99 * 12) / 365 : 159 / 30;
-            const proratedCost = Math.round(addedSeats * dailyRatePerSeat * remainingDays);
-            return Math.max(1, Math.min(fullCycleCost, proratedCost));
-          }
-          return 0;
-        })()}
-      />
     </SafeAreaView>
   );
 }
