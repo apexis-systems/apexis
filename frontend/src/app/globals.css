@@ -169,3 +169,57 @@
     scrollbar-width: none;
   }
 }
+
+@layer components {
+  .blog-prose {
+    @apply text-muted-foreground font-light leading-[1.9] text-[15px] sm:text-base;
+  }
+  .blog-prose p {
+    @apply mb-5 last:mb-0;
+  }
+  .blog-prose h2 {
+    @apply text-xl sm:text-2xl font-bold text-foreground mt-12 mb-4 leading-tight scroll-mt-24;
+  }
+  .blog-prose h3 {
+    @apply text-lg sm:text-xl font-bold text-foreground mt-10 mb-3 leading-tight scroll-mt-24;
+  }
+  .blog-prose h4 {
+    @apply text-base sm:text-lg font-bold text-foreground mt-8 mb-2 leading-tight scroll-mt-24;
+  }
+  .blog-prose h2:first-child,
+  .blog-prose h3:first-child,
+  .blog-prose h4:first-child {
+    @apply mt-0;
+  }
+  .blog-prose strong {
+    @apply font-semibold text-foreground;
+  }
+  .blog-prose em {
+    @apply text-foreground/80;
+  }
+  .blog-prose a {
+    @apply underline underline-offset-4 decoration-primary/40 hover:decoration-primary text-primary transition-colors;
+  }
+  .blog-prose ul,
+  .blog-prose ol {
+    @apply my-5 pl-5 space-y-2;
+  }
+  .blog-prose ul {
+    @apply list-disc marker:text-primary;
+  }
+  .blog-prose ol {
+    @apply list-decimal marker:text-primary marker:font-semibold;
+  }
+  .blog-prose blockquote {
+    @apply border-l-2 border-primary pl-5 my-8 italic text-foreground/80 font-normal;
+  }
+  .blog-prose blockquote p {
+    @apply mb-0;
+  }
+  .blog-prose img {
+    @apply rounded-xl my-8 w-full h-auto border border-border;
+  }
+  .blog-prose code {
+    @apply px-1.5 py-0.5 rounded bg-muted text-foreground text-[13px] font-mono;
+  }
+}

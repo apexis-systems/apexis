@@ -40,22 +40,26 @@ async function generateUniqueSlug(proposedSlug: string | undefined, title: strin
     return slug;
 }
 
+function s3UrlForKey(key: string): string {
+    return `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`;
+}
+
+/**
+ * blogs/* is public-read on the bucket, so media is served straight from S3.
+ * This also self-heals older rows saved via the (now-removed) backend media
+ * proxy, whose stored URL was host-baked at upload time and broke whenever
+ * viewed from a different host.
+ */
 function normalizeBlogMediaUrl(str: any, req?: Request): string | null {
     if (!str || typeof str !== 'string') return null;
-    const host = req ? `${req.protocol}://${req.get('host')}` : (process.env.PUBLIC_API_URL || 'http://localhost:5002');
-    const apiBase = `${host}/api/blogs/media?key=`;
 
     let result = str;
 
-    // Convert relative media URLs to full backend URLs
-    result = result.replace(/(?:src=["'])?\/api\/blogs\/media\?key=([^"'\s>]+)/g, (match, key) => {
-        const fullUrl = `${apiBase}${key}`;
+    // Legacy proxy URLs (relative, or absolute with any previously-baked host) -> direct S3 URL
+    result = result.replace(/(?:src=["'])?(?:https?:\/\/[^/\s"']+)?\/api\/blogs\/media\?key=([^"'\s>]+)/g, (match, key) => {
+        const fullUrl = s3UrlForKey(decodeURIComponent(key));
         return match.startsWith('src=') ? `src="${fullUrl}"` : fullUrl;
     });
-
-    // Convert direct S3 URLs to full backend media proxy URLs
-    const s3Regex = /https:\/\/[^/]+\.s3\.[^/]+\.amazonaws\.com\/(blogs\/[^\s"']+)/g;
-    result = result.replace(s3Regex, (match, key) => `${apiBase}${encodeURIComponent(key)}`);
 
     return result;
 }
@@ -307,9 +311,7 @@ export const uploadBlogImage = async (req: Request | any, res: Response) => {
             Body: req.file.buffer,
         }));
 
-        const host = `${req.protocol}://${req.get('host')}`;
-        const mediaUrl = `${host}/api/blogs/media?key=${encodeURIComponent(key)}`;
-        res.json({ url: mediaUrl, key });
+        res.json({ url: s3UrlForKey(key), key });
     } catch (err) {
         console.error('uploadBlogImage error:', err);
         res.status(500).json({ error: 'Failed to upload image' });
@@ -331,9 +333,7 @@ export const uploadBlogVideo = async (req: Request | any, res: Response) => {
             Body: req.file.buffer,
         }));
 
-        const host = `${req.protocol}://${req.get('host')}`;
-        const mediaUrl = `${host}/api/blogs/media?key=${encodeURIComponent(key)}`;
-        res.json({ url: mediaUrl, key });
+        res.json({ url: s3UrlForKey(key), key });
     } catch (err) {
         console.error('uploadBlogVideo error:', err);
         res.status(500).json({ error: 'Failed to upload video' });

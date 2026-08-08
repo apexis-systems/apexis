@@ -27,12 +27,14 @@ const videoUpload = multer({
 // Public media proxy route (no auth required for public image display)
 router.get('/media', getBlogMedia);
 
+// Public read routes (no auth required)
+router.get('/', listBlogs);
+router.get('/:id', getBlog);
+
 // Admin routes require authentication + superadmin status
 router.use(verifyToken);
 router.use(isSuperAdmin);
 
-router.get('/', listBlogs);
-router.get('/:id', getBlog);
 router.post('/', createBlog);
 router.put('/:id', updateBlog);
 router.delete('/:id', deleteBlog);
