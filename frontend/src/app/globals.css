@@ -223,3 +223,116 @@
     @apply px-1.5 py-0.5 rounded bg-muted text-foreground text-[13px] font-mono;
   }
 }
+
+/* ---------- Blog editor (TipTap paragraph blocks) — ported verbatim from rhinontech ---------- */
+.blog-tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: oklch(0.75 0.01 250);
+}
+.blog-tiptap h2 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 1.25rem 0 0.5rem;
+}
+.blog-tiptap h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 1rem 0 0.4rem;
+}
+.blog-tiptap h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0.9rem 0 0.35rem;
+}
+.blog-tiptap p {
+  margin: 0.4rem 0;
+}
+.blog-tiptap a {
+  color: oklch(0.55 0.15 250);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.blog-tiptap ul,
+.blog-tiptap ol {
+  padding-left: 1.4rem;
+  margin: 0.5rem 0;
+}
+.blog-tiptap ul { list-style: disc; }
+.blog-tiptap ol { list-style: decimal; }
+.blog-tiptap li { margin: 0.2rem 0; }
+.blog-tiptap blockquote {
+  border-left: 3px solid oklch(0.85 0.02 250);
+  padding-left: 1rem;
+  font-style: italic;
+  color: oklch(0.45 0.01 250);
+  margin: 0.75rem 0;
+}
+.blog-tiptap strong { font-weight: 700; }
+.blog-tiptap u { text-underline-offset: 3px; }
+.blog-tiptap s { opacity: 0.75; }
+.blog-tiptap mark {
+  border-radius: 0.2rem;
+  padding: 0.05rem 0.2rem;
+  color: #1c1917;
+}
+.blog-tiptap img {
+  border-radius: 0.75rem;
+  margin: 0.75rem 0;
+  cursor: pointer;
+  transition: outline 0.15s ease-in-out;
+}
+.blog-tiptap img.ProseMirror-selectednode {
+  outline: 3px solid hsl(var(--primary));
+}
+.blog-tiptap code {
+  background: oklch(0.96 0.005 250);
+  border: 1px solid oklch(0.92 0.008 250);
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.85em;
+}
+.blog-tiptap pre {
+  background: oklch(0.97 0.004 250);
+  border: 1px solid oklch(0.92 0.008 250);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+}
+.blog-tiptap pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85rem;
+}
+.blog-tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+  table-layout: fixed;
+}
+.blog-tiptap th,
+.blog-tiptap td {
+  border: 1px solid oklch(0.9 0.008 250);
+  padding: 0.4rem 0.6rem;
+  vertical-align: top;
+  position: relative;
+}
+.blog-tiptap th {
+  background: oklch(0.97 0.004 250);
+  font-weight: 700;
+  text-align: left;
+}
+.blog-tiptap .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: oklch(0.55 0.15 250 / 0.12);
+  pointer-events: none;
+}
