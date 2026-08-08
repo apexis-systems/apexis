@@ -296,3 +296,5 @@ export function BlogPreviewPage({ id }: { id: string }) {
     </div>
   );
 }
+
+export default BlogPreviewPage;

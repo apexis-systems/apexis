@@ -495,3 +495,5 @@ function CharCounter({ value, limit }: { value: string; limit: number }) {
     </span>
   );
 }
+
+export default BlogEditorPage;
