@@ -27,6 +27,7 @@ export default function SuperadminLayout({
   const pathname = usePathname() || "";
   const [activeHash, setActiveHash] = useState("");
   const visibleNavItems = getVisibleSuperadminNavItems(user);
+  const isPreviewRoute = /^\/superadmin\/blogs\/[^/]+\/preview\/?$/.test(pathname);
   const blockedAccountsRoute = Boolean(
     user &&
       pathname.startsWith("/superadmin/accounts") &&
@@ -107,6 +108,12 @@ export default function SuperadminLayout({
     );
   }
 
+  // Blog preview opens in its own tab and should render as a standalone
+  // page — not wrapped in the admin sidebar/topbar chrome.
+  if (isPreviewRoute) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen bg-[hsl(38_33%_95%)] text-[hsl(30_10%_15%)] dark:bg-[hsl(30_10%_10%)] dark:text-[hsl(38_20%_90%)]">
       <SuperadminSidebar />
@@ -173,8 +180,6 @@ export default function SuperadminLayout({
           </div>
         </div>
       </div>
-
-      <SuperadminThemeToggle className="fixed right-6 top-4 z-50 hidden md:flex" />
 
       <main className="min-h-screen md:pl-60">{children}</main>
     </div>

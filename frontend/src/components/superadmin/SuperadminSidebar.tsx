@@ -11,6 +11,7 @@ import {
   Building2,
   ClipboardList,
   DollarSign,
+  FileText,
   HeartPulse,
   IndianRupee,
   LayoutDashboard,
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import SuperadminThemeToggle from "@/components/superadmin/SuperadminThemeToggle";
 
 export interface SuperadminNavItem {
   href: string;
@@ -67,6 +69,7 @@ export const superadminNavItems: SuperadminNavItem[] = [
   { href: "/superadmin/users", label: "Users", icon: Users },
   { href: "/superadmin/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/superadmin/teams", label: "Teams", icon: ShieldCheck },
+  { href: "/superadmin/blogs", label: "Blogs", icon: FileText },
 ];
 
 export const canAccessSuperadminAccounts = (user: SuperadminAccessUser) =>
@@ -177,15 +180,16 @@ export default function SuperadminSidebar() {
         })}
       </nav>
 
-      <div className="border-t border-[hsl(30_8%_20%)] px-4 py-4 dark:border-[hsl(30_8%_16%)]">
+      <div className="flex items-center gap-2 border-t border-[hsl(30_8%_20%)] px-4 py-4 dark:border-[hsl(30_8%_16%)]">
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded px-3 py-2.5 text-sm text-[hsl(38_20%_85%/0.6)] transition-colors duration-150 hover:bg-[hsl(30_8%_18%)] hover:text-[hsl(38_20%_85%)]"
+          className="flex flex-1 items-center gap-3 rounded px-3 py-2.5 text-sm text-[hsl(38_20%_85%/0.6)] transition-colors duration-150 hover:bg-[hsl(30_8%_18%)] hover:text-[hsl(38_20%_85%)]"
         >
           <LogOut className="h-[18px] w-[18px]" />
           <span>Logout</span>
         </button>
+        <SuperadminThemeToggle className="h-10 w-10 shrink-0 border-[hsl(30_8%_20%)] bg-transparent text-[hsl(38_20%_85%/0.7)] hover:bg-[hsl(30_8%_18%)] hover:text-[hsl(38_20%_85%)] dark:border-[hsl(30_8%_16%)]" />
       </div>
     </aside>
   );

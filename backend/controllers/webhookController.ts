@@ -92,6 +92,11 @@ export const handleRazorpayWebhook = async (req: Request, res: Response) => {
       const now = new Date();
 
       // Determine end date: prefer Razorpay's current_end timestamp if present
+      let newStartDate: Date = subEntity.current_start && typeof subEntity.current_start === "number"
+        ? new Date(subEntity.current_start * 1000)
+        : now;
+
+      // Determine end date: prefer Razorpay's current_end timestamp if present
       let newEndDate: Date;
       if (subEntity.current_end && typeof subEntity.current_end === "number") {
         newEndDate = new Date(subEntity.current_end * 1000);
@@ -123,7 +128,7 @@ export const handleRazorpayWebhook = async (req: Request, res: Response) => {
         auto_pay_enabled: true,
         seats_purchased: quantity,
         price_per_seat: unitPrice,
-        plan_start_date: org.plan_start_date || now,
+        plan_start_date: newStartDate,
         plan_end_date: newEndDate,
         subscription_cycle: cycle,
       });
