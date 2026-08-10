@@ -141,9 +141,11 @@ export const restoreProject = async (id: string | number) => {
     }
 };
 
-export const getProjectPhotosPaginated = async (projectId: string | number, page: number = 1, limit: number = 30) => {
+export const getProjectPhotosPaginated = async (projectId: string | number, page: number = 1, limit: number = 30, sort?: string) => {
     try {
-        const response = await PrivateAxios.get(`/projects/${projectId}/photos?page=${page}&limit=${limit}`);
+        let url = `/projects/${projectId}/photos?page=${page}&limit=${limit}`;
+        if (sort) url += `&sort=${sort}`;
+        const response = await PrivateAxios.get(url);
         return response.data;
     } catch (error) {
         console.error("getProjectPhotosPaginated Error", error);

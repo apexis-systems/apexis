@@ -104,7 +104,7 @@ export default function Dashboard() {
             } else if (sortType === 'oldest') {
                 sortedProjects.sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
             } else {
-                sortedProjects.sort((a: any, b: any) => 
+                sortedProjects.sort((a: any, b: any) =>
                     (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
                 );
             }
@@ -263,7 +263,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold text-foreground leading-tight">
-                            {t('welcome_back')}, {user.name?.split(' ')[0]} 
+                            {t('welcome_back')}, {user.name?.split(' ')[0]}
                         </h1>
                         <p className="text-[11px] text-muted-foreground font-medium">
                             {(user.role === 'admin' || user.role === 'superadmin') && t('manage_projects')}
@@ -315,7 +315,16 @@ export default function Dashboard() {
                             <div className="text-base font-bold text-foreground leading-none">{totalDocs}</div>
                         </div>
                     </div>
-                    <div className="rounded-xl bg-card/50 border border-border p-2.5 px-4 flex items-center gap-3 lg:min-w-[120px]">
+                    <div
+                        onClick={() => {
+                            if (user?.role === 'admin' || user?.role === 'superadmin') {
+                                router.push(`/${user.role}/photo-library`);
+                            } else {
+                                toast.error('Only administrators can view the photo library.');
+                            }
+                        }}
+                        className="rounded-xl bg-card/50 border border-border p-2.5 px-4 flex items-center gap-3 lg:min-w-[120px] cursor-pointer hover:border-accent hover:bg-card transition-all"
+                    >
                         <div className="h-8 w-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500 shrink-0">
                             <Image className="h-4 w-4" />
                         </div>

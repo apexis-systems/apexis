@@ -697,7 +697,7 @@ export const removeProjectMember = async (req: Request, res: Response) => {
         if (req.query.block === 'true' && userToBlock) {
             // 1. Add to blocked list
             if (userToBlock.email || userToBlock.phone_number) {
-                const whereClause: any = { 
+                const whereClause: any = {
                     organization_id: authUser.organization_id,
                     project_id: blockScope === 'project' ? Number(projectId) : null
                 };
@@ -765,7 +765,7 @@ export const removeProjectMember = async (req: Request, res: Response) => {
 
                 // 3. Find memberships for this user in THESE projects
                 const memberships = await project_members.findAll({
-                    where: { 
+                    where: {
                         user_id: userId,
                         project_id: { [Op.in]: ownedProjectIds }
                     },
@@ -775,40 +775,40 @@ export const removeProjectMember = async (req: Request, res: Response) => {
                 const affectedProjectIds = memberships.map((m: any) => m.project_id);
 
                 // 4. Remove memberships and associated data ONLY for these projects
-                await project_members.destroy({ 
-                    where: { 
-                        user_id: userId, 
+                await project_members.destroy({
+                    where: {
+                        user_id: userId,
                         project_id: { [Op.in]: ownedProjectIds }
-                    }, 
-                    transaction: t as any 
+                    },
+                    transaction: t as any
                 });
-                
+
                 if (ownedProjectIds.length > 0) {
-                    await room_members.destroy({ 
-                        where: { 
+                    await room_members.destroy({
+                        where: {
                             user_id: userId,
                             room_id: {
                                 [Op.in]: Sequelize.literal(`(SELECT id FROM rooms WHERE project_id IN (${ownedProjectIds.join(',')}))`)
                             }
-                        }, 
-                        transaction: t as any 
+                        },
+                        transaction: t as any
                     });
 
                     // Nullify assignees for tasks in these projects
-                    await snags.update({ assigned_to: null }, { 
-                        where: { 
+                    await snags.update({ assigned_to: null }, {
+                        where: {
                             assigned_to: userId,
                             project_id: { [Op.in]: ownedProjectIds }
-                        }, 
-                        transaction: t as any 
+                        },
+                        transaction: t as any
                     });
-                    
-                    await rfis.update({ assigned_to: null }, { 
-                        where: { 
+
+                    await rfis.update({ assigned_to: null }, {
+                        where: {
                             assigned_to: userId,
                             project_id: { [Op.in]: ownedProjectIds }
-                        }, 
-                        transaction: t as any 
+                        },
+                        transaction: t as any
                     });
                 }
 
@@ -933,8 +933,8 @@ export const restoreProject = async (req: Request, res: Response) => {
         const limitCheck = await validateTrashItemRestoreLimit("project", project, authUser);
         if (!limitCheck.allowed) {
             return res.status(limitCheck.status || 403).json({
-                error: limitCheck.message,
-                message: limitCheck.message,
+                error: limitCheck.message || "Storage limit reached for this project",
+                message: limitCheck.message || "Storage limit reached for this project",
                 code: limitCheck.code || "LIMIT_REACHED",
                 limit: limitCheck.limit,
                 currentUsage: limitCheck.currentUsage,
@@ -975,6 +975,7 @@ export const getProjectPhotos = async (req: Request, res: Response) => {
         const limit = parseInt(req.query.limit as string, 10) || 40;
         const page = parseInt(req.query.page as string, 10) || 1;
         const offset = (page - 1) * limit;
+        const sortDirection = req.query.sort === 'oldest' ? 'ASC' : 'DESC';
 
         // Get all folders for this project
         const folderData = await folders.findAll({
@@ -988,7 +989,7 @@ export const getProjectPhotos = async (req: Request, res: Response) => {
                     { project_id: id },
                     { folder_id: { [Op.in]: folderIds } }
                 ]
-              }
+            }
             : { project_id: id };
 
         const whereCondition: any = {
@@ -1005,7 +1006,7 @@ export const getProjectPhotos = async (req: Request, res: Response) => {
             where: whereCondition,
             limit,
             offset,
-            order: [["createdAt", "DESC"]],
+            order: [["createdAt", sortDirection]],
             include: [
                 {
                     model: users,

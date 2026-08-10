@@ -514,13 +514,24 @@ export default function DashboardScreen() {
 
           <View ref={statsRef} style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
             {[
-              { label: t('dashboard.stats.projects'), count: displayProjects.length },
-              { label: t('dashboard.stats.folders'), count: displayStats.totalFolders },
-              { label: t('dashboard.stats.documents'), count: displayStats.totalDocs },
-              { label: t('dashboard.stats.photos'), count: displayStats.totalPhotos },
+              { label: t('dashboard.stats.projects'), count: displayProjects.length, key: 'projects' },
+              { label: t('dashboard.stats.folders'), count: displayStats.totalFolders, key: 'folders' },
+              { label: t('dashboard.stats.documents'), count: displayStats.totalDocs, key: 'documents' },
+              { label: t('dashboard.stats.photos'), count: displayStats.totalPhotos, key: 'photos' },
             ].map((stat, i) => (
-              <View
+              <TouchableOpacity
                 key={i}
+                disabled={stat.key !== 'photos'}
+                activeOpacity={stat.key === 'photos' ? 0.7 : 1}
+                onPress={() => {
+                  if (stat.key === 'photos') {
+                    if (user.role === 'admin' || user.role === 'superadmin') {
+                      router.push('/(tabs)/project/photo-library');
+                    } else {
+                      // Alert.alert(t('Error'), 'Only administrators can view the photo library.');
+                    }
+                  }
+                }}
                 style={{
                   flex: 1,
                   backgroundColor: colors.surface,
@@ -538,7 +549,7 @@ export default function DashboardScreen() {
               >
                 <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>{stat.count}</Text>
                 <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontWeight: '600' }}>{stat.label}</Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
 

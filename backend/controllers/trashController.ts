@@ -49,8 +49,8 @@ export const restoreTrash = async (req: Request, res: Response) => {
         const limitCheck = await validateTrashItemRestoreLimit(type, record, authUser);
         if (!limitCheck.allowed) {
             return res.status(limitCheck.status || 403).json({
-                error: limitCheck.message,
-                message: limitCheck.message,
+                error: limitCheck.message || "Storage limit reached for this project",
+                message: limitCheck.message || "Storage limit reached for this project",
                 code: limitCheck.code || "LIMIT_REACHED",
                 limit: limitCheck.limit,
                 currentUsage: limitCheck.currentUsage,

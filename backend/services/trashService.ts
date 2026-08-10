@@ -3,7 +3,7 @@ import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import db, { comments, files, folders, manuals, organizations, project_members, projects, rfis, sequelize, snags, users } from "../models/index.ts";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { checkStorageLimit } from "../utils/subscriptionAccess.ts";
+import { checkStorageLimit, LimitCheckResult } from "../utils/subscriptionAccess.ts";
 
 const TRASH_RETENTION_DAYS = 30;
 
@@ -244,7 +244,7 @@ export const permanentlyDeleteRFIRecord = async (rfiId: number) => {
         const project = await projects.findByPk(record.project_id, { paranoid: false, transaction });
         if (project?.deletedAt) throw new Error("Project is already in trash");
 
-        for (const photo of [ ...(Array.isArray(record.photos) ? record.photos : []), ...(Array.isArray(record.response_photos) ? record.response_photos : []) ]) {
+        for (const photo of [...(Array.isArray(record.photos) ? record.photos : []), ...(Array.isArray(record.response_photos) ? record.response_photos : [])]) {
             await deleteS3Object(photo);
         }
 
@@ -357,13 +357,13 @@ export const getTrashItemsForUser = async (authUser: any, queryOrgId?: string | 
     const projectWhere =
         authUser.role === "superadmin" || authUser.role === "admin"
             ? {
-                  ...(organizationId ? { organization_id: organizationId } : {}),
-                  deletedAt: { [Op.ne]: null },
-              }
+                ...(organizationId ? { organization_id: organizationId } : {}),
+                deletedAt: { [Op.ne]: null },
+            }
             : {
-                  id: { [Op.in]: projectIds },
-                  deletedAt: { [Op.ne]: null },
-              };
+                id: { [Op.in]: projectIds },
+                deletedAt: { [Op.ne]: null },
+            };
 
     const deletedProjects = await projects.findAll({
         where: projectWhere,
@@ -640,7 +640,7 @@ export const purgeExpiredTrashItems = async () => {
     }
 };
 
-export const validateTrashItemRestoreLimit = async (type: string, record: any, authUser: any) => {
+export const validateTrashItemRestoreLimit = async (type: string, record: any, authUser: any): Promise<LimitCheckResult> => {
     let projectId: number | null = null;
     let incomingSizeMb = 0;
 

@@ -8,7 +8,9 @@ import {
     Dimensions,
     StyleSheet,
     RefreshControl,
-    BackHandler
+    BackHandler,
+    Modal,
+    ScrollView
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Text } from '@/components/ui/AppText';
@@ -18,7 +20,8 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getProjectPhotosPaginated } from '@/services/projectService';
+import { getProjectPhotosPaginated, getProjects } from '@/services/projectService';
+import { getOrgPhotosPaginated } from '@/services/organizationService';
 import FullScreenImageModal from '@/components/shared/FullScreenImageModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -27,11 +30,16 @@ const GAP = 8;
 const IMAGE_SIZE = (SCREEN_WIDTH - 32 - (NUM_COLUMNS - 1) * GAP) / NUM_COLUMNS;
 
 export default function PhotoLibraryScreen() {
-    const { projectId } = useLocalSearchParams<{ projectId: string }>();
+    const { projectId } = useLocalSearchParams<{ projectId?: string }>();
     const router = useRouter();
     const { colors } = useTheme();
     const { user } = useAuth();
     const insets = useSafeAreaInsets();
+
+    const [selectedProjectId, setSelectedProjectId] = useState<string>(projectId || 'all');
+    const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+    const [orgProjects, setOrgProjects] = useState<any[]>([]);
+    const [showProjectPicker, setShowProjectPicker] = useState<boolean>(false);
 
     const [photos, setPhotos] = useState<any[]>([]);
     const [page, setPage] = useState<number>(1);
@@ -45,9 +53,16 @@ export default function PhotoLibraryScreen() {
 
     const isAdminUser = user?.role === 'admin' || user?.role === 'superadmin';
 
-    const fetchPhotos = useCallback(async (pageNum: number, isRefresh: boolean = false) => {
-        if (!projectId) return;
+    // Fetch projects for org filter if in global photo library
+    useEffect(() => {
+        if (isAdminUser && !projectId) {
+            getProjects()
+                .then(data => setOrgProjects(data.projects || []))
+                .catch(err => console.error('Failed to load org projects:', err));
+        }
+    }, [isAdminUser, projectId]);
 
+    const fetchPhotos = useCallback(async (pageNum: number, isRefresh: boolean = false, overrideProject?: string, overrideSort?: 'newest' | 'oldest') => {
         try {
             if (isRefresh) {
                 setRefreshing(true);
@@ -57,7 +72,12 @@ export default function PhotoLibraryScreen() {
                 setLoadingMore(true);
             }
 
-            const data = await getProjectPhotosPaginated(projectId, pageNum, 36); // 36 is multiple of 3
+            const activeProjectId = overrideProject !== undefined ? overrideProject : selectedProjectId;
+            const activeSort = overrideSort !== undefined ? overrideSort : sortOrder;
+
+            const data = projectId
+                ? await getProjectPhotosPaginated(projectId, pageNum, 36, activeSort)
+                : await getOrgPhotosPaginated(pageNum, 36, undefined, activeProjectId, activeSort);
             const fetchedPhotos = data.photos || [];
 
             if (isRefresh || pageNum === 1) {
@@ -67,16 +87,16 @@ export default function PhotoLibraryScreen() {
             }
 
             setPage(pageNum);
-            setHasMore(pageNum < data.pagination.totalPages);
+            setHasMore(pageNum < (data.pagination?.totalPages || 1));
         } catch (error) {
-            console.error('Fetch project photos failed:', error);
-            Alert.alert('Error', 'Failed to load project photos.');
+            console.error('Fetch photos failed:', error);
+            Alert.alert('Error', 'Failed to load photos.');
         } finally {
             setLoading(false);
             setLoadingMore(false);
             setRefreshing(false);
         }
-    }, [projectId]);
+    }, [projectId, selectedProjectId, sortOrder]);
 
     const handleBack = useCallback(() => {
         if (projectId) {
@@ -116,6 +136,22 @@ export default function PhotoLibraryScreen() {
         fetchPhotos(page + 1);
     };
 
+    const handleProjectSelect = (projId: string) => {
+        setSelectedProjectId(projId);
+        setShowProjectPicker(false);
+        fetchPhotos(1, false, projId, sortOrder);
+    };
+
+    const handleSortChange = (newSort: 'newest' | 'oldest') => {
+        setSortOrder(newSort);
+        fetchPhotos(1, false, selectedProjectId, newSort);
+    };
+
+    const selectedProjectObj = orgProjects.find(p => String(p.id) === selectedProjectId);
+    const selectedProjectLabel = selectedProjectId === 'all'
+        ? 'All Projects'
+        : (selectedProjectObj?.name || 'Selected Project');
+
     const renderPhotoItem = ({ item }: { item: any }) => {
         const photoUrl = item.downloadUrl || item.file_url;
         return (
@@ -152,7 +188,11 @@ export default function PhotoLibraryScreen() {
                 </View>
                 <Text style={[styles.emptyTitle, { color: colors.text }]}>No Photos Found</Text>
                 <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                    This project does not have any uploaded photos yet.
+                    {projectId
+                        ? 'This project does not have any uploaded photos yet.'
+                        : selectedProjectId !== 'all'
+                            ? 'No uploaded photos found for the selected project.'
+                            : 'No uploaded photos found in this organization.'}
                 </Text>
             </View>
         );
@@ -175,6 +215,32 @@ export default function PhotoLibraryScreen() {
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>Photo Library</Text>
                 <View style={{ width: 40 }} />
+            </View>
+
+            {/* Filter Bar */}
+            <View style={[styles.filterBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+                {!projectId && (
+                    <TouchableOpacity
+                        onPress={() => setShowProjectPicker(true)}
+                        style={[styles.filterPill, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    >
+                        <Feather name="folder" size={14} color={colors.primary} />
+                        <Text style={[styles.filterPillText, { color: colors.text }]} numberOfLines={1}>
+                            {selectedProjectLabel}
+                        </Text>
+                        <Feather name="chevron-down" size={14} color={colors.textMuted} />
+                    </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                    onPress={() => handleSortChange(sortOrder === 'newest' ? 'oldest' : 'newest')}
+                    style={[styles.filterPill, { backgroundColor: colors.background, borderColor: colors.border }]}
+                >
+                    <Feather name={sortOrder === 'newest' ? 'arrow-down' : 'arrow-up'} size={14} color={colors.primary} />
+                    <Text style={[styles.filterPillText, { color: colors.text }]}>
+                        {sortOrder === 'newest' ? 'Newest first' : 'Oldest first'}
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             {loading && photos.length === 0 ? (
@@ -203,6 +269,67 @@ export default function PhotoLibraryScreen() {
                     }
                 />
             )}
+
+            {/* Project Selection Modal */}
+            <Modal
+                visible={showProjectPicker}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setShowProjectPicker(false)}
+            >
+                <TouchableOpacity
+                    activeOpacity={1}
+                    onPress={() => setShowProjectPicker(false)}
+                    style={styles.modalOverlay}
+                >
+                    <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <Text style={[styles.modalTitle, { color: colors.text }]}>Filter by Project</Text>
+                        <ScrollView style={{ maxHeight: 300 }}>
+                            <TouchableOpacity
+                                onPress={() => handleProjectSelect('all')}
+                                style={[
+                                    styles.modalOption,
+                                    selectedProjectId === 'all' && { backgroundColor: colors.primary + '15' }
+                                ]}
+                            >
+                                <Text style={[
+                                    styles.modalOptionText,
+                                    { color: selectedProjectId === 'all' ? colors.primary : colors.text }
+                                ]}>
+                                    All Projects
+                                </Text>
+                                {selectedProjectId === 'all' && (
+                                    <Feather name="check" size={16} color={colors.primary} />
+                                )}
+                            </TouchableOpacity>
+
+                            {orgProjects.map((p) => {
+                                const isSelected = String(p.id) === selectedProjectId;
+                                return (
+                                    <TouchableOpacity
+                                        key={p.id}
+                                        onPress={() => handleProjectSelect(String(p.id))}
+                                        style={[
+                                            styles.modalOption,
+                                            isSelected && { backgroundColor: colors.primary + '15' }
+                                        ]}
+                                    >
+                                        <Text style={[
+                                            styles.modalOptionText,
+                                            { color: isSelected ? colors.primary : colors.text }
+                                        ]}>
+                                            {p.name}
+                                        </Text>
+                                        {isSelected && (
+                                            <Feather name="check" size={16} color={colors.primary} />
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
 
             {/* Fullscreen Image Modal */}
             <FullScreenImageModal
@@ -240,6 +367,29 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
+    },
+    filterBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+    },
+    filterPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 20,
+        borderWidth: 1,
+        maxWidth: '50%',
+    },
+    filterPillText: {
+        fontSize: 12,
+        fontWeight: '600',
+        flexShrink: 1,
     },
     listContainer: {
         padding: 16,
@@ -287,5 +437,42 @@ const styles = StyleSheet.create({
         fontSize: 14,
         textAlign: 'center',
         paddingHorizontal: 32,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalCard: {
+        width: '100%',
+        maxHeight: 400,
+        borderRadius: 16,
+        borderWidth: 1,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        elevation: 5,
+    },
+    modalTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 12,
+    },
+    modalOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        marginBottom: 4,
+    },
+    modalOptionText: {
+        fontSize: 14,
+        fontWeight: '600',
     },
 });
