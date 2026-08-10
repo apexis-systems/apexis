@@ -92,3 +92,5 @@ export function ContentImageInput({ label = "Cover Image", value = "", onChange 
     </div>
   );
 }
+
+export default ContentImageInput;

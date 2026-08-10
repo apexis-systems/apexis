@@ -8,7 +8,6 @@ import { getBlogs, getBlog, createBlog, updateBlog } from "@/services/blogServic
 import { ContentImageInput } from "@/pages/Superadmin/Blogs/ContentImageInput";
 import { ParagraphBlock } from "./ParagraphBlock";
 import { FaqEditor } from "./FaqEditor";
-import { BlogPreview } from "./BlogPreview";
 import { legacyMarkdownToHtml } from "./legacyMarkdown";
 import {
   type Blog,
@@ -49,7 +48,6 @@ export function BlogEditorPage({ id }: { id?: string }) {
   const [loading, setLoading] = useState(!!id);
   const [saving, setSaving] = useState<BlogStatus | null>(null);
   const [error, setError] = useState("");
-  const [previewOpen, setPreviewOpen] = useState(false);
 
   const [original, setOriginal] = useState<Blog | null>(null);
   const [legacyConverted, setLegacyConverted] = useState(false);
@@ -262,8 +260,10 @@ export function BlogEditorPage({ id }: { id?: string }) {
 
         <div className="flex shrink-0 items-center gap-2">
           <button
-            onClick={() => setPreviewOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-stone-100"
+            onClick={() => window.open(`/superadmin/blogs/${id}/preview`, "_blank", "noopener,noreferrer")}
+            disabled={!id}
+            title={id ? "Open preview in a new tab" : "Save as draft to preview"}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <TbEye size={14} /> Preview
           </button>
@@ -470,22 +470,6 @@ export function BlogEditorPage({ id }: { id?: string }) {
           </div>
         </div>
       </div>
-
-      <BlogPreview
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-        title={title}
-        excerpt={excerpt}
-        coverImage={coverImage}
-        authorName={authorName}
-        authorRole={authorRole}
-        readTime={readTime}
-        category={category}
-        blocks={isEmptyHtml(content) ? [] : [{ id: "preview", type: "paragraph", html: content }]}
-        faqs={faqs}
-        slug={original?.slug || ""}
-        isPublished={status === "Published"}
-      />
     </main>
   );
 }
@@ -511,3 +495,5 @@ function CharCounter({ value, limit }: { value: string; limit: number }) {
     </span>
   );
 }
+
+export default BlogEditorPage;

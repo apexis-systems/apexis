@@ -157,3 +157,5 @@ export function FaqEditor({
     </div>
   );
 }
+
+export default FaqEditor;

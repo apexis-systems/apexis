@@ -858,3 +858,5 @@ export function ParagraphBlock({
     </div>
   );
 }
+
+export default ParagraphBlock;
