@@ -27,6 +27,10 @@ import {
   verifyPayment,
   validateSeatChange,
   cancelAutoPay,
+  getPendingCustomPlan,
+  createCustomPlanOrder,
+  acceptCustomPlan,
+  declineCustomPlan,
 } from "@/services/subscriptionService";
 import { ProjectMemberManagementModal } from "@/components/subscription/ProjectMemberManagementModal";
 import { SubscriptionNoticeModal } from "@/components/subscription/SubscriptionNoticeModal";
@@ -104,9 +108,103 @@ export default function SubscriptionScreen() {
     require("../assets/images/app-icon.png"),
   )?.uri || "";
 
+  const [pendingCustomPlan, setPendingCustomPlan] = useState<any | null>(null);
+  const [customPlanLoading, setCustomPlanLoading] = useState(false);
+
   useEffect(() => {
     fetchPlans();
+    fetchCustomPlanOffer();
   }, []);
+
+  const fetchCustomPlanOffer = async () => {
+    try {
+      const res = await getPendingCustomPlan();
+      if (res?.hasPendingOffer && res?.plan) {
+        setPendingCustomPlan(res.plan);
+      } else {
+        setPendingCustomPlan(null);
+      }
+    } catch (err) {
+      console.error("Error fetching custom plan offer in mobile", err);
+    }
+  };
+
+  const handleAcceptCustomPlanOffer = async () => {
+    setCustomPlanLoading(true);
+    try {
+      const res = await createCustomPlanOrder();
+      if (RazorpayCheckout) {
+        const options: any = {
+          description: "Accept Custom Enterprise Plan",
+          image: appIconUri,
+          currency: res.currency || "INR",
+          key: res.keyId,
+          name: "Apexis",
+          prefill: {
+            email: user?.email || "",
+            contact: user?.phone_number || "",
+            name: user?.name || "",
+          },
+          theme: { color: "#f97316" },
+        };
+
+        if (res.is_subscription && res.subscriptionId) {
+          options.subscription_id = res.subscriptionId;
+        } else {
+          options.order_id = res.orderId;
+          options.amount = res.amountInPaise;
+        }
+
+        RazorpayCheckout.open(options)
+          .then(async (data: any) => {
+            await acceptCustomPlan({
+              razorpay_order_id: data.razorpay_order_id,
+              razorpay_subscription_id: data.razorpay_subscription_id || res.subscriptionId,
+              razorpay_payment_id: data.razorpay_payment_id,
+              razorpay_signature: data.razorpay_signature,
+            });
+            Alert.alert("Success 🎉", "Custom Plan activated successfully!");
+            setPendingCustomPlan(null);
+            refreshUsage();
+            try {
+              const me = await getMe();
+              if (me?.user) updateUser(me.user);
+            } catch { }
+          })
+          .catch((err: any) => {
+            Alert.alert("Payment Cancelled", err?.description || "Payment was not completed.");
+          })
+          .finally(() => setCustomPlanLoading(false));
+      } else {
+        // Fallback for Expo Go / direct activation if Razorpay Native module is missing
+        await acceptCustomPlan({
+          razorpay_order_id: res.orderId,
+          razorpay_subscription_id: res.subscriptionId
+        });
+        Alert.alert("Success 🎉", "Custom Plan activated successfully!");
+        setPendingCustomPlan(null);
+        refreshUsage();
+        try {
+          const me = await getMe();
+          if (me?.user) updateUser(me.user);
+        } catch { }
+        setCustomPlanLoading(false);
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err?.response?.data?.message || "Failed to accept custom plan");
+      setCustomPlanLoading(false);
+    }
+  };
+
+  const handleDeclineCustomPlanOffer = async () => {
+    try {
+      await declineCustomPlan();
+      Alert.alert("Declined", "Custom plan offer declined.");
+      setPendingCustomPlan(null);
+    } catch (err) {
+      Alert.alert("Error", "Failed to decline offer.");
+    }
+  };
 
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [selectedSeats, setSelectedSeats] = useState<number>(5);
@@ -454,6 +552,83 @@ export default function SubscriptionScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {pendingCustomPlan ? (
+          <View
+            style={{
+              backgroundColor: "rgba(249, 115, 22, 0.1)",
+              borderColor: "#f97316",
+              borderWidth: 2,
+              borderRadius: 16,
+              padding: 16,
+              marginBottom: 16,
+            }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <Feather name="award" size={18} color="#f97316" />
+              <Text style={{ fontFamily: "Montserrat-Bold", fontSize: 12, color: "#f97316", textTransform: "uppercase" }}>
+                🎉 Exclusive Custom Plan Offer
+              </Text>
+            </View>
+            <Text style={{ fontFamily: "Montserrat-Bold", fontSize: 16, color: colors.text, marginBottom: 4 }}>
+              Enterprise Custom Plan Invitation
+            </Text>
+            <Text style={{ fontFamily: "Montserrat-Regular", fontSize: 12, color: colors.textMuted, marginBottom: 12 }}>
+              Superadmin has invited your organization for a custom enterprise plan.
+            </Text>
+
+            <View style={{ gap: 6, marginBottom: 16 }}>
+              <Text style={{ fontFamily: "Montserrat-SemiBold", fontSize: 13, color: colors.text }}>
+                • Seats: <Text style={{ fontFamily: "Montserrat-Bold", color: "#f97316" }}>{pendingCustomPlan.contributor_limit} Contributor Seats</Text>
+              </Text>
+              <Text style={{ fontFamily: "Montserrat-SemiBold", fontSize: 13, color: colors.text }}>
+                • Storage: <Text style={{ fontFamily: "Montserrat-Bold", color: "#f97316" }}>{Math.round(pendingCustomPlan.storage_limit_mb / 1024)} GB Storage</Text>
+              </Text>
+              <Text style={{ fontFamily: "Montserrat-SemiBold", fontSize: 13, color: colors.text }}>
+                • Cycle: <Text style={{ fontFamily: "Montserrat-Bold", color: "#f97316", textTransform: "capitalize" }}>{pendingCustomPlan.subscription_cycle || "monthly"}</Text>
+              </Text>
+              <Text style={{ fontFamily: "Montserrat-SemiBold", fontSize: 13, color: colors.text }}>
+                • Amount: <Text style={{ fontFamily: "Montserrat-Bold", color: "#10b981" }}>₹{Number(pendingCustomPlan.price).toLocaleString("en-IN")} / cycle</Text>
+              </Text>
+              {pendingCustomPlan.custom_notes ? (
+                <Text style={{ fontFamily: "Montserrat-Italic", fontSize: 11, color: colors.textMuted, marginTop: 4 }}>
+                  Note: "{pendingCustomPlan.custom_notes}"
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <TouchableOpacity
+                onPress={handleAcceptCustomPlanOffer}
+                disabled={customPlanLoading}
+                style={{
+                  backgroundColor: "#f97316",
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                {customPlanLoading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={{ fontFamily: "Montserrat-Bold", color: "#ffffff", fontSize: 14 }}>
+                    Accept & Turn On AutoPay (₹{Number(pendingCustomPlan.price).toLocaleString("en-IN")})
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleDeclineCustomPlanOffer}
+                disabled={customPlanLoading}
+                style={{
+                  paddingVertical: 8,
+                  alignItems: "center",
+                }}>
+                <Text style={{ fontFamily: "Montserrat-Medium", color: colors.textMuted, fontSize: 12 }}>
+                  Decline Offer
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
         {/* Current Plan Card */}
         <View
           style={[

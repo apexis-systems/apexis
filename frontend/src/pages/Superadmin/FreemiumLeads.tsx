@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search,
   Users,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getFreemiumLeads, extendOrganizationTrials } from "@/services/superadminService";
+import CreateCustomPlanModal from "@/components/superadmin/CreateCustomPlanModal";
 
 interface Lead {
   id: number;
@@ -107,6 +109,7 @@ export default function FreemiumLeads() {
   const [expiryFilter, setExpiryFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [leadsList, setLeadsList] = useState<Lead[]>([]);
+  const [customPlanLead, setCustomPlanLead] = useState<Lead | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [extendDays, setExtendDays] = useState("7");
@@ -504,6 +507,17 @@ export default function FreemiumLeads() {
                     </td>
                     <td className={cn(tableCellClass, "text-center")}>
                       <div className="flex items-center justify-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCustomPlanLead(lead)}
+                          disabled={!lead.organizationId}
+                          className="h-8 gap-1 border-[hsl(24_95%_53%/0.4)] bg-[hsl(24_95%_53%/0.08)] px-2 text-xs font-semibold text-[hsl(24_95%_53%)] hover:bg-[hsl(24_95%_53%)] hover:text-white"
+                          title="Create Custom Plan Offer"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Custom Plan</span>
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-[hsl(30_8%_45%)] hover:text-[hsl(24_95%_53%)]" title="Send Email">
                           <Mail className="h-4 w-4" />
                         </Button>
@@ -530,6 +544,13 @@ export default function FreemiumLeads() {
           </table>
         </div>
       </div>
+
+      <CreateCustomPlanModal
+        isOpen={Boolean(customPlanLead)}
+        onClose={() => setCustomPlanLead(null)}
+        lead={customPlanLead}
+        onSuccess={handleRefresh}
+      />
     </div>
   );
 }

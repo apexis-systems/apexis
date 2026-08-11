@@ -199,3 +199,21 @@ export const updateSystemConfig = async (minAppVersion: string) => {
         throw error;
     }
 };
+
+export const createCustomPlanOffer = async (payload: {
+    organizationId: number;
+    seats: number;
+    storageGb: number;
+    cycle: 'monthly' | 'annual';
+    amount: number;
+    notes?: string;
+}) => {
+    try {
+        const response = await PrivateAxios.post('/superadmin/custom-plan/create', payload);
+        return response.data;
+    } catch (error) {
+        console.error("createCustomPlanOffer Error", error);
+        throw error;
+    }
+};
+
