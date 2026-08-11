@@ -3,7 +3,7 @@ import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import db, { comments, files, folders, manuals, organizations, project_members, projects, rfis, sequelize, snags, users } from "../models/index.ts";
 import s3Client, { BUCKET_NAME } from "../config/s3Config.ts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { checkStorageLimit, LimitCheckResult } from "../utils/subscriptionAccess.ts";
+import { checkStorageLimit, type LimitCheckResult } from "../utils/subscriptionAccess.ts";
 
 const TRASH_RETENTION_DAYS = 30;
 

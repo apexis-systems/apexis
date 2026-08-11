@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search,
   Users,
+  Briefcase,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getFreemiumLeads, extendOrganizationTrials } from "@/services/superadminService";
+import { getAllLeads, extendOrganizationTrials } from "@/services/superadminService";
 
 interface Lead {
   id: number;
@@ -41,7 +42,6 @@ interface Lead {
   isActive: boolean;
   converted: boolean;
 }
-
 
 const cardClass =
   "rounded border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] shadow-[0_1px_0_rgba(0,0,0,0.03)] dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)]";
@@ -79,7 +79,7 @@ const getStatusTag = (remaining: number) => {
     };
   }
   return {
-    label: "New User",
+    label: "Active Customer",
     color:
       "bg-emerald-500/15 text-emerald-600 border-emerald-500/20 dark:text-emerald-400",
     emoji: "🟢",
@@ -94,13 +94,27 @@ const getConversionProbability = (score: number) => {
 
 const getReminders = (remaining: number) => {
   const reminders: string[] = [];
-  if (remaining <= 30 && remaining > 15) reminders.push("First follow-up reminder");
-  if (remaining <= 15 && remaining > 5) reminders.push("Conversion reminder");
-  if (remaining <= 5) reminders.push("Last reminder before trial ends");
+  if (remaining <= 30 && remaining > 15) reminders.push("Plan renewal reminder");
+  if (remaining <= 15 && remaining > 5) reminders.push("Trial / Subscription end warning");
+  if (remaining <= 5) reminders.push("Urgent: Subscription expiring soon");
   return reminders;
 };
 
-export default function FreemiumLeads() {
+const isFreemium = (planName?: string) => {
+  return (planName || "").trim().toLowerCase() === "freemium";
+};
+
+const isStarter = (planName?: string) => {
+  return (planName || "").trim().toLowerCase() === "starter";
+};
+
+const isCustomPlan = (planName?: string) => {
+  const plan = (planName || "").trim().toLowerCase();
+  return plan !== "freemium" && plan !== "starter";
+};
+
+export default function Customers() {
+  const [planFilter, setPlanFilter] = useState<"all" | "custom">("all");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -113,7 +127,7 @@ export default function FreemiumLeads() {
   const [isExtending, setIsExtending] = useState(false);
 
   const fetchLeadsData = async () => {
-    const response = await getFreemiumLeads();
+    const response = await getAllLeads();
     return response.leads || [];
   };
 
@@ -124,7 +138,7 @@ export default function FreemiumLeads() {
       setLeadsList(data);
       setSelectedIds(new Set());
     } catch (error) {
-      console.error("Failed to fetch leads:", error);
+      console.error("Failed to fetch customers:", error);
     } finally {
       setIsRefreshing(false);
     }
@@ -136,7 +150,7 @@ export default function FreemiumLeads() {
         const data = await fetchLeadsData();
         setLeadsList(data);
       } catch (error) {
-        console.error("Failed to fetch leads:", error);
+        console.error("Failed to fetch customers:", error);
       } finally {
         setLoading(false);
       }
@@ -145,8 +159,18 @@ export default function FreemiumLeads() {
     fetchLeads();
   }, []);
 
+  // Filter out Freemium leads from the Customers page entirely
+  const customerLeads = useMemo(() => {
+    return leadsList.filter((lead) => !isFreemium(lead.planName));
+  }, [leadsList]);
+
   const filtered = useMemo(() => {
-    return leadsList.filter((lead) => {
+    return customerLeads.filter((lead) => {
+      // Plan Filter: All vs Custom (Custom excludes Starter)
+      if (planFilter === "custom" && !isCustomPlan(lead.planName)) {
+        return false;
+      }
+
       const query = search.toLowerCase();
       const matchesSearch =
         !search ||
@@ -165,7 +189,7 @@ export default function FreemiumLeads() {
 
       return true;
     });
-  }, [activeFilter, expiryFilter, search, statusFilter, leadsList]);
+  }, [customerLeads, planFilter, search, statusFilter, activeFilter, expiryFilter]);
 
   const selectableFiltered = filtered.filter((lead) => lead.organizationId != null);
   const allFilteredSelected =
@@ -200,7 +224,7 @@ export default function FreemiumLeads() {
     const days = Number(extendDays);
     if (!Number.isFinite(days) || days <= 0) return;
 
-    const organizationIds = leadsList
+    const organizationIds = customerLeads
       .filter((lead) => selectedIds.has(lead.id) && lead.organizationId != null)
       .map((lead) => lead.organizationId as number);
 
@@ -212,7 +236,7 @@ export default function FreemiumLeads() {
       await extendOrganizationTrials(uniqueOrgIds, days);
       await handleRefresh();
     } catch (error) {
-      console.error("Failed to extend trials:", error);
+      console.error("Failed to extend trials/plans:", error);
     } finally {
       setIsExtending(false);
     }
@@ -224,48 +248,72 @@ export default function FreemiumLeads() {
         <div className="flex flex-col items-center gap-2">
           <Clock className="h-8 w-8 animate-spin text-[hsl(24_95%_53%)]" />
           <p className={cn("text-sm font-medium", mutedTextClass)}>
-            {isRefreshing ? "Refreshing lead intelligence..." : "Loading lead intelligence..."}
+            {isRefreshing ? "Refreshing customer intelligence..." : "Loading customer intelligence..."}
           </p>
         </div>
       </div>
     );
   }
 
-  const totalLeadsCount = leadsList.length;
-  const expiring15 = leadsList.filter((lead) => lead.remaining <= 15).length;
-  const expiring7 = leadsList.filter((lead) => lead.remaining <= 7).length;
-  const converted = leadsList.filter((lead) => lead.converted).length;
+  const totalCustomersCount = customerLeads.length;
+  const customPlansCount = customerLeads.filter((lead) => isCustomPlan(lead.planName)).length;
+  const expiring15 = customerLeads.filter((lead) => lead.remaining <= 15).length;
+  const expiring7 = customerLeads.filter((lead) => lead.remaining <= 7).length;
 
   const summaryCards = [
-    { title: "Total Freemium Users", value: totalLeadsCount, icon: Users, accent: "bg-[hsl(24_95%_53%/0.1)] text-[hsl(24_95%_53%)]" },
+    { title: "Total Customers", value: totalCustomersCount, icon: Users, accent: "bg-[hsl(24_95%_53%/0.1)] text-[hsl(24_95%_53%)]" },
+    { title: "Custom Plan Customers", value: customPlansCount, icon: Briefcase, accent: "bg-purple-500/10 text-purple-600 dark:text-purple-400" },
     { title: "Expiring in 15 Days", value: expiring15, icon: Clock, accent: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
     { title: "Expiring in 7 Days", value: expiring7, icon: AlertTriangle, accent: "bg-red-500/10 text-red-600 dark:text-red-400" },
-    { title: "Converted to Paid", value: converted, icon: CreditCard, accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
   ];
 
-  const remindableLeads = leadsList.filter((lead) => getReminders(lead.remaining).length > 0);
+  const remindableLeads = customerLeads.filter((lead) => getReminders(lead.remaining).length > 0);
 
   return (
     <div className="space-y-6 p-4 md:p-6">
-
       <div className="flex flex-row items-center justify-between">
         <div>
           <h1 className={cn("text-xl font-bold", strongTextClass)}>
-            Leads
+            Customers
           </h1>
           <p className={cn("mt-0.5 text-xs", mutedTextClass)}>
-            Track & convert free trial users into paid subscribers
+            Manage & analyze all registered customer accounts and custom plan subscribers
           </p>
         </div>
 
         <div className="mr-20 flex items-center gap-3">
+          <div className="flex items-center rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] p-1 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)]">
+            <button
+              onClick={() => setPlanFilter("all")}
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-semibold transition-all duration-200",
+                planFilter === "all"
+                  ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
+                  : "text-[hsl(30_8%_45%)] hover:text-[hsl(30_10%_15%)] dark:text-[hsl(38_10%_55%)] dark:hover:text-[hsl(38_20%_90%)]"
+              )}
+            >
+              All Customers ({totalCustomersCount})
+            </button>
+            <button
+              onClick={() => setPlanFilter("custom")}
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-semibold transition-all duration-200",
+                planFilter === "custom"
+                  ? "bg-[hsl(24_95%_53%)] text-white shadow-sm"
+                  : "text-[hsl(30_8%_45%)] hover:text-[hsl(30_10%_15%)] dark:text-[hsl(38_10%_55%)] dark:hover:text-[hsl(38_20%_90%)]"
+              )}
+            >
+              Custom Plans ({customPlansCount})
+            </button>
+          </div>
+
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
             className={cn(
               "flex h-9 w-9 items-center justify-center rounded-lg border border-[hsl(35_15%_85%)] bg-[hsl(39_30%_97%)] text-[hsl(30_8%_45%)] transition-all duration-300 hover:bg-[hsl(37_18%_91%)] hover:text-[hsl(24_95%_53%)] hover:border-[hsl(24_95%_53%/0.35)] active:scale-95 disabled:pointer-events-none disabled:opacity-50 dark:border-[hsl(30_8%_22%)] dark:bg-[hsl(30_8%_14%)] dark:text-[hsl(38_10%_55%)] dark:hover:bg-[hsl(30_6%_18%)] dark:hover:text-[hsl(24_95%_53%)] dark:hover:border-[hsl(24_95%_53%/0.35)]"
             )}
-            title="Refresh Leads"
+            title="Refresh Customers"
           >
             <RefreshCw
               className={cn(
@@ -340,7 +388,7 @@ export default function FreemiumLeads() {
           </Select>
 
           <div className={cn("ml-auto text-xs", mutedTextClass)}>
-            Showing {filtered.length} of {leadsList.length} leads
+            Showing {filtered.length} of {customerLeads.length} customers
           </div>
         </div>
       </div>
@@ -364,7 +412,7 @@ export default function FreemiumLeads() {
             disabled={isExtending || !Number(extendDays)}
             className="h-9"
           >
-            {isExtending ? "Extending..." : "Extend Trial"}
+            {isExtending ? "Extending..." : "Extend Plan Duration"}
           </Button>
           <Button
             size="sm"
@@ -381,7 +429,7 @@ export default function FreemiumLeads() {
         <div className="rounded border border-amber-500/20 bg-amber-500/5 p-4">
           <h3 className={cn("mb-2 flex items-center gap-2 text-sm font-semibold", strongTextClass)}>
             <AlertTriangle className="h-4 w-4 text-amber-500" />
-            Lead Reminders ({remindableLeads.length})
+            Customer Reminders ({remindableLeads.length})
           </h3>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {remindableLeads.slice(0, 6).map((lead) => (
@@ -415,10 +463,10 @@ export default function FreemiumLeads() {
                 </th>
                 <th className={tableHeadClass}>User</th>
                 <th className={tableHeadClass}>Company</th>
-                <th className={tableHeadClass}>Trial Period</th>
+                <th className={tableHeadClass}>Subscription Period</th>
                 <th className={cn(tableHeadClass, "text-center")}>Days Left</th>
                 <th className={tableHeadClass}>Status</th>
-                <th className={tableHeadClass}>Conversion Score</th>
+                <th className={tableHeadClass}>Activity Score</th>
                 <th className={cn(tableHeadClass, "text-center")}>Actions</th>
               </tr>
             </thead>
@@ -449,7 +497,14 @@ export default function FreemiumLeads() {
                       <div className="flex flex-col items-start gap-1">
                         <span className={cn("text-sm font-medium", strongTextClass)}>{lead.company || "—"}</span>
                         {lead.planName ? (
-                          <span className="inline-flex items-center rounded border border-[hsl(24_95%_53%/0.3)] bg-[hsl(24_95%_53%/0.1)] px-1.5 py-0.5 text-[10px] font-semibold text-[hsl(24_95%_53%)]">
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold",
+                              isCustomPlan(lead.planName)
+                                ? "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                                : "border-[hsl(24_95%_53%/0.3)] bg-[hsl(24_95%_53%/0.1)] text-[hsl(24_95%_53%)]"
+                            )}
+                          >
                             {lead.planName}
                           </span>
                         ) : null}
@@ -522,7 +577,7 @@ export default function FreemiumLeads() {
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={8} className={cn("py-8 text-center text-sm", mutedTextClass)}>
-                    No leads match your filters.
+                    No customers match your filters.
                   </td>
                 </tr>
               ) : null}
