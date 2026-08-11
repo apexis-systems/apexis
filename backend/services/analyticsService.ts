@@ -389,6 +389,7 @@ export const getAllLeads = async () => {
 
         return {
             id: u.id,
+            organizationId: org?.id ?? null,
             name: u.name,
             email: u.email,
             phone: u.phone_number || "+91 0000000000",

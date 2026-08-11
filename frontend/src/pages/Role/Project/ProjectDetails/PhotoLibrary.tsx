@@ -2,21 +2,30 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Project, User } from '@/types';
-import { Camera, ArrowLeft, Folder as FolderIcon, Loader2, RefreshCw, ShieldAlert, Image as ImageIcon } from 'lucide-react';
+import { Camera, ArrowLeft, Folder as FolderIcon, Loader2, RefreshCw, ShieldAlert, Image as ImageIcon, ArrowUpDown, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { getProjectPhotosPaginated } from '@/services/projectService';
+import { getProjectPhotosPaginated, getProjects } from '@/services/projectService';
+import { getOrgPhotosPaginated } from '@/services/organizationService';
 import FileViewer from '@/components/shared/FileViewer';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface PhotoLibraryProps {
-  project: Project;
-  user: User;
+  project?: Project;
+  user?: User;
   onBack?: () => void;
 }
 
-const PhotoLibrary = ({ project, user, onBack }: PhotoLibraryProps) => {
+const PhotoLibrary = ({ project, user: userProp, onBack }: PhotoLibraryProps) => {
   const { t } = useLanguage();
+  const authContext = useAuth() as any;
+  const user = userProp || authContext?.user;
+
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(project?.id ? String(project.id) : 'all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [orgProjects, setOrgProjects] = useState<any[]>([]);
+
   const [photos, setPhotos] = useState<any[]>([]);
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
@@ -27,8 +36,15 @@ const PhotoLibrary = ({ project, user, onBack }: PhotoLibraryProps) => {
 
   const isAdminUser = user?.role === 'admin' || user?.role === 'superadmin';
 
-  const fetchPhotos = useCallback(async (pageNum: number, append: boolean = false) => {
-    if (!project?.id) return;
+  useEffect(() => {
+    if (isAdminUser && !project?.id) {
+      getProjects()
+        .then(res => setOrgProjects(res.projects || []))
+        .catch(err => console.error('Failed to load org projects:', err));
+    }
+  }, [isAdminUser, project?.id]);
+
+  const fetchPhotos = useCallback(async (pageNum: number, append: boolean = false, overrideProject?: string, overrideSort?: 'newest' | 'oldest') => {
     try {
       if (pageNum === 1 && !append) {
         setLoading(true);
@@ -36,7 +52,12 @@ const PhotoLibrary = ({ project, user, onBack }: PhotoLibraryProps) => {
         setLoadingMore(true);
       }
 
-      const data = await getProjectPhotosPaginated(project.id, pageNum, 36);
+      const activeProject = overrideProject !== undefined ? overrideProject : selectedProjectId;
+      const activeSort = overrideSort !== undefined ? overrideSort : sortOrder;
+
+      const data = project?.id
+        ? await getProjectPhotosPaginated(project.id, pageNum, 36, activeSort)
+        : await getOrgPhotosPaginated(pageNum, 36, undefined, activeProject, activeSort);
       const fetchedPhotos = data.photos || [];
 
       if (append) {
@@ -51,19 +72,29 @@ const PhotoLibrary = ({ project, user, onBack }: PhotoLibraryProps) => {
         setTotalPhotos(data.pagination.total || fetchedPhotos.length);
       }
     } catch (error: any) {
-      console.error('Fetch project photos failed:', error);
-      toast.error(error?.response?.data?.error || t('failed_load_photos') || 'Failed to load project photo library.');
+      console.error('Fetch photos failed:', error);
+      toast.error(error?.response?.data?.error || t('failed_load_photos') || 'Failed to load photo library.');
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [project?.id, t]);
+  }, [project?.id, selectedProjectId, sortOrder, t]);
 
   useEffect(() => {
     if (isAdminUser) {
       fetchPhotos(1);
     }
   }, [fetchPhotos, isAdminUser]);
+
+  const handleProjectFilterChange = (newProjId: string) => {
+    setSelectedProjectId(newProjId);
+    fetchPhotos(1, false, newProjId, sortOrder);
+  };
+
+  const handleSortChange = (newSort: 'newest' | 'oldest') => {
+    setSortOrder(newSort);
+    fetchPhotos(1, false, selectedProjectId, newSort);
+  };
 
   if (!isAdminUser) {
     return (
@@ -73,7 +104,7 @@ const PhotoLibrary = ({ project, user, onBack }: PhotoLibraryProps) => {
         </div>
         <h3 className="text-lg font-bold text-foreground mb-1">Access Denied</h3>
         <p className="text-sm text-muted-foreground max-w-md">
-          Only administrators and superadmins can access the project Photo Library.
+          Only administrators and superadmins can access the Photo Library.
         </p>
         {onBack && (
           <Button variant="outline" className="mt-6 gap-2" onClick={onBack}>
@@ -108,21 +139,56 @@ const PhotoLibrary = ({ project, user, onBack }: PhotoLibraryProps) => {
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Viewing all uploaded project images across folders and modules
+              {project?.id
+                ? 'Viewing all uploaded project images across folders and modules'
+                : 'Viewing all uploaded images across projects in the organization'}
             </p>
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fetchPhotos(1)}
-          disabled={loading}
-          className="gap-2 text-xs h-9"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        {/* Filter Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {!project?.id && (
+            <div className="relative flex items-center">
+              <Filter className="absolute left-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <select
+                value={selectedProjectId}
+                onChange={(e) => handleProjectFilterChange(e.target.value)}
+                className="h-9 pl-8 pr-3 text-xs bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+              >
+                <option value="all">All Projects</option>
+                {orgProjects.map((p) => (
+                  <option key={p.id} value={String(p.id)}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="relative flex items-center">
+            <ArrowUpDown className="absolute left-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <select
+              value={sortOrder}
+              onChange={(e) => handleSortChange(e.target.value as 'newest' | 'oldest')}
+              className="h-9 pl-8 pr-3 text-xs bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+            >
+              <option value="newest">Newest to Oldest</option>
+              <option value="oldest">Oldest to Newest</option>
+            </select>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchPhotos(1)}
+            disabled={loading}
+            className="gap-2 text-xs h-9"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Grid Content */}
@@ -138,7 +204,11 @@ const PhotoLibrary = ({ project, user, onBack }: PhotoLibraryProps) => {
           </div>
           <h3 className="text-sm font-bold text-foreground">No Photos Found</h3>
           <p className="text-xs text-muted-foreground max-w-sm mt-1">
-            This project does not have any uploaded photos in its library yet.
+            {project?.id
+              ? 'This project does not have any uploaded photos in its library yet.'
+              : selectedProjectId !== 'all'
+                ? 'No uploaded photos found for the selected project.'
+                : 'No uploaded photos found across projects in this organization yet.'}
           </p>
         </div>
       ) : (
@@ -213,7 +283,7 @@ const PhotoLibrary = ({ project, user, onBack }: PhotoLibraryProps) => {
           onOpenChange={(open) => setViewerState(prev => ({ ...prev, open }))}
           user={user}
           targetType="photo"
-          projectId={project.id}
+          projectId={project?.id}
         />
       )}
     </div>

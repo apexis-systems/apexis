@@ -8,6 +8,10 @@ import {
   getInvoice,
   validateSeatChange,
   cancelAutoPaySubscription,
+  getPendingCustomPlan,
+  createCustomPlanOrder,
+  acceptCustomPlan,
+  declineCustomPlan,
 } from "../controllers/subscriptionController.ts";
 import { verifyToken } from "../middleware/verifyToken.ts";
 
@@ -21,5 +25,10 @@ router.get("/transactions", verifyToken, getTransactions);
 router.get("/usage", verifyToken, getUsage);
 router.get("/invoice/:id", verifyToken, getInvoice);
 router.post("/validate-seat-change", verifyToken, validateSeatChange);
+
+router.get("/custom-plan/pending", verifyToken, getPendingCustomPlan);
+router.post("/custom-plan/create-order", verifyToken, createCustomPlanOrder);
+router.post("/custom-plan/accept", verifyToken, acceptCustomPlan);
+router.post("/custom-plan/decline", verifyToken, declineCustomPlan);
 
 export default router;

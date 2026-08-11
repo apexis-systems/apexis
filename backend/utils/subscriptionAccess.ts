@@ -3,6 +3,15 @@ import { Op } from "sequelize";
 
 export const SUBSCRIPTION_GRACE_DAYS = 4;
 
+export interface LimitCheckResult {
+  allowed: boolean;
+  status: number;
+  code: string;
+  message?: string;
+  limit?: number;
+  currentUsage?: number;
+}
+
 export interface SubscriptionAccessState {
   planEndDate: Date | null;
   graceEndDate: Date | null;
@@ -61,7 +70,7 @@ export const checkMemberLimit = async (
   organizationId: number,
   role: "contributor" | "client" | "consultant" | "vendor",
   projectId?: number,
-) => {
+): Promise<LimitCheckResult> => {
   const org = await getOrganizationWithPlan(organizationId);
   if (!org || !org.plan) {
     return {
@@ -123,7 +132,7 @@ export const checkMemberLimit = async (
   };
 };
 
-export const checkProjectLimit = async (organizationId: number) => {
+export const checkProjectLimit = async (organizationId: number): Promise<LimitCheckResult> => {
   const org = await getOrganizationWithPlan(organizationId);
   if (!org) {
     return {
@@ -163,7 +172,7 @@ export const checkStorageLimit = async (
   incomingSizeMb: number,
   projectId?: number,
   userRole?: string,
-) => {
+): Promise<LimitCheckResult> => {
   const org = await getOrganizationWithPlan(organizationId);
   if (!org) {
     return {

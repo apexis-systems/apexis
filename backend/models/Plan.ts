@@ -82,6 +82,26 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: true,
             },
+            is_custom: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            organization_id: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+                defaultValue: null,
+            },
+            subscription_cycle: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                defaultValue: "monthly",
+            },
+            custom_notes: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+                defaultValue: null,
+            },
         },
         {
             tableName: "plans",

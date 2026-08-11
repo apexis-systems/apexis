@@ -52,7 +52,8 @@ export const SUPERADMIN_SECTION_HIGHLIGHT_EVENT =
 export const superadminNavItems: SuperadminNavItem[] = [
   { href: SUPERADMIN_DASHBOARD_PATH, label: "Overview", icon: LayoutDashboard },
   { href: "/superadmin/saas-growth", label: "SaaS Growth", icon: Rocket },
-  { href: "/superadmin/freemium-leads", label: "Freemium Leads", icon: UserCheck },
+  { href: "/superadmin/freemium-leads", label: "Leads", icon: UserCheck },
+  { href: "/superadmin/customers", label: "Customers", icon: Users },
   { href: "/superadmin/accounts", label: "Accounts", icon: IndianRupee },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#platform-growth`, label: "Platform Growth", icon: TrendingUp, scrollTo: "platform-growth" },
   { href: `${SUPERADMIN_DASHBOARD_PATH}#project-activity`, label: "Project Activity", icon: ClipboardList, scrollTo: "project-activity" },

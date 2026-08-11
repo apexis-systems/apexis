@@ -91,11 +91,112 @@ const Billing = () => {
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const [pendingNoticePlan, setPendingNoticePlan] = useState<any | null>(null);
 
+  // Custom Plan Offer state
+  const [pendingCustomPlan, setPendingCustomPlan] = useState<any | null>(null);
+  const [customPlanLoading, setCustomPlanLoading] = useState(false);
+
   useEffect(() => {
     if (user && (user.role === "admin" || user.role === "superadmin")) {
       loadTransactions();
+      loadCustomPlanOffer();
     }
   }, [user]);
+
+  const loadCustomPlanOffer = async () => {
+    try {
+      const res = await subscriptionService.getPendingCustomPlan();
+      if (res?.hasPendingOffer && res?.plan) {
+        setPendingCustomPlan(res.plan);
+      } else {
+        setPendingCustomPlan(null);
+      }
+    } catch (err) {
+      console.error("Failed to load pending custom plan offer", err);
+    }
+  };
+
+  const handleAcceptCustomPlan = async () => {
+    setCustomPlanLoading(true);
+    try {
+      const res = await subscriptionService.createCustomPlanOrder();
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded) {
+        toast.error("Razorpay SDK failed to load. Check your network connection.");
+        setCustomPlanLoading(false);
+        return;
+      }
+
+      const options: any = {
+        key: res.keyId,
+        name: "Apexis",
+        description: "Accept Custom Enterprise Plan",
+        handler: async (response: any) => {
+          try {
+            await subscriptionService.acceptCustomPlan({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_subscription_id: response.razorpay_subscription_id || res.subscriptionId,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            toast.success("🎉 Custom Plan activated successfully!");
+            setPendingCustomPlan(null);
+            await refreshUsage();
+            loadTransactions();
+            const refreshed = await getMe();
+            if (refreshed?.user) {
+              setUser({
+                ...refreshed.user,
+                organization: refreshed.organization,
+                project_id: refreshed.project_id,
+              });
+            }
+          } catch (err: any) {
+            toast.error("Failed to complete custom plan activation");
+          } finally {
+            setCustomPlanLoading(false);
+          }
+        },
+        prefill: {
+          name: user?.name,
+          email: user?.email,
+        },
+        modal: {
+          ondismiss: () => setCustomPlanLoading(false),
+        },
+        theme: {
+          color: "#f97316",
+        },
+      };
+
+      if (res.is_subscription && res.subscriptionId) {
+        options.subscription_id = res.subscriptionId;
+      } else {
+        options.order_id = res.orderId;
+        options.amount = res.amountInPaise;
+        options.currency = res.currency;
+      }
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on("payment.failed", (response: any) => {
+        toast.error(`Payment failed: ${response?.error?.description || ""}`);
+        setCustomPlanLoading(false);
+      });
+      rzp.open();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to initiate custom plan order");
+      setCustomPlanLoading(false);
+    }
+  };
+
+  const handleDeclineCustomPlan = async () => {
+    try {
+      await subscriptionService.declineCustomPlan();
+      toast.info("Custom Plan offer declined.");
+      setPendingCustomPlan(null);
+    } catch (err) {
+      toast.error("Failed to decline offer");
+    }
+  };
 
   const loadTransactions = async () => {
     try {
@@ -448,6 +549,74 @@ const Billing = () => {
         </TabsList>
 
         <TabsContent value="plans">
+          {pendingCustomPlan ? (
+            <div className="mb-8 rounded-2xl border-2 border-orange-500/30 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 p-6 shadow-lg backdrop-blur dark:border-orange-500/40">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/15 px-3 py-1 text-xs font-black uppercase tracking-wider text-orange-600 dark:text-orange-400">
+                    <span>🎉 Exclusive Custom Plan Invitation</span>
+                  </div>
+                  <h3 className="text-xl font-black text-foreground">
+                    Tailored Enterprise Offer for Your Organization
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Superadmin has generated a special custom plan offer for your team. Review details below and accept to activate auto-renewal.
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-4 pt-1 text-xs font-semibold text-foreground">
+                    <div className="rounded-lg border border-orange-500/20 bg-background/80 px-3 py-2">
+                      Seats: <span className="text-base font-black text-orange-600 dark:text-orange-400">{pendingCustomPlan.contributor_limit} Contributor Seats</span>
+                    </div>
+                    <div className="rounded-lg border border-orange-500/20 bg-background/80 px-3 py-2">
+                      Storage: <span className="text-base font-black text-orange-600 dark:text-orange-400">{Math.round(pendingCustomPlan.storage_limit_mb / 1024)} GB Storage</span>
+                    </div>
+                    <div className="rounded-lg border border-orange-500/20 bg-background/80 px-3 py-2">
+                      Cycle: <span className="text-base font-black capitalize text-orange-600 dark:text-orange-400">{pendingCustomPlan.subscription_cycle || "monthly"}</span>
+                    </div>
+                    <div className="rounded-lg border border-orange-500/20 bg-background/80 px-3 py-2">
+                      Amount: <span className="text-base font-black text-emerald-600 dark:text-emerald-400">₹{Number(pendingCustomPlan.price).toLocaleString("en-IN")} / cycle</span>
+                    </div>
+                  </div>
+
+                  {pendingCustomPlan.custom_notes ? (
+                    <div className="mt-2 text-xs italic text-muted-foreground">
+                      Note from Admin: "{pendingCustomPlan.custom_notes}"
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col gap-2 shrink-0 sm:flex-row md:flex-col">
+                  <Button
+                    onClick={handleAcceptCustomPlan}
+                    disabled={customPlanLoading}
+                    className="h-11 px-6 font-bold bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-md hover:from-orange-600 hover:to-amber-700"
+                  >
+                    {customPlanLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="mr-2 h-4 w-4" />
+                        Accept & Activate AutoPay (₹{Number(pendingCustomPlan.price).toLocaleString("en-IN")})
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDeclineCustomPlan}
+                    disabled={customPlanLoading}
+                    className="h-9 text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    Decline Offer
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {plans.map((plan) => {
               const isAnnual = billingCycle === "annual" && plan.key !== "enterprise";

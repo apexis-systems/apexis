@@ -44,6 +44,7 @@ for (const file of filesInDir) {
 // Plan <-> Organization
 db.organizations.belongsTo(db.plans, { foreignKey: 'plan_id' });
 db.plans.hasMany(db.organizations, { foreignKey: 'plan_id' });
+db.organizations.belongsTo(db.plans, { as: 'pendingCustomPlan', foreignKey: 'pending_custom_plan_id' });
 
 // Organization <-> User
 db.users.belongsTo(db.organizations, { foreignKey: 'organization_id' });

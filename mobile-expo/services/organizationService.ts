@@ -51,3 +51,17 @@ export const updateOrganization = async (data: { name?: string; restrict_onboard
         throw error;
     }
 };
+
+export const getOrgPhotosPaginated = async (page: number = 1, limit: number = 30, orgId?: string, projectId?: string, sort?: string) => {
+    try {
+        let url = `/organizations/photos?page=${page}&limit=${limit}`;
+        if (orgId) url += `&organization_id=${orgId}`;
+        if (projectId && projectId !== 'all') url += `&project_id=${projectId}`;
+        if (sort) url += `&sort=${sort}`;
+        const response = await PrivateAxios.get(url);
+        return response.data;
+    } catch (error) {
+        console.error("getOrgPhotosPaginated Error", error);
+        throw error;
+    }
+};

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { organizations, projects, folders, users } from "../models/index.ts";
+import { organizations, projects, folders, users, plans } from "../models/index.ts";
 import jwt from "jsonwebtoken";
 import { saveSystemConfig, getCachedVersion } from "./systemController.ts";
 import { sendEmail } from "../utils/email.ts";
@@ -471,3 +471,93 @@ export const updateSystemConfig = async (req: Request, res: Response) => {
         res.status(500).json({ error: error.message || "Internal server error" });
     }
 };
+
+export const createCustomPlanOffer = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser || authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: SuperAdmin access only" });
+        }
+
+        const { organizationId, seats, storageGb, cycle, amount, notes } = req.body;
+
+        const orgIdNum = Number(organizationId);
+        const seatsNum = Number(seats);
+        const storageNum = Number(storageGb);
+        const amountNum = Number(amount);
+        const planCycle = cycle === "annual" ? "annual" : "monthly";
+
+        if (!orgIdNum || !Number.isFinite(seatsNum) || seatsNum < 1 || !Number.isFinite(storageNum) || storageNum < 1 || !Number.isFinite(amountNum) || amountNum < 0) {
+            return res.status(400).json({ error: "Invalid parameters. Please provide valid organizationId, seats, storageGb, and amount." });
+        }
+
+        const org = await organizations.findByPk(orgIdNum);
+        if (!org) {
+            return res.status(404).json({ error: "Organization not found" });
+        }
+
+        const durationDays = planCycle === "annual" ? 365 : 30;
+        const perSeatPrice = planCycle === "annual" ? (amountNum / seatsNum / 12) : (amountNum / seatsNum);
+
+        // Create new custom plan record in plans table
+        const customPlan = await plans.create({
+            name: `Custom Plan (${org.name})`,
+            price: amountNum,
+            price_per_seat_monthly: Number(perSeatPrice.toFixed(2)),
+            price_per_seat_annually: Number(perSeatPrice.toFixed(2)),
+            storage_limit_mb: storageNum * 1024,
+            duration_days: durationDays,
+            project_limit: 9999,
+            contributor_limit: seatsNum,
+            client_limit: 9999,
+            max_snags: 9999,
+            max_rfis: 9999,
+            can_export_reports: true,
+            can_share_media: true,
+            can_export_handover: true,
+            is_active: true,
+            is_custom: true,
+            organization_id: org.id,
+            subscription_cycle: planCycle,
+            custom_notes: notes || null
+        });
+
+        // Set pending_custom_plan_id on organization
+        await org.update({ pending_custom_plan_id: customPlan.id });
+
+        // Find primary admin user for notification
+        const adminUser = await users.findOne({
+            where: { organization_id: org.id, role: 'admin' },
+            order: [['is_primary', 'DESC'], ['createdAt', 'ASC']]
+        });
+
+        if (adminUser) {
+            await sendNotification({
+                userId: adminUser.id,
+                title: "🎉 Special Custom Plan Offer",
+                body: `Superadmin has generated a custom plan offer of ${seatsNum} seats and ${storageNum} GB storage for your organization. Tap to view and accept.`,
+                type: "custom_plan_offer",
+                data: {
+                    organization_id: org.id,
+                    pending_custom_plan_id: customPlan.id,
+                    seats: seatsNum,
+                    storageGb: storageNum,
+                    cycle: planCycle,
+                    price: amountNum,
+                    custom_notes: notes || ""
+                }
+            }).catch(err => console.error("Error sending custom plan notification:", err));
+        }
+
+        res.status(201).json({
+            success: true,
+            message: `Successfully created custom plan offer for ${org.name}`,
+            plan: customPlan
+        });
+
+    } catch (error: any) {
+        console.error("createCustomPlanOffer Error:", error);
+        res.status(500).json({ error: error.message || "Internal server error" });
+    }
+};
+
