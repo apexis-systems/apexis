@@ -65,6 +65,19 @@ export const handleNotificationNavigation = (type: string | undefined | null, da
             return;
         }
 
+        if (
+            type === 'custom_plan_offer' ||
+            type === 'custom_plan_checkout' ||
+            type === 'subscription' ||
+            type === 'subscription_expired' ||
+            type === 'expiry' ||
+            type === 'plan_change' ||
+            type === 'billing'
+        ) {
+            router.push('/subscription');
+            return;
+        }
+
         if (!projectId) {
             console.warn('[NAV] No projectId in notification data — skipping project navigation.');
             return;

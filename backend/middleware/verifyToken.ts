@@ -22,7 +22,7 @@ export const verifyToken = async (req: AuthRequest, res: Response, next: NextFun
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
         req.user = decoded; // { user_id, role, organization_id, project_id? }
-        
+
         const sessionUser: any = decoded;
         if (sessionUser?.role !== "superadmin" && sessionUser?.organization_id) {
             const org = await organizations.findByPk(sessionUser.organization_id);

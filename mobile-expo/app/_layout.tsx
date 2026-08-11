@@ -176,7 +176,17 @@ function RootLayoutNav() {
     if (isAuthLoading) return;
     if (!isLoggedIn) return;
     if (!hasSeenOnboarding) return;
-    if (subscriptionLocked) return;
+    const isSubscriptionNotif = [
+      'custom_plan_offer',
+      'custom_plan_checkout',
+      'subscription',
+      'subscription_expired',
+      'expiry',
+      'plan_change',
+      'billing'
+    ].includes(pendingNotification.type);
+
+    if (subscriptionLocked && !isSubscriptionNotif) return;
 
     console.log('[NAV] Processing notification', pendingNotification.id);
     navigateFromNotification(

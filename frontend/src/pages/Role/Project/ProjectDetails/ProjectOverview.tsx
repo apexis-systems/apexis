@@ -407,14 +407,11 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         </div>
         <div 
           className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
-          onClick={() => (userRole === 'admin' || userRole === 'superadmin') ? onTabChange?.('photo-library' as any) : onTabChange?.('photos')}
+          onClick={() => onTabChange?.('photos')}
         >
           <div className="flex items-center gap-2 text-accent group-hover:text-accent/80 transition-colors">
             <Camera className="h-4 w-4" />
             <span className="text-xs">{t('photos')}</span>
-            {(userRole === 'admin' || userRole === 'superadmin') && (
-              <span className="ml-auto text-[10px] font-semibold text-accent/80 group-hover:underline">Library &rarr;</span>
-            )}
           </div>
           <div className="mt-1 text-xl font-bold text-accent">{counting ? '...' : photosCount}</div>
         </div>

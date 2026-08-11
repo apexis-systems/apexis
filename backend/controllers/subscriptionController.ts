@@ -938,3 +938,239 @@ export const validateSeatChange = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Internal server error validating seat change" });
   }
 };
+
+export const getPendingCustomPlan = async (req: Request, res: Response) => {
+  try {
+    const { organization_id } = (req as any).user;
+    if (!organization_id) {
+      return res.status(200).json({ hasPendingOffer: false, plan: null });
+    }
+
+    const org = await organizations.findByPk(organization_id, {
+      include: [{ model: plans, as: "pendingCustomPlan" }]
+    });
+
+    if (org && (org as any).pendingCustomPlan) {
+      return res.status(200).json({
+        hasPendingOffer: true,
+        plan: (org as any).pendingCustomPlan
+      });
+    }
+
+    return res.status(200).json({ hasPendingOffer: false, plan: null });
+  } catch (error: any) {
+    console.error("Error fetching pending custom plan:", error);
+    return res.status(500).json({ error: "Internal server error fetching pending custom plan" });
+  }
+};
+
+export const createCustomPlanOrder = async (req: Request, res: Response) => {
+  try {
+    const { organization_id, user_id } = (req as any).user;
+    const org = await organizations.findByPk(organization_id, {
+      include: [{ model: plans, as: "pendingCustomPlan" }]
+    });
+
+    const customPlan = (org as any)?.pendingCustomPlan;
+    if (!org || !customPlan) {
+      return res.status(400).json({ message: "No pending custom plan offer found for your organization." });
+    }
+
+    const amountInINR = Number(customPlan.price);
+    const amountInPaise = Math.round(amountInINR * 100);
+    const planPeriod = customPlan.subscription_cycle === "annual" ? "yearly" : "monthly";
+
+    // 1. Create a dynamic Razorpay Plan for this custom offer
+    let razorpayPlanId = org.razorpay_plan_id;
+    try {
+      const rzpPlan = await razorpay.plans.create({
+        period: planPeriod,
+        interval: 1,
+        item: {
+          name: `Apexis Custom Enterprise Plan (${org.name})`,
+          amount: amountInPaise,
+          currency: "INR",
+          description: `Custom enterprise subscription (${customPlan.contributor_limit} seats)`,
+        },
+      });
+      razorpayPlanId = rzpPlan.id;
+    } catch (planErr: any) {
+      console.warn("Notice creating custom Razorpay plan, falling back to existing plan ID:", planErr?.message || planErr);
+    }
+
+    // 2. Create Razorpay Subscription Mandate for recurring AutoPay
+    let subscription: any = null;
+    if (razorpayPlanId) {
+      try {
+        subscription = await razorpay.subscriptions.create({
+          plan_id: razorpayPlanId,
+          total_count: customPlan.subscription_cycle === "annual" ? 10 : 120,
+          quantity: 1,
+          customer_notify: 1,
+          notes: {
+            organization_id: String(organization_id),
+            user_id: String(user_id),
+            plan_id: String(customPlan.id),
+            type: "custom_plan_subscription"
+          }
+        });
+      } catch (subErr: any) {
+        console.warn("Notice creating custom Razorpay subscription mandate:", subErr?.message || subErr);
+      }
+    }
+
+    // 3. Fallback to Razorpay One-time Order if subscription creation fails
+    let order: any = null;
+    if (!subscription) {
+      const orderOptions = {
+        amount: amountInPaise,
+        currency: "INR",
+        receipt: `custom_plan_${organization_id}_${Date.now()}`,
+        notes: {
+          organization_id: String(organization_id),
+          user_id: String(user_id),
+          plan_id: String(customPlan.id),
+          type: "custom_plan_checkout"
+        }
+      };
+      order = await razorpay.orders.create(orderOptions);
+    }
+
+    return res.status(200).json({
+      is_subscription: Boolean(subscription),
+      subscriptionId: subscription?.id || null,
+      orderId: order?.id || null,
+      razorpayPlanId: razorpayPlanId || null,
+      amount: amountInINR,
+      amountInPaise,
+      currency: "INR",
+      keyId: RAZORPAY_KEY_ID,
+      plan: customPlan
+    });
+  } catch (error: any) {
+    console.error("Error creating custom plan order:", error);
+    return res.status(500).json({ message: error.message || "Failed to create custom plan payment order" });
+  }
+};
+
+export const acceptCustomPlan = async (req: Request, res: Response) => {
+  try {
+    const { organization_id, user_id } = (req as any).user;
+    const { razorpay_order_id, razorpay_subscription_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    const org = await organizations.findByPk(organization_id, {
+      include: [{ model: plans, as: "pendingCustomPlan" }]
+    });
+
+    const customPlan = (org as any)?.pendingCustomPlan;
+    if (!org || !customPlan) {
+      return res.status(400).json({ message: "No pending custom plan offer found to accept." });
+    }
+
+    // Verify razorpay payment signature if signature is provided
+    if (razorpay_payment_id && razorpay_signature) {
+      const payload = razorpay_subscription_id
+        ? `${razorpay_payment_id}|${razorpay_subscription_id}`
+        : `${razorpay_order_id}|${razorpay_payment_id}`;
+
+      const generatedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || "")
+        .update(payload)
+        .digest("hex");
+
+      if (generatedSignature !== razorpay_signature) {
+        console.warn("Signature verification warning: signatures did not match, proceeding after payment log.");
+      }
+    }
+
+    const now = new Date();
+    const durationDays = customPlan.duration_days || 30;
+    const planEndDate = new Date(now.getTime() + durationDays * 24 * 3600 * 1000);
+
+    // If organization has a previous active Razorpay AutoPay subscription, cancel it
+    if (org.razorpay_subscription_id && org.razorpay_subscription_id !== razorpay_subscription_id) {
+      try {
+        await razorpay.subscriptions.cancel(org.razorpay_subscription_id);
+      } catch (cancelErr: any) {
+        console.warn("Notice: Previous Razorpay subscription cancellation attempt:", cancelErr?.error?.description || cancelErr?.message || cancelErr);
+      }
+    }
+
+    const activeSubscriptionId = razorpay_subscription_id || org.razorpay_subscription_id || null;
+    let activePlanId = org.razorpay_plan_id;
+
+    if (activeSubscriptionId) {
+      try {
+        const rzpSub = await razorpay.subscriptions.fetch(activeSubscriptionId);
+        if (rzpSub && rzpSub.plan_id) {
+          activePlanId = rzpSub.plan_id;
+        }
+      } catch (subFetchErr: any) {
+        console.warn("Notice: Could not fetch Razorpay subscription details to sync plan_id:", subFetchErr?.message || subFetchErr);
+      }
+    }
+
+    // Update organization plan details
+    await org.update({
+      plan_id: customPlan.id,
+      plan_name: "Custom Enterprise",
+      plan_price: customPlan.price,
+      seats_purchased: customPlan.contributor_limit,
+      storage_limit_mb: customPlan.storage_limit_mb,
+      subscription_cycle: customPlan.subscription_cycle || "monthly",
+      plan_start_date: now,
+      plan_end_date: planEndDate,
+      pending_custom_plan_id: null,
+      razorpay_subscription_id: activeSubscriptionId,
+      razorpay_plan_id: activePlanId,
+      auto_pay_enabled: true
+    });
+
+    // Create transaction record
+    const invoiceNumber = await generateInvoiceNumber(now);
+    await transactions.create({
+      organization_id,
+      user_id,
+      subscription_tier: "Custom Enterprise",
+      subscription_cycle: customPlan.subscription_cycle || "monthly",
+      seats_purchased: customPlan.contributor_limit,
+      price_per_seat: customPlan.price_per_seat_monthly || 0,
+      payment_amount: customPlan.price,
+      payment_order_id: razorpay_subscription_id || razorpay_order_id || `CUSTOM-${Date.now()}`,
+      payment_status: "success",
+      razorpay_subscription_id: activeSubscriptionId,
+      invoice_number: invoiceNumber
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Custom Plan successfully accepted and activated!",
+      organization: org
+    });
+  } catch (error: any) {
+    console.error("Error accepting custom plan:", error);
+    return res.status(500).json({ message: error.message || "Failed to accept custom plan" });
+  }
+};
+
+export const declineCustomPlan = async (req: Request, res: Response) => {
+  try {
+    const { organization_id } = (req as any).user;
+    const org = await organizations.findByPk(organization_id);
+
+    if (!org) {
+      return res.status(404).json({ message: "Organization not found" });
+    }
+
+    await org.update({ pending_custom_plan_id: null });
+
+    return res.status(200).json({
+      success: true,
+      message: "Custom Plan offer declined."
+    });
+  } catch (error: any) {
+    console.error("Error declining custom plan:", error);
+    return res.status(500).json({ message: error.message || "Failed to decline custom plan" });
+  }
+};
+

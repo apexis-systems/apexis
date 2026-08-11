@@ -105,3 +105,48 @@ export const removeProjectMember = async (projectId: number, userId: number) => 
     throw error;
   }
 };
+
+export const getPendingCustomPlan = async () => {
+  try {
+    const response = await PrivateAxios.get('/subscription/custom-plan/pending');
+    return response.data;
+  } catch (error) {
+    console.error("getPendingCustomPlan Error", error);
+    return { hasPendingOffer: false, plan: null };
+  }
+};
+
+export const createCustomPlanOrder = async () => {
+  try {
+    const response = await PrivateAxios.post('/subscription/custom-plan/create-order');
+    return response.data;
+  } catch (error) {
+    console.error("createCustomPlanOrder Error", error);
+    throw error;
+  }
+};
+
+export const acceptCustomPlan = async (data: {
+  razorpay_order_id?: string;
+  razorpay_subscription_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+}) => {
+  try {
+    const response = await PrivateAxios.post('/subscription/custom-plan/accept', data);
+    return response.data;
+  } catch (error) {
+    console.error("acceptCustomPlan Error", error);
+    throw error;
+  }
+};
+
+export const declineCustomPlan = async () => {
+  try {
+    const response = await PrivateAxios.post('/subscription/custom-plan/decline');
+    return response.data;
+  } catch (error) {
+    console.error("declineCustomPlan Error", error);
+    throw error;
+  }
+};

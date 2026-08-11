@@ -86,6 +86,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
                 defaultValue: null,
             },
+            pending_custom_plan_id: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+                defaultValue: null,
+            },
         },
         {
             tableName: "organizations",
