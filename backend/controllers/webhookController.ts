@@ -4,6 +4,7 @@ import { Op } from "sequelize";
 import { organizations, transactions, users } from "../models/index.ts";
 import { getIO } from "../socket.ts";
 import { generateInvoice } from "../services/invoiceService.ts";
+import razorpay from "../config/razorpayConfig.ts";
 
 const formatInvoicePrefix = (date: Date) => {
   const dd = String(date.getDate()).padStart(2, "0");
@@ -190,6 +191,18 @@ export const handleRazorpayWebhook = async (req: Request, res: Response) => {
       const subEntity = payload?.subscription?.entity;
       if (subEntity) {
         const notesOrgId = subEntity.notes?.organization_id;
+        const prevSubId = subEntity.notes?.previous_subscription_id;
+
+        // Auto-cancel previous subscription if provided in notes
+        if (prevSubId && prevSubId !== subEntity.id) {
+          try {
+            await razorpay.subscriptions.cancel(prevSubId);
+            console.log(`[Webhook Info]: Cancelled old subscription ${prevSubId} upon authentication of ${subEntity.id}`);
+          } catch (cancelErr: any) {
+            console.warn(`[Webhook Notice]: Previous sub ${prevSubId} cancellation notice in webhook:`, cancelErr?.error?.description || cancelErr?.message || cancelErr);
+          }
+        }
+
         const whereClause = notesOrgId
           ? { [Op.or]: [{ razorpay_subscription_id: subEntity.id }, { id: notesOrgId }] }
           : { razorpay_subscription_id: subEntity.id };
