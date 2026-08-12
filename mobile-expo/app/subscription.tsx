@@ -42,6 +42,42 @@ try {
   // Not available in Expo Go — requires a development build
 }
 
+const parseRazorpayErrorMessage = (err: any): string => {
+  if (!err) return "Payment was cancelled or could not be completed.";
+  if (err?.code === 2 || err?.code === 0) {
+    return "Payment was cancelled.";
+  }
+
+  const raw = err?.description || err?.message || (typeof err === "string" ? err : "");
+
+  if (typeof raw === "string" && raw.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw);
+      const inner = parsed?.error || parsed;
+
+      if (inner?.description && inner.description !== "undefined") {
+        return inner.description;
+      }
+
+      if (inner?.reason === "payment_error" || inner?.code === "BAD_REQUEST_ERROR") {
+        return "Payment authentication was cancelled or failed. Please try again or use a different payment method.";
+      }
+
+      if (inner?.reason) {
+        return `Payment failed (${String(inner.reason).replace(/_/g, " ")}).`;
+      }
+    } catch {
+      // Return fallback below if JSON parsing fails
+    }
+  }
+
+  if (typeof raw === "string" && raw && raw !== "undefined" && !raw.trim().startsWith("{")) {
+    return raw;
+  }
+
+  return "Payment authentication was cancelled or failed. Please try again.";
+};
+
 const PLAN_ORDER = ["Starter", "Enterprise"];
 const GST_RATE = 0.18;
 
@@ -172,7 +208,9 @@ export default function SubscriptionScreen() {
             } catch { }
           })
           .catch((err: any) => {
-            Alert.alert("Payment Cancelled", err?.description || "Payment was not completed.");
+            const isCancelled = err?.code === 2 || err?.code === 0;
+            const alertTitle = isCancelled ? "Payment Cancelled" : "Payment Error";
+            Alert.alert(alertTitle, parseRazorpayErrorMessage(err));
           })
           .finally(() => setCustomPlanLoading(false));
       } else {
@@ -434,9 +472,8 @@ export default function SubscriptionScreen() {
       }
       const errorMessage =
         error?.response?.data?.message ||
-        error?.message ||
-        "Payment initiation failed. Please try again.";
-      Alert.alert("Error", errorMessage);
+        parseRazorpayErrorMessage(error);
+      Alert.alert("Payment Error", errorMessage);
     } finally {
       setProcessingPayment(false);
     }
