@@ -378,6 +378,7 @@ export const createOrder = async (req: Request, res: Response) => {
         organization_id: String(organization_id),
         user_id: String(user_id),
         plan_cycle,
+        previous_subscription_id: org?.razorpay_subscription_id || "",
       },
     };
 
@@ -525,14 +526,28 @@ export const verifyPayment = async (req: Request, res: Response) => {
     const pricePerSeat = (transaction as any).price_per_seat || (plan_cycle === "annual" ? 99 : 159);
 
     const newSubId = razorpay_subscription_id || (transaction as any).razorpay_subscription_id;
-    const oldSubId = org?.razorpay_subscription_id;
+    let oldSubId = org?.razorpay_subscription_id && org.razorpay_subscription_id !== newSubId ? org.razorpay_subscription_id : null;
 
-    if (newSubId && oldSubId && newSubId !== oldSubId) {
+    if (newSubId) {
+      try {
+        const newRzpSub = await razorpay.subscriptions.fetch(newSubId);
+        const prevIdFromNotes = newRzpSub?.notes?.previous_subscription_id;
+        if (prevIdFromNotes && prevIdFromNotes !== newSubId) {
+          oldSubId = prevIdFromNotes;
+        }
+      } catch (e) {
+        // ignore fetch error
+      }
+    }
+
+    if (oldSubId) {
       try {
         const fetchedOldSub = await razorpay.subscriptions.fetch(oldSubId);
-        const cancelAtCycleEnd = Boolean(fetchedOldSub.paid_count && fetchedOldSub.paid_count > 0);
-        await razorpay.subscriptions.cancel(oldSubId, cancelAtCycleEnd);
-        console.log(`[AutoPay Replacement]: Cancelled old subscription ${oldSubId} (cancelAtCycleEnd: ${cancelAtCycleEnd}) in favor of ${newSubId}`);
+        if (fetchedOldSub && ["active", "authenticated"].includes(fetchedOldSub.status)) {
+          const cancelAtCycleEnd = Boolean(fetchedOldSub.paid_count && fetchedOldSub.paid_count > 0);
+          await razorpay.subscriptions.cancel(oldSubId, cancelAtCycleEnd);
+          console.log(`[AutoPay Replacement]: Cancelled old subscription ${oldSubId} (cancelAtCycleEnd: ${cancelAtCycleEnd}) in favor of ${newSubId}`);
+        }
       } catch (cancelErr: any) {
         console.warn("[AutoPay Replacement Notice]: Failed to cancel old subscription", cancelErr?.error?.description || cancelErr?.message || cancelErr);
       }
@@ -1011,7 +1026,8 @@ export const createCustomPlanOrder = async (req: Request, res: Response) => {
             organization_id: String(organization_id),
             user_id: String(user_id),
             plan_id: String(customPlan.id),
-            type: "custom_plan_subscription"
+            type: "custom_plan_subscription",
+            previous_subscription_id: org.razorpay_subscription_id || "",
           }
         });
       } catch (subErr: any) {
@@ -1087,10 +1103,28 @@ export const acceptCustomPlan = async (req: Request, res: Response) => {
     const durationDays = customPlan.duration_days || 30;
     const planEndDate = new Date(now.getTime() + durationDays * 24 * 3600 * 1000);
 
-    // If organization has a previous active Razorpay AutoPay subscription, cancel it
-    if (org.razorpay_subscription_id && org.razorpay_subscription_id !== razorpay_subscription_id) {
+    // Cancel old active Razorpay AutoPay subscription if replaced
+    let previousSubId = org.razorpay_subscription_id && org.razorpay_subscription_id !== razorpay_subscription_id ? org.razorpay_subscription_id : null;
+
+    if (razorpay_subscription_id) {
       try {
-        await razorpay.subscriptions.cancel(org.razorpay_subscription_id);
+        const newRzpSub = await razorpay.subscriptions.fetch(razorpay_subscription_id);
+        const prevIdFromNotes = newRzpSub?.notes?.previous_subscription_id;
+        if (prevIdFromNotes && prevIdFromNotes !== razorpay_subscription_id) {
+          previousSubId = prevIdFromNotes;
+        }
+      } catch (e) {
+        // ignore fetch error
+      }
+    }
+
+    if (previousSubId) {
+      try {
+        const fetchedOldSub = await razorpay.subscriptions.fetch(previousSubId);
+        if (fetchedOldSub && ["active", "authenticated"].includes(fetchedOldSub.status)) {
+          await razorpay.subscriptions.cancel(previousSubId);
+          console.log(`[Custom Plan Replacement]: Cancelled previous Razorpay subscription ${previousSubId} for org #${org.id}`);
+        }
       } catch (cancelErr: any) {
         console.warn("Notice: Previous Razorpay subscription cancellation attempt:", cancelErr?.error?.description || cancelErr?.message || cancelErr);
       }
