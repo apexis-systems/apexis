@@ -115,6 +115,38 @@ const Billing = () => {
     }
   };
 
+  const getFriendlyWebRazorpayError = (errResponse: any): string => {
+    const err = errResponse?.error || errResponse;
+    if (!err) return "Payment was not completed. Please try again.";
+
+    let desc = err?.description || err?.message || "";
+    if (typeof desc === "string" && desc.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(desc);
+        const inner = parsed?.error || parsed;
+        if (inner?.description && inner.description !== "undefined") {
+          return inner.description;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (typeof desc === "string" && desc && desc !== "undefined") {
+      return desc;
+    }
+
+    if (err?.reason === "payment_error" || err?.code === "BAD_REQUEST_ERROR") {
+      return "Payment authentication was cancelled or failed. Please try again or use a different payment method.";
+    }
+
+    if (err?.reason) {
+      return `Payment failed (${String(err.reason).replace(/_/g, " ")}).`;
+    }
+
+    return "Payment was not completed. Please try again.";
+  };
+
   const handleAcceptCustomPlan = async () => {
     setCustomPlanLoading(true);
     try {
@@ -178,7 +210,7 @@ const Billing = () => {
 
       const rzp = new (window as any).Razorpay(options);
       rzp.on("payment.failed", (response: any) => {
-        toast.error(`Payment failed: ${response?.error?.description || ""}`);
+        toast.error(getFriendlyWebRazorpayError(response));
         setCustomPlanLoading(false);
       });
       rzp.open();
@@ -395,8 +427,7 @@ const Billing = () => {
 
       const rzp = new (window as any).Razorpay(options);
       rzp.on("payment.failed", (response: any) => {
-        const message = response?.error?.description || t('payment_failed');
-        toast.error(`${t('payment_failed')}: ${message}`);
+        toast.error(getFriendlyWebRazorpayError(response));
       });
       rzp.open();
     } catch (error: any) {
