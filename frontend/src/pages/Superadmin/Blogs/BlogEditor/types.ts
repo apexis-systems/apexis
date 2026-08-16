@@ -29,6 +29,8 @@ export interface Blog {
   authorAvatar?: string | null;
   coverImage?: string | null;
   tags: string[];
+  primaryKeywords: string[];
+  secondaryKeywords: string[];
   readTime: string;
   publishedAt: string;
   status: BlogStatus;

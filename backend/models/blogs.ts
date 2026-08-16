@@ -65,6 +65,14 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.ARRAY(DataTypes.STRING),
                 defaultValue: [],
             },
+            primary_keywords: {
+                type: DataTypes.ARRAY(DataTypes.STRING),
+                defaultValue: [],
+            },
+            secondary_keywords: {
+                type: DataTypes.ARRAY(DataTypes.STRING),
+                defaultValue: [],
+            },
             read_time: {
                 type: DataTypes.STRING,
                 defaultValue: "1 min read",
