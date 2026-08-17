@@ -13,6 +13,7 @@ import {
   Users,
   Briefcase,
   Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,10 +27,12 @@ import {
 import { cn } from "@/lib/utils";
 import { getAllLeads, extendOrganizationTrials } from "@/services/superadminService";
 import CreateCustomPlanModal from "@/components/superadmin/CreateCustomPlanModal";
+import ActivateCustomPlanModal from "@/components/superadmin/ActivateCustomPlanModal";
 
 interface Lead {
   id: number;
   organizationId: number | null;
+  pendingCustomPlanId?: number | null;
   name: string;
   email: string;
   phone: string;
@@ -124,6 +127,7 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [leadsList, setLeadsList] = useState<Lead[]>([]);
   const [customPlanLead, setCustomPlanLead] = useState<Lead | null>(null);
+  const [activatePlanLead, setActivatePlanLead] = useState<Lead | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [extendDays, setExtendDays] = useState("7");
@@ -562,6 +566,19 @@ export default function Customers() {
                     </td>
                     <td className={cn(tableCellClass, "text-center")}>
                       <div className="flex items-center justify-center gap-1">
+                        {lead.pendingCustomPlanId ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActivatePlanLead(lead)}
+                            disabled={!lead.organizationId}
+                            className="h-8 gap-1 border-emerald-500/40 bg-emerald-500/10 px-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-600 hover:text-white dark:text-emerald-400 dark:hover:bg-emerald-600 dark:hover:text-white"
+                            title="Activate Custom Plan (Direct Payment)"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Active Plan</span>
+                          </Button>
+                        ) : null}
                         <Button
                           variant="outline"
                           size="sm"
@@ -604,6 +621,13 @@ export default function Customers() {
         isOpen={Boolean(customPlanLead)}
         onClose={() => setCustomPlanLead(null)}
         lead={customPlanLead}
+        onSuccess={handleRefresh}
+      />
+
+      <ActivateCustomPlanModal
+        isOpen={Boolean(activatePlanLead)}
+        onClose={() => setActivatePlanLead(null)}
+        lead={activatePlanLead}
         onSuccess={handleRefresh}
       />
     </div>

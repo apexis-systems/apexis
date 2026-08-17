@@ -1188,7 +1188,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         } finally {
             setDownloading(false);
             if (uri && uri.startsWith('file://')) {
-                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => { });
             }
         }
     };
@@ -1619,7 +1619,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 } finally {
                     setDownloading(false);
                     if (uri && uri.startsWith('file://')) {
-                        FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+                        FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => { });
                     }
                 }
             }
@@ -1675,7 +1675,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         } finally {
             setSharing(false);
             if (uri && uri.startsWith('file://')) {
-                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => { });
             }
         }
     };

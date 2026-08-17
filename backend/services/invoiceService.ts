@@ -135,8 +135,10 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         // --- 1. Header & Title ---
         drawBrandedHeader(doc, 'RECORD · REPORT · RELEASE .');
 
+        const isSuperadminActivated = Boolean((transaction as any).is_superadmin_activated);
+
         doc.font('Helvetica-Bold').fontSize(14).fillColor(BRAND.ink);
-        doc.text('TAX INVOICE – SOFTWARE SUBSCRIPTION', 50, doc.y, {
+        doc.text(isSuperadminActivated ? 'INVOICE – SOFTWARE SUBSCRIPTION' : 'TAX INVOICE – SOFTWARE SUBSCRIPTION', 50, doc.y, {
             align: 'center',
             width: doc.page.width - 100
         });
@@ -241,7 +243,9 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         const tableX = 50;
         const tableW = doc.page.width - 100;
         const colWidths = [tableW * 0.28, tableW * 0.24, tableW * 0.16, tableW * 0.15, tableW * 0.17];
-        const headers = ['Description', 'Billing Period', 'Unit Price', 'GST 18%', 'Total (INR)'];
+        const headers = isSuperadminActivated
+            ? ['Description', 'Billing Period', 'Unit Price', 'GST (0%)', 'Total (INR)']
+            : ['Description', 'Billing Period', 'Unit Price', 'GST 18%', 'Total (INR)'];
 
         const tableStartY = doc.y;
         const radius = 6;
@@ -260,8 +264,8 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         });
 
         const grandTotal = Number(transaction.payment_amount);
-        const subtotal = grandTotal / 1.18;
-        const totalTax = grandTotal - subtotal;
+        const subtotal = isSuperadminActivated ? grandTotal : (grandTotal / 1.18);
+        const totalTax = isSuperadminActivated ? 0 : (grandTotal - subtotal);
         const cgst = totalTax / 2;
         const sgst = totalTax / 2;
 
@@ -303,8 +307,10 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         };
 
         drawTotalLine('Subtotal', subtotal);
-        drawTotalLine('CGST @ 9%', cgst);
-        drawTotalLine('SGST @ 9%', sgst);
+        if (!isSuperadminActivated) {
+            drawTotalLine('CGST @ 9%', cgst);
+            drawTotalLine('SGST @ 9%', sgst);
+        }
         doc.moveTo(summaryX, doc.y).lineTo(doc.page.width - 50, doc.y).strokeColor(BRAND.line).lineWidth(0.5).stroke();
         doc.moveDown(0.5);
         drawTotalLine('Grand Total', grandTotal, true);

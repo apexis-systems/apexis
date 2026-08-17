@@ -14,6 +14,8 @@ const transporter = nodemailer.createTransport({
 type EmailAttachment = {
     filename?: string;
     path?: string;
+    content?: any;
+    contentType?: string;
     cid?: string;
 };
 

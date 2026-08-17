@@ -67,6 +67,11 @@ export default (sequelize: Sequelize) => {
                 allowNull: true,
                 defaultValue: null,
             },
+            is_superadmin_activated: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
         },
         {
             tableName: "transactions",
