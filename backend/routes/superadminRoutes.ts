@@ -16,7 +16,9 @@ import {
     sendBroadcastNotification,
     updateSystemConfig,
     extendOrganizationTrials,
-    createCustomPlanOffer
+    createCustomPlanOffer,
+    getPendingCustomPlanForOrg,
+    activateCustomPlan
 } from "../controllers/superadminController.ts";
 import { verifyToken, isSuperAdmin } from "../middleware/verifyToken.ts";
 
@@ -44,5 +46,7 @@ router.delete("/teams/:id", deleteSuperAdmin);
 router.put("/system-config", updateSystemConfig);
 router.post("/organizations/extend-trial", extendOrganizationTrials);
 router.post("/custom-plan/create", createCustomPlanOffer);
+router.get("/custom-plan/:organizationId", getPendingCustomPlanForOrg);
+router.post("/custom-plan/activate", activateCustomPlan);
 
 export default router;

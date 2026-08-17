@@ -199,7 +199,11 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
     );
 
     if (!gesturesEnabled) {
-        return animatedViewContent;
+        return (
+            <GestureDetector gesture={singleTap}>
+                {animatedViewContent}
+            </GestureDetector>
+        );
     }
 
     return (

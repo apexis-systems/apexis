@@ -308,7 +308,7 @@ export const getFreemiumLeads = async () => {
             model: organizations,
             where: { plan_name: 'Freemium' },
             required: true,
-            attributes: ['id', 'name', 'plan_name', 'plan_start_date', 'plan_end_date']
+            attributes: ['id', 'name', 'plan_name', 'plan_start_date', 'plan_end_date', 'pending_custom_plan_id']
         }],
         attributes: ['id', 'name', 'email', 'phone_number', 'createdAt'],
         order: [['createdAt', 'DESC']]
@@ -337,6 +337,7 @@ export const getFreemiumLeads = async () => {
         return {
             id: u.id,
             organizationId: org?.id ?? null,
+            pendingCustomPlanId: org?.pending_custom_plan_id ?? null,
             name: u.name,
             email: u.email,
             phone: u.phone_number || "+91 0000000000",
@@ -361,7 +362,7 @@ export const getAllLeads = async () => {
         include: [{
             model: organizations,
             required: false,
-            attributes: ['id', 'name', 'plan_name', 'plan_start_date', 'plan_end_date']
+            attributes: ['id', 'name', 'plan_name', 'plan_start_date', 'plan_end_date', 'pending_custom_plan_id']
         }],
         attributes: ['id', 'name', 'email', 'phone_number', 'createdAt'],
         order: [['createdAt', 'DESC']]
@@ -390,6 +391,7 @@ export const getAllLeads = async () => {
         return {
             id: u.id,
             organizationId: org?.id ?? null,
+            pendingCustomPlanId: org?.pending_custom_plan_id ?? null,
             name: u.name,
             email: u.email,
             phone: u.phone_number || "+91 0000000000",

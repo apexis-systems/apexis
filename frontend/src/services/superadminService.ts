@@ -217,3 +217,24 @@ export const createCustomPlanOffer = async (payload: {
     }
 };
 
+export const getPendingCustomPlanForOrg = async (organizationId: number | string) => {
+    try {
+        const response = await PrivateAxios.get(`/superadmin/custom-plan/${organizationId}`);
+        return response.data;
+    } catch (error) {
+        console.error("getPendingCustomPlanForOrg Error", error);
+        throw error;
+    }
+};
+
+export const activateCustomPlan = async (organizationId: number | string) => {
+    try {
+        const response = await PrivateAxios.post('/superadmin/custom-plan/activate', { organizationId });
+        return response.data;
+    } catch (error) {
+        console.error("activateCustomPlan Error", error);
+        throw error;
+    }
+};
+
+

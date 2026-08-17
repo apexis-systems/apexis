@@ -50,6 +50,7 @@ export default function PhotoLibraryScreen() {
 
     // Fullscreen viewer state
     const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
+    const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
     const isAdminUser = user?.role === 'admin' || user?.role === 'superadmin';
 
@@ -152,12 +153,15 @@ export default function PhotoLibraryScreen() {
         ? 'All Projects'
         : (selectedProjectObj?.name || 'Selected Project');
 
-    const renderPhotoItem = ({ item }: { item: any }) => {
+    const renderPhotoItem = ({ item, index }: { item: any; index: number }) => {
         const photoUrl = item.downloadUrl || item.file_url;
         return (
             <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => setSelectedPhoto(item)}
+                onPress={() => {
+                    setSelectedPhoto(item);
+                    setSelectedIndex(index);
+                }}
                 style={[styles.photoWrapper, { width: IMAGE_SIZE, height: IMAGE_SIZE, backgroundColor: colors.surface }]}
             >
                 <Image
@@ -335,9 +339,35 @@ export default function PhotoLibraryScreen() {
             <FullScreenImageModal
                 visible={selectedPhoto !== null}
                 onClose={() => setSelectedPhoto(null)}
+                photos={photos}
+                initialIndex={selectedIndex}
+                onIndexChange={(idx) => {
+                    setSelectedIndex(idx);
+                    if (photos[idx]) setSelectedPhoto(photos[idx]);
+                }}
                 uri={selectedPhoto ? (selectedPhoto.downloadUrl || selectedPhoto.file_url) : null}
                 folderName={selectedPhoto?.folder?.name}
                 title={selectedPhoto?.file_name}
+                fileId={selectedPhoto?.id}
+                projectId={projectId || selectedPhoto?.project?.id || selectedPhoto?.project_id}
+                location={selectedPhoto?.location}
+                tags={selectedPhoto?.tags}
+                onFolderPress={(photo) => {
+                    const targetPhoto = photo || selectedPhoto;
+                    const targetFolderId = targetPhoto?.folder?.id;
+                    const targetProjectId = projectId || targetPhoto?.project?.id || targetPhoto?.project_id;
+                    if (targetProjectId && targetFolderId) {
+                        setSelectedPhoto(null);
+                        router.push({
+                            pathname: '/project/[id]',
+                            params: {
+                                id: String(targetProjectId),
+                                tab: 'photos',
+                                folderId: String(targetFolderId),
+                            },
+                        });
+                    }
+                }}
             />
         </SafeAreaView>
     );

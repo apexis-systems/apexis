@@ -116,7 +116,7 @@ export const checkLimit = (type: LimitType) => {
         case "project": {
           const isPaidPlan = Boolean(org.plan_name && !["freemium", "free"].includes(org.plan_name.toLowerCase()));
           if (isPaidPlan) {
-            break;
+            return next();
           }
           currentUsage = await projects.count({
             where: { organization_id: org.id },
