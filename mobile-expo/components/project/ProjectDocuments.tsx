@@ -2060,12 +2060,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
 
     const confirmDeleteFolder = (folder: any) => {
         Alert.alert(
-            t('projectDocuments.deleteFolder'),
-            t('projectDocuments.deleteFolderConfirm', { name: folder.name }),
+            t('projectDocuments.deleteFolder', 'Delete Folder'),
+            t('projectDocuments.deleteFolderConfirm', 'Move "{{name}}" to Trash? It can be recovered later from Settings for 30 days.', { name: folder.name }),
             [
-                { text: t('projectDocuments.cancel'), style: 'cancel' },
+                { text: t('projectDocuments.cancel', 'Cancel'), style: 'cancel' },
                 {
-                    text: t('projectDocuments.moveToTrash'),
+                    text: t('projectDocuments.moveToTrash', 'Delete'),
                     style: 'destructive',
                     onPress: () => handleDelete(folder)
                 }
@@ -2624,19 +2624,23 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                 const isArchiveFolder = folder.name.toLowerCase() === 'archive';
                                 const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
                                 const isConfidentialFolder = folder.name.toLowerCase() === 'confidential';
+                                const displayName = isArchiveFolder
+                                    ? t('projectDocuments.archive')
+                                    : (isConfirmationFolder ? "Confirmations" : (folder.name.length > 25 ? folder.name.slice(0, 25) + '...' : folder.name));
                                 return (
                                     <View
                                         key={folder.id}
                                         style={{
                                             width: '24%',
-                                            aspectRatio: 1,
+                                            minHeight: 88,
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             borderRadius: 16,
                                             backgroundColor: isSelected ? 'rgba(249,115,22,0.08)' : colors.surface,
                                             borderWidth: 1,
                                             borderColor: isSelected ? colors.primary : colors.border,
-                                            padding: 8, // Standardized to match Photos
+                                            paddingHorizontal: 4,
+                                            paddingVertical: 6,
                                             shadowColor: '#000',
                                             shadowOffset: { width: 0, height: 2 },
                                             shadowOpacity: 0.05,
@@ -2669,10 +2673,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 <Feather name={unlockedFolders.has(folder.id) ? "unlock" : "lock"} size={12} color="#f43f5e" />
                                             </View>
                                         )}
-                                        <View style={{ marginBottom: 6 }}>
+                                        <View style={{ marginBottom: 3 }}>
                                             <Feather
                                                 name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : isConfidentialFolder ? "shield" : "folder"}
-                                                size={(isConfirmationFolder || isConfidentialFolder) ? 32 : 36}
+                                                size={(isConfirmationFolder || isConfidentialFolder) ? 28 : 30}
                                                 color={isArchiveFolder ? '#94a3b8' : (isConfirmationFolder ? '#fb923c' : (isConfidentialFolder ? '#f43f5e' : colors.primary))}
                                             />
                                         </View>
@@ -2681,8 +2685,8 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                                                 <Feather name="check" size={10} color="#fff" />
                                             </View>
                                         )}
-                                        <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{isArchiveFolder ? t('projectDocuments.archive') : (isConfirmationFolder ? "Confirmations" : folder.name)}</Text>
-                                        <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
+                                        <Text numberOfLines={3} style={{ fontSize: 9.5, lineHeight: 12, fontWeight: '600', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{displayName}</Text>
+                                        <Text style={{ fontSize: 8.5, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                             {subcount > 0
                                                 ? t('projectDocuments.filesFoldersCount', { fileCount: count, folderCount: subcount })
                                                 : t('projectDocuments.filesOnlyCount', { count: count })}

@@ -741,6 +741,7 @@
             "failedToShareDocument": "Failed to share document",
             "unarchiveSuccess": "Document unarchived successfully",
             "failedToUnarchive": "Failed to unarchive document",
+            "deleteFolderConfirm": "Move \"{{name}}\" to Trash? It can be recovered later from Settings for 30 days.",
             "deleteFileConfirm": "Move \"{{name}}\" to Trash? It can be recovered later from Settings for 30 days.",
             "moveToTrash": "Delete",
             "failedToDeleteFile": "Failed to delete file",

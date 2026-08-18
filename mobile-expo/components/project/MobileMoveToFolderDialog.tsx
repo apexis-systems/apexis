@@ -242,10 +242,10 @@ export default function MobileMoveToFolderDialog({
                                     >
                                         <Feather name="folder" size={22} color={colors.primary} />
                                         <Text 
-                                            numberOfLines={2} 
+                                            numberOfLines={3} 
                                             style={[styles.folderName, { color: colors.text }]}
                                         >
-                                            {folder.name}
+                                            {folder.name?.length > 25 ? folder.name.slice(0, 25) + '...' : folder.name}
                                         </Text>
                                     </TouchableOpacity>
                                 );

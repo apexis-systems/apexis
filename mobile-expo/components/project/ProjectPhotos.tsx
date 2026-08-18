@@ -1,8 +1,7 @@
 import {
-    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl, Keyboard, PanResponder
+    View, TouchableOpacity, Alert, Modal, Share as RNShare, Dimensions, StatusBar, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, BackHandler, StyleSheet, RefreshControl, Keyboard, PanResponder, FlatList
 } from 'react-native';
 import { Image } from 'expo-image';
-import { FlatList, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import { Text, TextInput } from '@/components/ui/AppText';
 import * as Sharing from 'expo-sharing';
 import { Feather } from '@expo/vector-icons';
@@ -26,7 +25,7 @@ import MobileMoveToFolderDialog from './MobileMoveToFolderDialog';
 import LinkFileModal from '../shared/LinkFileModal';
 import FileInformationModal from '../shared/FileInformationModal';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FileActionMenu from './FileActionMenu';
@@ -858,15 +857,15 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         }
     }, [viewerIndex, viewerOpen]);
 
-    const loadComments = async (fileId: number) => {
-        setCommentLoading(true);
+    const loadComments = async (fileId: number, silent = false) => {
+        if (!silent) setCommentLoading(true);
         try {
             const data = await getComments(fileId);
             setPhotoComments(data);
         } catch (e) {
             console.error('loadComments error:', e);
         } finally {
-            setCommentLoading(false);
+            if (!silent) setCommentLoading(false);
         }
     };
 
@@ -976,18 +975,23 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     {/* Buttons / Actions */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         {!isReply && !c.is_deleted && (
-                            <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                            <GestureTouchableOpacity onPress={() => {
+                                setReplyTo(c.id);
+                                setTimeout(() => {
+                                    commentInputRef.current?.focus();
+                                }, 50);
+                            }}>
                                 <Text style={{ color: '#888', fontSize: 9 }}>↩ {t('projectPhotos.reply')}</Text>
-                            </TouchableOpacity>
+                            </GestureTouchableOpacity>
                         )}
                         {editable && (
                             <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                                <TouchableOpacity style={{ padding: 4 }} onPress={() => { setEditingCommentId(c.id); setEditingCommentText(c.text); }}>
+                                <GestureTouchableOpacity style={{ padding: 4 }} onPress={() => { setEditingCommentId(c.id); setEditingCommentText(c.text); }}>
                                     <Feather name="edit-2" size={14} color="#aaa" />
-                                </TouchableOpacity>
-                                <TouchableOpacity style={{ padding: 4 }} onPress={() => handleCommentDelete(c.id)}>
+                                </GestureTouchableOpacity>
+                                <GestureTouchableOpacity style={{ padding: 4 }} onPress={() => handleCommentDelete(c.id)}>
                                     <Feather name="trash-2" size={14} color="#ff6b6b" />
-                                </TouchableOpacity>
+                                </GestureTouchableOpacity>
                             </View>
                         )}
                     </View>
@@ -1002,12 +1006,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             style={{ flex: 1, height: 32, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, color: '#fff', fontSize: 12 }}
                             autoFocus
                         />
-                        <TouchableOpacity style={{ padding: 6 }} onPress={() => handleEditCommentSave(c.id)} disabled={editSending}>
+                        <GestureTouchableOpacity style={{ padding: 6 }} onPress={() => handleEditCommentSave(c.id)} disabled={editSending}>
                             <Feather name="check" size={18} color="#4caf50" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={{ padding: 6 }} onPress={() => { setEditingCommentId(null); setEditingCommentText(''); }}>
+                        </GestureTouchableOpacity>
+                        <GestureTouchableOpacity style={{ padding: 6 }} onPress={() => { setEditingCommentId(null); setEditingCommentText(''); }}>
                             <Feather name="x" size={18} color="#f44336" />
-                        </TouchableOpacity>
+                        </GestureTouchableOpacity>
                     </View>
                 ) : (
                     <View style={{ marginTop: 2 }}>
@@ -1056,15 +1060,20 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
         const photo = sortedPhotos[viewerIndex];
         if (!photo?.id || !commentText.trim() || addingComment) return;
         setAddingComment(true);
+        const textToSend = commentText.trim();
+        const replyTarget = replyTo ?? undefined;
+        setCommentText('');
+        setReplyTo(null);
         try {
-            await addCommentApi(photo.id, commentText.trim(), replyTo ?? undefined);
-            setCommentText('');
-            setReplyTo(null);
-            await loadComments(photo.id);
+            await addCommentApi(photo.id, textToSend, replyTarget);
+            await loadComments(photo.id, true);
         } catch (e) {
             console.error('addComment error:', e);
         } finally {
             setAddingComment(false);
+            setTimeout(() => {
+                commentInputRef.current?.focus();
+            }, 50);
         }
     };
 
@@ -1457,12 +1466,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
 
     const confirmDeleteFolder = (folder: any) => {
         Alert.alert(
-            t('projectPhotos.deleteFolder'),
-            t('projectPhotos.deleteFolderConfirm', { name: folder.name }),
+            t('projectPhotos.deleteFolder', 'Delete Folder'),
+            t('projectPhotos.deleteFolderConfirm', 'Move "{{name}}" to Trash? It can be recovered later from Settings for 30 days.', { name: folder.name }),
             [
-                { text: t('projectPhotos.cancel'), style: 'cancel' },
+                { text: t('projectPhotos.cancel', 'Cancel'), style: 'cancel' },
                 {
-                    text: t('projectPhotos.moveToTrash'),
+                    text: t('projectPhotos.moveToTrash', 'Delete'),
                     style: 'destructive',
                     onPress: () => handleDelete(folder)
                 }
@@ -2091,19 +2100,23 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         const isArchiveFolder = folder.name.toLowerCase() === 'archive';
                                         const isConfirmationFolder = folder.name.toLowerCase() === 'confirmation' || folder.name.toLowerCase() === 'confirmations';
                                         const isConfidentialFolder = folder.name.toLowerCase() === 'confidential';
+                                        const displayName = isConfirmationFolder
+                                            ? "Confirmations"
+                                            : (folder.name.length > 25 ? folder.name.slice(0, 25) + '...' : folder.name);
                                         return (
                                             <View
                                                 key={folder.id}
                                                 style={{
                                                     width: '24%',
-                                                    aspectRatio: 1,
+                                                    minHeight: 88,
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     borderRadius: 16,
                                                     backgroundColor: isSelected ? 'rgba(249,115,22,0.08)' : colors.surface,
                                                     borderWidth: 1,
                                                     borderColor: isSelected ? colors.primary : colors.border,
-                                                    padding: 8,
+                                                    paddingHorizontal: 4,
+                                                    paddingVertical: 6,
                                                     shadowColor: '#000',
                                                     shadowOffset: { width: 0, height: 2 },
                                                     shadowOpacity: 0.05,
@@ -2136,10 +2149,10 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         <Feather name={unlockedFolders.has(folder.id) ? "unlock" : "lock"} size={12} color="#f43f5e" />
                                                     </View>
                                                 )}
-                                                <View style={{ marginBottom: 6 }}>
+                                                <View style={{ marginBottom: 3 }}>
                                                     <Feather
                                                         name={isArchiveFolder ? "archive" : isConfirmationFolder ? "check-circle" : isConfidentialFolder ? "shield" : "folder"}
-                                                        size={(isConfirmationFolder || isConfidentialFolder) ? 32 : 36}
+                                                        size={(isConfirmationFolder || isConfidentialFolder) ? 28 : 30}
                                                         color={isArchiveFolder ? '#94a3b8' : (isConfirmationFolder ? '#fb923c' : (isConfidentialFolder ? '#f43f5e' : colors.primary))}
                                                     />
                                                 </View>
@@ -2148,8 +2161,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                         <Feather name="check" size={10} color="#fff" />
                                                     </View>
                                                 )}
-                                                <Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '600', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{isConfirmationFolder ? "Confirmations" : folder.name}</Text>
-                                                <Text style={{ fontSize: 9, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
+                                                <Text numberOfLines={3} style={{ fontSize: 9.5, lineHeight: 12, fontWeight: '600', color: isArchiveFolder ? '#64748b' : (isConfirmationFolder ? '#f97316' : (isConfidentialFolder ? '#e11d48' : colors.text)), textAlign: 'center' }}>{displayName}</Text>
+                                                <Text style={{ fontSize: 8.5, color: colors.textMuted, textAlign: 'center', marginTop: 2 }}>
                                                     {subcount > 0
                                                         ? t('projectPhotos.photosFoldersCount', { photoCount: count, folderCount: subcount })
                                                         : t('projectPhotos.photosOnlyCount', { count })
@@ -2798,6 +2811,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 onTap={() => setShowViewerUI(prev => !prev)}
                                                 onDismiss={closeViewer}
                                                 gesturesEnabled={keyboardHeight === 0}
+                                                keyboardOpen={keyboardHeight > 0}
                                             />
                                         </View>
                                     </View>
@@ -2867,9 +2881,12 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         {replyTo && (
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                                                 <Text style={{ color: colors.primary, fontSize: 9 }}>{t('projectPhotos.replyingTo')}</Text>
-                                                <TouchableOpacity onPress={() => setReplyTo(null)}>
+                                                <GestureTouchableOpacity onPress={() => {
+                                                    setReplyTo(null);
+                                                    commentInputRef.current?.focus();
+                                                }}>
                                                     <Text style={{ color: '#888', fontSize: 9 }}>✕ {t('projectPhotos.cancel')}</Text>
-                                                </TouchableOpacity>
+                                                </GestureTouchableOpacity>
                                             </View>
                                         )}
                                         {showMentions && (
@@ -2908,7 +2925,6 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                 <GestureTouchableOpacity
                                                     onPress={handleAddComment}
                                                     disabled={addingComment || !commentText.trim()}
-
                                                 >
                                                     <View style={{ width: 36, height: 36, borderRadius: 18, display: 'flex', backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: (!commentText.trim() || addingComment) ? 0.5 : 1 }}>
                                                         {addingComment
