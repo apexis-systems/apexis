@@ -69,6 +69,8 @@ export function BlogEditorPage({ id }: { id?: string }) {
   const [publishedAt, setPublishedAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [metaTitle, setMetaTitle] = useState("");
   const [metaDescription, setMetaDescription] = useState("");
+  const [primaryKeywords, setPrimaryKeywords] = useState("");
+  const [secondaryKeywords, setSecondaryKeywords] = useState("");
   const [authorName, setAuthorName] = useState("APEXIS");
   const [authorRole, setAuthorRole] = useState("Engineering");
   const [authorAvatar, setAuthorAvatar] = useState("");
@@ -110,6 +112,8 @@ export function BlogEditorPage({ id }: { id?: string }) {
         const rawAuthorRole = b.authorRole || b.author_role;
         const rawAuthorAvatar = b.authorAvatar || b.author_avatar;
         const rawReadTime = b.readTime || b.read_time;
+        const rawPrimaryKeywords = b.primaryKeywords || b.primary_keywords;
+        const rawSecondaryKeywords = b.secondaryKeywords || b.secondary_keywords;
 
         setOriginal(blog);
         setTitle(blog.title || "");
@@ -124,6 +128,8 @@ export function BlogEditorPage({ id }: { id?: string }) {
         setPublishedAt(safeFormatDate(rawPublishedAt));
         setMetaTitle(rawMetaTitle || "");
         setMetaDescription(rawMetaDescription || "");
+        setPrimaryKeywords((rawPrimaryKeywords || []).join(", "));
+        setSecondaryKeywords((rawSecondaryKeywords || []).join(", "));
         setAuthorName(rawAuthorName || "APEXIS");
         setAuthorRole(rawAuthorRole || "Engineering");
         setAuthorAvatar(rawAuthorAvatar || "");
@@ -183,6 +189,8 @@ export function BlogEditorPage({ id }: { id?: string }) {
         coverImage: coverImage || null,
         category: category.trim() || null,
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+        primaryKeywords: primaryKeywords.split(",").map((k) => k.trim()).filter(Boolean),
+        secondaryKeywords: secondaryKeywords.split(",").map((k) => k.trim()).filter(Boolean),
         readTime,
         publishedAt: new Date(`${publishedAt}T00:00:00`).toISOString(),
         metaTitle: metaTitle.trim() || null,
@@ -211,7 +219,8 @@ export function BlogEditorPage({ id }: { id?: string }) {
       }
     },
     [
-      id, title, slug, excerpt, content, cleanFaqs, coverImage, category, tags, readTime,
+      id, title, slug, excerpt, content, cleanFaqs, coverImage, category, tags,
+      primaryKeywords, secondaryKeywords, readTime,
       publishedAt, metaTitle, metaDescription, authorName, authorRole, authorAvatar,
       original, router, listPath,
     ]
@@ -438,6 +447,26 @@ export function BlogEditorPage({ id }: { id?: string }) {
                   onChange={(e) => setMetaDescription(e.target.value)}
                   placeholder={excerpt || "Falls back to the excerpt"}
                   className="h-24 w-full resize-none rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-stone-900"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                Primary Keywords (comma separated)
+                <input
+                  type="text"
+                  value={primaryKeywords}
+                  onChange={(e) => setPrimaryKeywords(e.target.value)}
+                  placeholder="e.g. construction site reporting"
+                  className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-stone-900"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                Secondary Keywords (comma separated)
+                <input
+                  type="text"
+                  value={secondaryKeywords}
+                  onChange={(e) => setSecondaryKeywords(e.target.value)}
+                  placeholder="e.g. daily progress reports, site documentation"
+                  className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-stone-900"
                 />
               </label>
             </SettingsCard>
