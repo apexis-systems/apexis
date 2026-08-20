@@ -137,14 +137,14 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         } else if (!pdfViewerUrl && lastOpenedPdfUriRef.current && !restoreViewerUrlRef.current) {
             const uriToDelete = lastOpenedPdfUriRef.current;
             lastOpenedPdfUriRef.current = null;
-            FileSystem.deleteAsync(uriToDelete, { idempotent: true }).catch(() => {});
+            FileSystem.deleteAsync(uriToDelete, { idempotent: true }).catch(() => { });
         }
     }, [pdfViewerUrl]);
 
     useEffect(() => {
         return () => {
             if (lastOpenedPdfUriRef.current) {
-                FileSystem.deleteAsync(lastOpenedPdfUriRef.current, { idempotent: true }).catch(() => {});
+                FileSystem.deleteAsync(lastOpenedPdfUriRef.current, { idempotent: true }).catch(() => { });
             }
         };
     }, []);
@@ -882,7 +882,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         <Text style={{ color: '#888', fontSize: 8 }}>{formatCommentTime(c.createdAt)}</Text>
                         {c.is_edited && <Text style={{ color: colors.primary, fontSize: 8, opacity: 0.7 }}>({t('projectDocuments.edited', 'Edited')})</Text>}
                     </View>
-                    
+
                     {/* Buttons / Actions */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         {!isReply && !c.is_deleted && (
@@ -1946,7 +1946,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         } finally {
             setSharing(false);
             if (uri && uri.startsWith('file://')) {
-                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => { });
             }
         }
     };
@@ -2225,7 +2225,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
         } finally {
             setProcessing(null);
             if (uri && uri.startsWith('file://')) {
-                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+                FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => { });
             }
         }
     };
@@ -3024,7 +3024,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         <View
                             style={{
                                 position: 'absolute',
-                                bottom: Platform.OS === 'ios' ? keyboardHeight : 0,
+                                bottom: Platform.OS === 'ios' ? keyboardHeight : keyboardHeight,
                                 left: 0,
                                 right: 0,
                                 backgroundColor: 'rgba(15,15,15,0.98)',
@@ -3176,19 +3176,19 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                         onRename={() => handleRenameFileAction(activeActionFile)}
                         onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
                         onUploadNewVersion={
-                            !currentFolder?.name.toLowerCase().includes('archive') && 
-                            (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
+                            !currentFolder?.name.toLowerCase().includes('archive') &&
+                                (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
                                 ? () => {
-                                      if (activeActionFile) {
-                                          setPdfViewerUrl(null);
-                                          setCurrentDoc(null);
-                                          setShowComments(false);
-                                          setDocComments([]);
-                                          setShowInfoModal(false);
-                                          setActionMenuVisible(false);
-                                          router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
-                                      }
-                                  }
+                                    if (activeActionFile) {
+                                        setPdfViewerUrl(null);
+                                        setCurrentDoc(null);
+                                        setShowComments(false);
+                                        setDocComments([]);
+                                        setShowInfoModal(false);
+                                        setActionMenuVisible(false);
+                                        router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
+                                    }
+                                }
                                 : undefined
                         }
                         clientVisible={activeActionFile?.client_visible !== false}
@@ -3745,13 +3745,13 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 onRename={() => handleRenameFileAction(activeActionFile)}
                 onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
                 onUploadNewVersion={
-                    !currentFolder?.name.toLowerCase().includes('archive') && 
-                    (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
+                    !currentFolder?.name.toLowerCase().includes('archive') &&
+                        (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
                         ? () => {
-                              if (activeActionFile) {
-                                  router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
-                              }
-                          }
+                            if (activeActionFile) {
+                                router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
+                            }
+                        }
                         : undefined
                 }
                 clientVisible={activeActionFile?.client_visible !== false}

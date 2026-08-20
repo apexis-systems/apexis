@@ -2822,7 +2822,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         {/* Bottom panel: info + comments */}
                         {showViewerUI && (
                             <View
-                                style={{ position: 'absolute', bottom: Platform.OS === 'ios' ? keyboardHeight : 0, left: 0, right: 0, zIndex: 9999 }}
+                                style={{ position: 'absolute', bottom: Platform.OS === 'ios' ? keyboardHeight : keyboardHeight, left: 0, right: 0, zIndex: 9999 }}
                             >
                                 <View style={{ backgroundColor: 'rgba(0,0,0,0.85)', paddingTop: 10 }}>
                                     <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
