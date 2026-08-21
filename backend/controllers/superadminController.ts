@@ -701,74 +701,13 @@ export const activateCustomPlan = async (req: Request, res: Response) => {
             is_superadmin_activated: true
         });
 
-        // Generate PDF Invoice without GST (is_superadmin_activated is true)
-        let invoicePdfBuffer: Buffer | null = null;
-        try {
-            invoicePdfBuffer = await generateInvoice(transaction.id);
-        } catch (pdfErr) {
-            console.error("Error generating invoice PDF:", pdfErr);
-        }
-
-        // Send Email with Invoice Attachment to User
-        if (adminUser && adminUser.email) {
-            const cycleText = customPlan.subscription_cycle === "annual" ? "Annual" : "Monthly";
-            const emailHtml = `
-                <div style="font-family: Arial, sans-serif; color: #1c1917; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e7e5e4; border-radius: 8px;">
-                    <div style="font-size: 24px; font-weight: 700; color: #f97415; margin-bottom: 16px;">
-                        APEXIS<span style="font-size: 16px; color: #78716c;">PRO™</span>
-                    </div>
-                    <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">Your Custom Enterprise Plan is Now Active!</h2>
-                    <p style="font-size: 14px; line-height: 1.6; color: #44403c;">Hello <strong>${adminUser.name || 'Valued Customer'}</strong>,</p>
-                    <p style="font-size: 14px; line-height: 1.6; color: #44403c;">
-                        We have verified your direct payment and your <strong>Custom Enterprise Plan</strong> has been activated for <strong>${org.name}</strong>.
-                    </p>
-                    
-                    <div style="background-color: #f4f4f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                        <h3 style="margin-top: 0; font-size: 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Plan Summary</h3>
-                        <p style="margin: 6px 0; font-size: 13px;"><strong>Organization:</strong> ${org.name}</p>
-                        <p style="margin: 6px 0; font-size: 13px;"><strong>Seats:</strong> ${customPlan.contributor_limit} contributor seats</p>
-                        <p style="margin: 6px 0; font-size: 13px;"><strong>Storage:</strong> ${Math.round((customPlan.storage_limit_mb || 0) / 1024)} GB</p>
-                        <p style="margin: 6px 0; font-size: 13px;"><strong>Billing Cycle:</strong> ${cycleText}</p>
-                        <p style="margin: 6px 0; font-size: 13px;"><strong>Total Amount:</strong> ₹${Number(customPlan.price).toLocaleString('en-IN')}</p>
-                        <p style="margin: 6px 0; font-size: 13px;"><strong>Valid Until:</strong> ${planEndDate.toLocaleDateString('en-IN')}</p>
-                    </div>
-
-                    <p style="font-size: 14px; line-height: 1.6; color: #44403c;">
-                        Please find your official payment invoice attached to this email. You can also view and download your invoice anytime from your account settings.
-                    </p>
-                    <p style="font-size: 14px; line-height: 1.6; color: #44403c; margin-top: 24px;">
-                        Thank you for partnering with APEXISpro™.<br>
-                        <strong>The APEXIS Team</strong>
-                    </p>
-                </div>
-            `;
-
-            try {
-                await sendEmail(
-                    adminUser.email,
-                    `Invoice #${invoiceNumber} - Custom Enterprise Plan Activated | APEXISpro™`,
-                    emailHtml,
-                    {
-                        isHtml: true,
-                        attachments: invoicePdfBuffer ? [
-                            {
-                                filename: `Invoice_${invoiceNumber}.pdf`,
-                                content: invoicePdfBuffer,
-                                contentType: 'application/pdf',
-                            }
-                        ] : []
-                    }
-                );
-            } catch (emailErr) {
-                console.error("Error sending invoice email:", emailErr);
-            }
-
-            // In-app notification
+        // In-app notification for plan activation
+        if (adminUser) {
             try {
                 await sendNotification({
                     userId: adminUser.id,
                     title: "✅ Plan Activated",
-                    body: `Your Custom Enterprise Plan (${customPlan.contributor_limit} seats, ${Math.round((customPlan.storage_limit_mb || 0) / 1024)} GB) has been activated. Invoice #${invoiceNumber} sent to your email.`,
+                    body: `Your Custom Enterprise Plan (${customPlan.contributor_limit} seats, ${Math.round((customPlan.storage_limit_mb || 0) / 1024)} GB) has been activated.`,
                     type: "plan_activated",
                     data: {
                         organization_id: org.id,
@@ -803,9 +742,10 @@ export const activateCustomPlan = async (req: Request, res: Response) => {
 
         res.status(200).json({
             success: true,
-            message: `Custom plan successfully activated for ${org.name}. Invoice #${invoiceNumber} generated and emailed.`,
+            message: `Custom plan successfully activated for ${org.name}.`,
             transactionId: transaction.id,
-            invoiceNumber
+            invoiceNumber,
+            organizationId: org.id
         });
 
     } catch (error: any) {
@@ -813,5 +753,279 @@ export const activateCustomPlan = async (req: Request, res: Response) => {
         res.status(500).json({ error: error.message || "Internal server error" });
     }
 };
+
+export const getCustomPlanInvoiceDetails = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser || authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: SuperAdmin access only" });
+        }
+
+        const { organizationId } = req.params;
+        const orgIdNum = Number(organizationId);
+
+        if (!orgIdNum) {
+            return res.status(400).json({ error: "Invalid organizationId" });
+        }
+
+        const org = await organizations.findByPk(orgIdNum, {
+            include: [{ model: plans, as: "pendingCustomPlan" }]
+        });
+
+        if (!org) {
+            return res.status(404).json({ error: "Organization not found" });
+        }
+
+        let adminUser = await users.findOne({
+            where: { organization_id: org.id, role: 'admin', is_primary: true }
+        });
+        if (!adminUser) {
+            adminUser = await users.findOne({
+                where: { organization_id: org.id },
+                order: [['createdAt', 'ASC']]
+            });
+        }
+
+        // Find latest transaction for this organization
+        const latestTx = await transactions.findOne({
+            where: { organization_id: org.id },
+            order: [['created_at', 'DESC']]
+        });
+
+        const invoiceNumber = latestTx?.invoice_number || (await generateInvoiceNumber(new Date()));
+        const defaultAmount = Number(latestTx?.payment_amount ?? org.plan_price ?? 0);
+
+        let parsedPaymentDetails = latestTx?.payment_details;
+        if (typeof parsedPaymentDetails === 'string') {
+            try { parsedPaymentDetails = JSON.parse(parsedPaymentDetails); } catch { /* ignore */ }
+        }
+
+        res.status(200).json({
+            organization: {
+                id: org.id,
+                name: org.name,
+                plan_name: org.plan_name || "Custom Enterprise",
+                seats: org.seats_purchased || 1,
+                storage_limit_mb: org.storage_limit_mb || 10240,
+                subscription_cycle: org.subscription_cycle || "monthly",
+                plan_start_date: org.plan_start_date,
+                plan_end_date: org.plan_end_date,
+                plan_price: org.plan_price,
+            },
+            adminUser: adminUser ? {
+                id: adminUser.id,
+                name: adminUser.name,
+                email: adminUser.email,
+                phone: adminUser.phone_number,
+            } : null,
+            transaction: latestTx ? {
+                id: latestTx.id,
+                invoice_number: latestTx.invoice_number || invoiceNumber,
+                payment_amount: latestTx.payment_amount,
+                payment_method: latestTx.payment_method || 'bank_transfer',
+                payment_details: parsedPaymentDetails || {},
+            } : null,
+            suggestedInvoiceNumber: invoiceNumber,
+            defaultAmount
+        });
+
+    } catch (error: any) {
+        console.error("getCustomPlanInvoiceDetails Error:", error);
+        res.status(500).json({ error: error.message || "Internal server error" });
+    }
+};
+
+export const sendCustomPlanInvoice = async (req: Request, res: Response) => {
+    try {
+        const authUser = (req as any).user;
+        if (!authUser || authUser.role !== 'superadmin') {
+            return res.status(403).json({ error: "Forbidden: SuperAdmin access only" });
+        }
+
+        const {
+            organizationId,
+            transactionId,
+            paymentAmount,
+            paymentMethod,
+            paymentDetails,
+            recipientEmail,
+            customNotes
+        } = req.body;
+
+        const orgIdNum = Number(organizationId);
+        if (!orgIdNum) {
+            return res.status(400).json({ error: "Invalid organizationId" });
+        }
+
+        const org = await organizations.findByPk(orgIdNum);
+        if (!org) {
+            return res.status(404).json({ error: "Organization not found" });
+        }
+
+        let adminUser = await users.findOne({
+            where: { organization_id: org.id, role: 'admin', is_primary: true }
+        });
+        if (!adminUser) {
+            adminUser = await users.findOne({
+                where: { organization_id: org.id },
+                order: [['createdAt', 'ASC']]
+            });
+        }
+
+        const targetEmail = recipientEmail || adminUser?.email;
+        if (!targetEmail) {
+            return res.status(400).json({ error: "Recipient email is required" });
+        }
+
+        const amountNum = Number(paymentAmount);
+        if (isNaN(amountNum) || amountNum < 0) {
+            return res.status(400).json({ error: "Valid payment amount is required" });
+        }
+
+        const now = new Date();
+        let transaction: any = null;
+
+        if (transactionId) {
+            transaction = await transactions.findByPk(Number(transactionId));
+        }
+
+        if (!transaction) {
+            transaction = await transactions.findOne({
+                where: { organization_id: org.id },
+                order: [['created_at', 'DESC']]
+            });
+        }
+
+        const invoiceNumber = transaction?.invoice_number || (await generateInvoiceNumber(now));
+
+        if (transaction) {
+            await transaction.update({
+                payment_amount: amountNum,
+                payment_method: paymentMethod || 'bank_transfer',
+                payment_details: paymentDetails || {},
+                invoice_number: invoiceNumber,
+                is_superadmin_activated: true,
+                payment_status: 'success'
+            });
+        } else {
+            transaction = await transactions.create({
+                organization_id: org.id,
+                user_id: adminUser?.id || authUser.user_id,
+                subscription_tier: org.plan_name || "Custom Enterprise",
+                subscription_cycle: org.subscription_cycle || "monthly",
+                seats_purchased: org.seats_purchased || 1,
+                price_per_seat: 0,
+                payment_amount: amountNum,
+                payment_order_id: `SA-DIRECT-${Date.now()}`,
+                payment_id: `DIRECT-PAYMENT-BY-SUPERADMIN`,
+                payment_status: "success",
+                invoice_number: invoiceNumber,
+                is_superadmin_activated: true,
+                payment_method: paymentMethod || 'bank_transfer',
+                payment_details: paymentDetails || {}
+            });
+        }
+
+        // Generate customized PDF Invoice (without GST)
+        let invoicePdfBuffer: Buffer | null = null;
+        try {
+            invoicePdfBuffer = await generateInvoice(transaction.id, {
+                payment_amount: amountNum,
+                payment_method: paymentMethod,
+                payment_details: paymentDetails
+            });
+        } catch (pdfErr) {
+            console.error("Error generating invoice PDF:", pdfErr);
+            return res.status(500).json({ error: "Failed to generate invoice PDF" });
+        }
+
+        // Build Email HTML
+        const cycleText = org.subscription_cycle === "annual" ? "Annual" : "Monthly";
+        const emailHtml = `
+            <div style="font-family: Arial, sans-serif; color: #1c1917; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e7e5e4; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 700; color: #f97415; margin-bottom: 16px;">
+                    APEXIS<span style="font-size: 16px; color: #78716c;">PRO™</span>
+                </div>
+                <h2 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">Invoice #${invoiceNumber} - Custom Enterprise Plan</h2>
+                <p style="font-size: 14px; line-height: 1.6; color: #44403c;">Hello <strong>${adminUser?.name || 'Valued Customer'}</strong>,</p>
+                <p style="font-size: 14px; line-height: 1.6; color: #44403c;">
+                    Please find attached your official payment invoice for your <strong>${org.plan_name || 'Custom Enterprise Plan'}</strong> subscription for <strong>${org.name}</strong>.
+                </p>
+                
+                <div style="background-color: #f4f4f5; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="margin-top: 0; font-size: 14px; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">Invoice Summary</h3>
+                    <p style="margin: 6px 0; font-size: 13px;"><strong>Invoice Number:</strong> ${invoiceNumber}</p>
+                    <p style="margin: 6px 0; font-size: 13px;"><strong>Organization:</strong> ${org.name}</p>
+                    <p style="margin: 6px 0; font-size: 13px;"><strong>Seats:</strong> ${org.seats_purchased || 1} contributor seats</p>
+                    <p style="margin: 6px 0; font-size: 13px;"><strong>Billing Cycle:</strong> ${cycleText}</p>
+                    <p style="margin: 6px 0; font-size: 13px;"><strong>Payment Amount:</strong> ₹${amountNum.toLocaleString('en-IN')}</p>
+                    <p style="margin: 6px 0; font-size: 13px;"><strong>Payment Method:</strong> ${paymentMethod === 'upi' ? 'UPI / QR Transfer' : 'Bank Transfer'}</p>
+                    ${org.plan_end_date ? `<p style="margin: 6px 0; font-size: 13px;"><strong>Valid Until:</strong> ${new Date(org.plan_end_date).toLocaleDateString('en-IN')}</p>` : ''}
+                    ${customNotes ? `<p style="margin: 6px 0; font-size: 13px; color: #78716c;"><strong>Note:</strong> ${customNotes}</p>` : ''}
+                </div>
+
+                <p style="font-size: 14px; line-height: 1.6; color: #44403c;">
+                    You can download and view your official invoice in PDF format attached below.
+                </p>
+                <p style="font-size: 14px; line-height: 1.6; color: #44403c; margin-top: 24px;">
+                    Thank you for choosing APEXISpro™.<br>
+                    <strong>The APEXIS Team</strong>
+                </p>
+            </div>
+        `;
+
+        try {
+            await sendEmail(
+                targetEmail,
+                `Invoice #${invoiceNumber} - Custom Enterprise Plan | APEXISpro™`,
+                emailHtml,
+                {
+                    isHtml: true,
+                    attachments: invoicePdfBuffer ? [
+                        {
+                            filename: `Invoice_${invoiceNumber}.pdf`,
+                            content: invoicePdfBuffer,
+                            contentType: 'application/pdf',
+                        }
+                    ] : []
+                }
+            );
+        } catch (emailErr) {
+            console.error("Error sending invoice email:", emailErr);
+            return res.status(500).json({ error: "Failed to send invoice email to recipient." });
+        }
+
+        // In-app notification
+        if (adminUser) {
+            try {
+                await sendNotification({
+                    userId: adminUser.id,
+                    title: "📄 Invoice Sent",
+                    body: `Your invoice #${invoiceNumber} for ₹${amountNum.toLocaleString('en-IN')} has been sent to ${targetEmail}.`,
+                    type: "invoice_sent",
+                    data: {
+                        organization_id: org.id,
+                        transaction_id: transaction.id,
+                        invoice_number: invoiceNumber
+                    }
+                });
+            } catch (notifErr) {
+                console.error("Error sending in-app notification:", notifErr);
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Invoice #${invoiceNumber} sent successfully to ${targetEmail}.`,
+            invoiceNumber,
+            transactionId: transaction.id
+        });
+
+    } catch (error: any) {
+        console.error("sendCustomPlanInvoice Error:", error);
+        res.status(500).json({ error: error.message || "Internal server error" });
+    }
+};
+
 
 

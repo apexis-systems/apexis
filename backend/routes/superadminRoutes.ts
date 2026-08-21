@@ -18,7 +18,9 @@ import {
     extendOrganizationTrials,
     createCustomPlanOffer,
     getPendingCustomPlanForOrg,
-    activateCustomPlan
+    activateCustomPlan,
+    getCustomPlanInvoiceDetails,
+    sendCustomPlanInvoice
 } from "../controllers/superadminController.ts";
 import { verifyToken, isSuperAdmin } from "../middleware/verifyToken.ts";
 
@@ -48,5 +50,7 @@ router.post("/organizations/extend-trial", extendOrganizationTrials);
 router.post("/custom-plan/create", createCustomPlanOffer);
 router.get("/custom-plan/:organizationId", getPendingCustomPlanForOrg);
 router.post("/custom-plan/activate", activateCustomPlan);
+router.get("/custom-plan/invoice-details/:organizationId", getCustomPlanInvoiceDetails);
+router.post("/custom-plan/send-invoice", sendCustomPlanInvoice);
 
 export default router;

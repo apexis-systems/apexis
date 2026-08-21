@@ -730,6 +730,7 @@
             "failedToShareDocument": "పత్రాన్ని షేర్ చేయడం విఫలమైంది",
             "unarchiveSuccess": "పత్రం విజయవంతంగా అన్ ఆర్కైవ్ చేయబడింది",
             "failedToUnarchive": "పత్రాన్ని అన్ ఆర్కైవ్ చేయడం విఫలమైంది",
+            "deleteFolderConfirm": "\"{{name}}\"ను ట్రాష్‌కు పంపాలా? దీన్ని తర్వాత Settings నుండి 30 రోజుల పాటు రికవర్ చేయవచ్చు.",
             "deleteFileConfirm": "\"{{name}}\"ను ట్రాష్‌కు పంపాలా? దీన్ని తర్వాత Settings నుండి 30 రోజుల పాటు రికవర్ చేయవచ్చు.",
             "moveToTrash": "తొలగించు",
             "failedToDeleteFile": "ఫైల్‌ను తొలగించడం విఫలమైంది",

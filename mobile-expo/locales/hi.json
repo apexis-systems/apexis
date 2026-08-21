@@ -730,6 +730,7 @@
             "failedToShareDocument": "दस्तावेज़ साझा करने में विफल",
             "unarchiveSuccess": "दस्तावेज़ सफलतापूर्वक अनआर्काइव किया गया",
             "failedToUnarchive": "दस्तावेज़ अनआर्काइव करने में विफल",
+            "deleteFolderConfirm": "क्या \"{{name}}\" को ट्रैश में भेजना है? इसे बाद में Settings से 30 दिनों तक रिकवर किया जा सकता है।",
             "deleteFileConfirm": "क्या \"{{name}}\" को ट्रैश में भेजना है? इसे बाद में Settings से 30 दिनों तक रिकवर किया जा सकता है।",
             "moveToTrash": "हटाएं",
             "failedToDeleteFile": "फ़ाइल हटाने में विफल",

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dimensions, ActivityIndicator, View } from 'react-native';
+import { Dimensions, ActivityIndicator, View, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
@@ -15,9 +15,10 @@ interface Props {
     onTap?: () => void;
     onDismiss?: () => void;
     gesturesEnabled?: boolean;
+    keyboardOpen?: boolean;
 }
 
-export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H, onZoomStateChange, onTap, onDismiss, gesturesEnabled = true }: Props) {
+export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H, onZoomStateChange, onTap, onDismiss, gesturesEnabled = true, keyboardOpen = false }: Props) {
     const scale = useSharedValue(1);
     const savedScale = useSharedValue(1);
     const translateX = useSharedValue(0);
@@ -197,6 +198,17 @@ export default function ZoomableImage({ uri, width = SCREEN_W, height = SCREEN_H
             )}
         </Animated.View>
     );
+
+    // When keyboard is open, disable all RNGH gestures and use a plain React Native
+    // touch handler so tapping the photo dismisses the keyboard, without interfering
+    // with button presses in the comment panel.
+    if (keyboardOpen) {
+        return (
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                {animatedViewContent}
+            </TouchableWithoutFeedback>
+        );
+    }
 
     if (!gesturesEnabled) {
         return (

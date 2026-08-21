@@ -729,7 +729,7 @@ export default function FullScreenImageModal({
                         <View
                             style={{
                                 position: 'absolute',
-                                bottom: Platform.OS === 'ios' ? keyboardHeight : 0,
+                                bottom: Platform.OS === 'ios' ? keyboardHeight : keyboardHeight,
                                 left: 0,
                                 right: 0,
                                 zIndex: 9999
