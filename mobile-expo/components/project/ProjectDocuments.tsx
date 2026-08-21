@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Picker } from '@react-native-picker/picker';
 import { useAuth } from '@/contexts/AuthContext';
-import { FlatList, TouchableOpacity as GestureTouchableOpacity, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import { View, TouchableOpacity, Alert, Modal, Share, ScrollView, BackHandler, ActivityIndicator, Dimensions, StatusBar, Platform, StyleSheet, RefreshControl, KeyboardAvoidingView, Keyboard, PanResponder } from 'react-native';
 import { Text, TextInput } from '@/components/ui/AppText';
 import { Feather } from '@expo/vector-icons';
@@ -886,18 +886,21 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     {/* Buttons / Actions */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         {!isReply && !c.is_deleted && (
-                            <TouchableOpacity onPress={() => setReplyTo(c.id)}>
+                            <GestureTouchableOpacity onPress={() => {
+                                setReplyTo(c.id);
+                                commentInputRef.current?.focus();
+                            }}>
                                 <Text style={{ color: '#888', fontSize: 9 }}>↩ {t('projectDocuments.reply')}</Text>
-                            </TouchableOpacity>
+                            </GestureTouchableOpacity>
                         )}
                         {editable && (
                             <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                                <TouchableOpacity style={{ padding: 4 }} onPress={() => { setEditingCommentId(c.id); setEditingCommentText(c.text); }}>
+                                <GestureTouchableOpacity style={{ padding: 4 }} onPress={() => { setEditingCommentId(c.id); setEditingCommentText(c.text); }}>
                                     <Feather name="edit-2" size={14} color="#aaa" />
-                                </TouchableOpacity>
-                                <TouchableOpacity style={{ padding: 4 }} onPress={() => handleCommentDelete(c.id)}>
+                                </GestureTouchableOpacity>
+                                <GestureTouchableOpacity style={{ padding: 4 }} onPress={() => handleCommentDelete(c.id)}>
                                     <Feather name="trash-2" size={14} color="#ff6b6b" />
-                                </TouchableOpacity>
+                                </GestureTouchableOpacity>
                             </View>
                         )}
                     </View>
@@ -912,12 +915,12 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                             style={{ flex: 1, height: 32, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, color: '#fff', fontSize: 12 }}
                             autoFocus
                         />
-                        <TouchableOpacity style={{ padding: 6 }} onPress={() => handleEditCommentSave(c.id)} disabled={editSending}>
+                        <GestureTouchableOpacity style={{ padding: 6 }} onPress={() => handleEditCommentSave(c.id)} disabled={editSending}>
                             <Feather name="check" size={18} color="#4caf50" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={{ padding: 6 }} onPress={() => { setEditingCommentId(null); setEditingCommentText(''); }}>
+                        </GestureTouchableOpacity>
+                        <GestureTouchableOpacity style={{ padding: 6 }} onPress={() => { setEditingCommentId(null); setEditingCommentText(''); }}>
                             <Feather name="x" size={18} color="#f44336" />
-                        </TouchableOpacity>
+                        </GestureTouchableOpacity>
                     </View>
                 ) : (
                     <View style={{ marginTop: 2 }}>
@@ -970,6 +973,9 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             setCommentText('');
             setReplyTo(null);
             await loadComments(currentDoc.id);
+            setTimeout(() => {
+                commentInputRef.current?.focus();
+            }, 50);
         } catch (e) {
             console.error('addComment error:', e);
         } finally {
@@ -2781,443 +2787,456 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 }}
             >
                 <StatusBar hidden />
-                <View style={{ flex: 1, backgroundColor: '#111' }}>
-                    {/* Header */}
-                    <View style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        paddingHorizontal: 16,
-                        paddingTop: Platform.OS === 'android' ? 40 : 52,
-                        paddingBottom: 12,
-                        backgroundColor: '#1a1a1a',
-                        borderBottomWidth: 1,
-                        borderBottomColor: 'rgba(255,255,255,0.08)',
-                    }}>
-                        <TouchableOpacity
-                            onPress={() => {
-                                setPdfViewerUrl(null);
-                                setCurrentDoc(null);
-                                setShowComments(false);
-                                setDocComments([]);
-                                setShowInfoModal(false);
-                                const returnTab = searchParams?.returnTab as string;
-                                if (returnTab) {
-                                    const rParams: any = { tab: returnTab };
-                                    if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
-                                    if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
-                                    if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
-                                    if (searchParams.returnViewerTab) {
-                                        rParams.viewerTab = 'links';
-                                    }
-                                    if (searchParams.returnFileId) {
-                                        rParams.fileId = String(searchParams.returnFileId);
-
-                                    } else {
-                                        rParams.fileId = '';
-                                        if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
-                                    }
-
-                                    // Clear the return params from the query state
-                                    rParams.returnTab = '';
-                                    rParams.returnRfiId = '';
-                                    rParams.returnSnagId = '';
-                                    rParams.returnFolderId = '';
-                                    rParams.returnFileId = '';
-                                    rParams.returnFolderActiveTab = '';
-                                    if (Platform.OS === 'ios') {
-                                        setTimeout(() => {
-                                            router.setParams(rParams);
-                                        }, 450);
-                                    } else {
-                                        router.setParams(rParams);
-                                    }
-                                }
-                            }}
-                            style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
-                        >
-                            <Feather name="x" size={20} color="#fff" />
-                        </TouchableOpacity>
-                        <Text numberOfLines={1} style={{ flex: 1, color: '#fff', fontSize: 13, fontWeight: '600', marginHorizontal: 12 }}>
-                            {pdfViewerName}
-                        </Text>
-                        <View style={{ flexDirection: 'row', gap: 4 }}>
-                            <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                                <Feather name="info" size={18} color="#fff" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowLinkModal(true))} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                                <Feather name="link" size={18} color="#fff" />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => setShowComments(!showComments)}
-                                style={{ padding: 8, borderRadius: 20, backgroundColor: showComments ? colors.primary : 'rgba(255,255,255,0.1)' }}
-                            >
-                                <View style={{ position: 'relative' }}>
-                                    <Feather name="message-square" size={18} color="#fff" />
-                                    {docComments.length > 0 && (
-                                        <View style={{ position: 'absolute', top: -4, right: -6, backgroundColor: '#ef4444', borderRadius: 8, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
-                                            <Text style={{ color: '#fff', fontSize: 7, fontWeight: '900' }}>{docComments.length}</Text>
-                                        </View>
-                                    )}
-                                </View>
-                            </TouchableOpacity>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                    <View style={{ flex: 1, backgroundColor: '#111' }}>
+                        {/* Header */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 16,
+                            paddingTop: Platform.OS === 'android' ? 40 : 52,
+                            paddingBottom: 12,
+                            backgroundColor: '#1a1a1a',
+                            borderBottomWidth: 1,
+                            borderBottomColor: 'rgba(255,255,255,0.08)',
+                            zIndex: 3000,
+                            elevation: 30,
+                        }}>
                             <TouchableOpacity
                                 onPress={() => {
-                                    if (currentDoc) handleShareDoc(currentDoc);
+                                    setPdfViewerUrl(null);
+                                    setCurrentDoc(null);
+                                    setShowComments(false);
+                                    setDocComments([]);
+                                    setShowInfoModal(false);
+                                    const returnTab = searchParams?.returnTab as string;
+                                    if (returnTab) {
+                                        const rParams: any = { tab: returnTab };
+                                        if (searchParams.returnRfiId) rParams.rfiId = String(searchParams.returnRfiId);
+                                        if (searchParams.returnSnagId) rParams.snagId = String(searchParams.returnSnagId);
+                                        if (searchParams.returnFolderId) rParams.folderId = String(searchParams.returnFolderId);
+                                        if (searchParams.returnViewerTab) {
+                                            rParams.viewerTab = 'links';
+                                        }
+                                        if (searchParams.returnFileId) {
+                                            rParams.fileId = String(searchParams.returnFileId);
+
+                                        } else {
+                                            rParams.fileId = '';
+                                            if (searchParams.returnFolderActiveTab) rParams.returnFolderActiveTab = String(searchParams.returnFolderActiveTab);
+                                        }
+
+                                        // Clear the return params from the query state
+                                        rParams.returnTab = '';
+                                        rParams.returnRfiId = '';
+                                        rParams.returnSnagId = '';
+                                        rParams.returnFolderId = '';
+                                        rParams.returnFileId = '';
+                                        rParams.returnFolderActiveTab = '';
+                                        if (Platform.OS === 'ios') {
+                                            setTimeout(() => {
+                                                router.setParams(rParams);
+                                            }, 450);
+                                        } else {
+                                            router.setParams(rParams);
+                                        }
+                                    }
                                 }}
                                 style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
                             >
-                                <Feather name="share-2" size={18} color="#fff" />
+                                <Feather name="x" size={20} color="#fff" />
                             </TouchableOpacity>
-                            {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                            <Text numberOfLines={1} style={{ flex: 1, color: '#fff', fontSize: 13, fontWeight: '600', marginHorizontal: 12 }}>
+                                {pdfViewerName}
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 4 }}>
+                                <TouchableOpacity onPress={() => setShowInfoModal(true)} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                                    <Feather name="info" size={18} color="#fff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => openSubModalFromViewer(() => setShowLinkModal(true))} style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                                    <Feather name="link" size={18} color="#fff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setShowComments(!showComments)}
+                                    style={{ padding: 8, borderRadius: 20, backgroundColor: showComments ? colors.primary : 'rgba(255,255,255,0.1)' }}
+                                >
+                                    <View style={{ position: 'relative' }}>
+                                        <Feather name="message-square" size={18} color="#fff" />
+                                        {docComments.length > 0 && (
+                                            <View style={{ position: 'absolute', top: -4, right: -6, backgroundColor: '#ef4444', borderRadius: 8, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
+                                                <Text style={{ color: '#fff', fontSize: 7, fontWeight: '900' }}>{docComments.length}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
                                 <TouchableOpacity
                                     onPress={() => {
-                                        setActiveActionFile(currentDoc);
-                                        setActionMenuVisible(true);
+                                        if (currentDoc) handleShareDoc(currentDoc);
                                     }}
                                     style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
                                 >
-                                    <Feather name="more-vertical" size={18} color="#fff" />
+                                    <Feather name="share-2" size={18} color="#fff" />
                                 </TouchableOpacity>
-                            )}
-                        </View>
-                    </View>
-
-                    {/* Metadata Strip */}
-                    {(currentDoc?.location || currentDoc?.tags) && (
-                        <View style={{ backgroundColor: '#1a1a1a', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                                {currentDoc?.location && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Feather name="map-pin" size={12} color="#f97316" />
-                                        <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{currentDoc?.location}</Text>
-                                    </View>
-                                )}
-                                {currentDoc?.tags && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Feather name="tag" size={12} color="#aaa" />
-                                        <View style={{ flexDirection: 'row', gap: 4 }}>
-                                            {currentDoc?.tags?.split(',').map((tag: string, tidx: number) => (
-                                                <View key={tidx} style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
-                                                    <Text style={{ color: '#fff', fontSize: 9 }}>{tag.trim()}</Text>
-                                                </View>
-                                            ))}
-                                        </View>
-                                    </View>
+                                {(user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor') && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setActiveActionFile(currentDoc);
+                                            setActionMenuVisible(true);
+                                        }}
+                                        style={{ padding: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)' }}
+                                    >
+                                        <Feather name="more-vertical" size={18} color="#fff" />
+                                    </TouchableOpacity>
                                 )}
                             </View>
                         </View>
-                    )}
 
-                    <View pointerEvents={keyboardHeight > 0 ? 'none' : 'auto'} style={{ flex: 1, position: 'relative' }}>
-                        {/* WebView PDF Rendering Layer */}
-                        {pdfViewerUrl && (
-                            (Platform.OS === 'ios' || (isExpoGo && Platform.OS === 'android')) ? (
-                                <WebView
-                                    key={pdfViewerUrl}
-                                    source={{ uri: pdfViewerUrl }}
-                                    style={{ flex: 1, backgroundColor: '#111' }}
-                                    startInLoadingState
-                                    scalesPageToFit
-                                    allowsInlineMediaPlayback
-                                    javaScriptEnabled
-                                    domStorageEnabled
-                                    originWhitelist={['*']}
-                                    onLoadStart={() => setPdfLoading(true)}
-                                    onLoadEnd={() => setPdfLoading(false)}
-                                    renderLoading={() => (
+                        {/* Metadata Strip */}
+                        {(currentDoc?.location || currentDoc?.tags) && (
+                            <View style={{ backgroundColor: '#1a1a1a', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                                    {currentDoc?.location && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Feather name="map-pin" size={12} color="#f97316" />
+                                            <Text style={{ color: '#eee', fontSize: 11, fontWeight: '500' }}>{currentDoc?.location}</Text>
+                                        </View>
+                                    )}
+                                    {currentDoc?.tags && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Feather name="tag" size={12} color="#aaa" />
+                                            <View style={{ flexDirection: 'row', gap: 4 }}>
+                                                {currentDoc?.tags?.split(',').map((tag: string, tidx: number) => (
+                                                    <View key={tidx} style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                                        <Text style={{ color: '#fff', fontSize: 9 }}>{tag.trim()}</Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        )}
+
+                        <View pointerEvents={keyboardHeight > 0 ? 'none' : 'auto'} style={{ flex: 1, position: 'relative' }}>
+                            {/* WebView PDF Rendering Layer */}
+                            {pdfViewerUrl && (
+                                (Platform.OS === 'ios' || (isExpoGo && Platform.OS === 'android')) ? (
+                                    <WebView
+                                        key={pdfViewerUrl}
+                                        source={{ uri: pdfViewerUrl }}
+                                        style={{ flex: 1, backgroundColor: '#111' }}
+                                        startInLoadingState
+                                        scalesPageToFit
+                                        allowsInlineMediaPlayback
+                                        javaScriptEnabled
+                                        domStorageEnabled
+                                        originWhitelist={['*']}
+                                        onLoadStart={() => setPdfLoading(true)}
+                                        onLoadEnd={() => setPdfLoading(false)}
+                                        renderLoading={() => (
+                                            <View style={{
+                                                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                                justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
+                                            }}>
+                                                <ActivityIndicator size="large" color={colors.primary} />
+                                                <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
+                                                    {t('projectDocuments.optimizingView')}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    />
+                                ) : (
+                                    Pdf ? (
+                                        <Pdf
+                                            source={{ uri: pdfViewerUrl, cache: true }}
+                                            style={{ flex: 1, backgroundColor: '#111' }}
+                                            trustAllCerts={false}
+                                            onLoadComplete={() => setPdfLoading(false)}
+                                            onError={(error: any) => {
+                                                console.error("PDF Load Error:", error);
+                                                setPdfLoading(false);
+                                            }}
+                                        />
+                                    ) : (
+                                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                            <Text style={{ color: '#fff' }}>{t('projectDocuments.viewerNotAvailable')}</Text>
+                                        </View>
+                                    )
+                                )
+                            )}
+
+                            {/* Watermark Overlays */}
+                            {(currentDoc?.do_not_follow || currentDoc?.only_for_reference) && (
+                                <View
+                                    pointerEvents="none"
+                                    style={{
+                                        ...StyleSheet.absoluteFillObject,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        zIndex: 100, // Very high zIndex to ensure it's above native components
+                                        gap: 40 // Add spacing if both are present
+                                    }}
+                                >
+                                    {currentDoc?.do_not_follow && (
                                         <View style={{
-                                            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                                            justifyContent: 'center', alignItems: 'center', backgroundColor: '#111'
+                                            transform: [{ rotate: '-30deg' }],
+                                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                            paddingHorizontal: 30,
+                                            paddingVertical: 15,
+                                            borderRadius: 8,
+                                            borderWidth: 3,
+                                            borderColor: 'rgba(239, 68, 68, 0.3)',
+                                            borderStyle: 'dashed'
                                         }}>
-                                            <ActivityIndicator size="large" color={colors.primary} />
-                                            <Text style={{ color: '#aaa', fontSize: 12, marginTop: 12 }}>
-                                                {t('projectDocuments.optimizingView')}
+                                            <Text style={{
+                                                color: 'rgba(239, 68, 68, 0.4)',
+                                                fontSize: 48,
+                                                fontWeight: '900',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: 2,
+                                                textAlign: 'center'
+                                            }}>
+                                                {t('projectDocuments.doNotFollow')}
                                             </Text>
                                         </View>
                                     )}
-                                />
-                            ) : (
-                                Pdf ? (
-                                    <Pdf
-                                        source={{ uri: pdfViewerUrl, cache: true }}
-                                        style={{ flex: 1, backgroundColor: '#111' }}
-                                        trustAllCerts={false}
-                                        onLoadComplete={() => setPdfLoading(false)}
-                                        onError={(error: any) => {
-                                            console.error("PDF Load Error:", error);
-                                            setPdfLoading(false);
-                                        }}
-                                    />
-                                ) : (
-                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                        <Text style={{ color: '#fff' }}>{t('projectDocuments.viewerNotAvailable')}</Text>
-                                    </View>
-                                )
-                            )
+                                    {currentDoc?.only_for_reference && (
+                                        <View style={{
+                                            transform: [{ rotate: '-30deg' }],
+                                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                            paddingHorizontal: 30,
+                                            paddingVertical: 15,
+                                            borderRadius: 8,
+                                            borderWidth: 3,
+                                            borderColor: 'rgba(59, 130, 246, 0.3)',
+                                            borderStyle: 'dashed'
+                                        }}>
+                                            <Text style={{
+                                                color: 'rgba(59, 130, 246, 0.4)',
+                                                fontSize: 48,
+                                                fontWeight: '900',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: 2,
+                                                textAlign: 'center'
+                                            }}>
+                                                {t('projectDocuments.onlyForReference')}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Backdrop to dismiss keyboard when clicking outside discussion modal */}
+                        {showComments && (
+                            <TouchableOpacity
+                                activeOpacity={1}
+                                onPress={() => Keyboard.dismiss()}
+                                style={{
+                                    position: 'absolute',
+                                    top: Platform.OS === 'android' ? 80 : 95,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    zIndex: 1500,
+                                }}
+                            />
                         )}
 
-                        {/* Watermark Overlays */}
-                        {(currentDoc?.do_not_follow || currentDoc?.only_for_reference) && (
+                        {/* Comments Overlay Panel */}
+                        {showComments && (
                             <View
-                                pointerEvents="none"
                                 style={{
-                                    ...StyleSheet.absoluteFillObject,
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    zIndex: 100, // Very high zIndex to ensure it's above native components
-                                    gap: 40 // Add spacing if both are present
+                                    position: 'absolute',
+                                    bottom: Platform.OS === 'ios' ? keyboardHeight : keyboardHeight,
+                                    left: 0,
+                                    right: 0,
+                                    backgroundColor: 'rgba(15,15,15,0.98)',
+                                    borderTopLeftRadius: 25,
+                                    borderTopRightRadius: 25,
+                                    borderTopWidth: 1,
+                                    borderTopColor: 'rgba(255,255,255,0.15)',
+                                    overflow: 'hidden',
+                                    zIndex: 2000,
+                                    shadowColor: '#000',
+                                    shadowOffset: { width: 0, height: -10 },
+                                    shadowOpacity: 0.5,
+                                    shadowRadius: 15,
+                                    elevation: 24
                                 }}
                             >
-                                {currentDoc?.do_not_follow && (
-                                    <View style={{
-                                        transform: [{ rotate: '-30deg' }],
-                                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                        paddingHorizontal: 30,
-                                        paddingVertical: 15,
-                                        borderRadius: 8,
-                                        borderWidth: 3,
-                                        borderColor: 'rgba(239, 68, 68, 0.3)',
-                                        borderStyle: 'dashed'
-                                    }}>
-                                        <Text style={{
-                                            color: 'rgba(239, 68, 68, 0.4)',
-                                            fontSize: 48,
-                                            fontWeight: '900',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: 2,
-                                            textAlign: 'center'
-                                        }}>
-                                            {t('projectDocuments.doNotFollow')}
+                                <View style={{ padding: 16 }}>
+                                    <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
+                                        <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 1 }}>
+                                            💬 {t('projectDocuments.discussion')} ({docComments.length})
                                         </Text>
                                     </View>
-                                )}
-                                {currentDoc?.only_for_reference && (
-                                    <View style={{
-                                        transform: [{ rotate: '-30deg' }],
-                                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                        paddingHorizontal: 30,
-                                        paddingVertical: 15,
-                                        borderRadius: 8,
-                                        borderWidth: 3,
-                                        borderColor: 'rgba(59, 130, 246, 0.3)',
-                                        borderStyle: 'dashed'
-                                    }}>
-                                        <Text style={{
-                                            color: 'rgba(59, 130, 246, 0.4)',
-                                            fontSize: 48,
-                                            fontWeight: '900',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: 2,
-                                            textAlign: 'center'
-                                        }}>
-                                            {t('projectDocuments.onlyForReference')}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                        )}
-                    </View>
 
-                    {/* Comments Overlay Panel */}
-                    {showComments && (
-                        <View
-                            style={{
-                                position: 'absolute',
-                                bottom: Platform.OS === 'ios' ? keyboardHeight : keyboardHeight,
-                                left: 0,
-                                right: 0,
-                                backgroundColor: 'rgba(15,15,15,0.98)',
-                                borderTopLeftRadius: 25,
-                                borderTopRightRadius: 25,
-                                borderTopWidth: 1,
-                                borderTopColor: 'rgba(255,255,255,0.15)',
-                                overflow: 'hidden',
-                                zIndex: 2000,
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: -10 },
-                                shadowOpacity: 0.5,
-                                shadowRadius: 15,
-                                elevation: 24
-                            }}
-                        >
-                            <ScrollView
-                                keyboardShouldPersistTaps="always"
-                                scrollEnabled={true}
-                                bounces={false}
-                                alwaysBounceVertical={false}
-                                contentContainerStyle={{ padding: 16 }}
-                            >
-                                <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
-                                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800', letterSpacing: 1 }}>
-                                        💬 {t('projectDocuments.discussion')} ({docComments.length})
-                                    </Text>
-                                </View>
-
-                                {commentLoading ? (
-                                    <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
-                                ) : (
-                                    <ScrollView
-                                        style={{ maxHeight: SCREEN_H * 0.35 }}
-                                        contentContainerStyle={{ paddingBottom: 10 }}
-                                        showsVerticalScrollIndicator={true}
-                                        keyboardShouldPersistTaps="always"
-                                    >
-                                        {docComments.length === 0 && (
-                                            <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
-                                        )}
-                                        {docComments.map((c: any) => (
-                                            <View key={c.id} style={{ marginBottom: 12 }}>
-                                                {renderCommentBubble(c, false)}
-                                                {c.replies?.map((r: any) => renderCommentBubble(r, true))}
-                                            </View>
-                                        ))}
-                                    </ScrollView>
-                                )}
-
-                                {replyTo && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
-                                        <Text style={{ color: colors.primary, fontSize: 10 }}>{t('projectDocuments.replyingTo')}</Text>
-                                        <TouchableOpacity onPress={() => setReplyTo(null)}>
-                                            <Feather name="x-circle" size={12} color="#888" />
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-
-                                {showMentions && (
-                                    <View style={{ position: 'absolute', bottom: 65, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 }}>
-                                        <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
-                                            {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
-                                                <GestureTouchableOpacity
-                                                    key={m.id}
-                                                    onPress={() => handleSelectMention(m)}
-                                                >
-                                                    <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                                        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                                                            <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
-                                                        </View>
-                                                        <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
-                                                    </View>
-                                                </GestureTouchableOpacity>
+                                    {commentLoading ? (
+                                        <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
+                                    ) : (
+                                        <ScrollView
+                                            style={{ maxHeight: SCREEN_H * 0.35 }}
+                                            contentContainerStyle={{ paddingBottom: 10 }}
+                                            showsVerticalScrollIndicator={true}
+                                            keyboardShouldPersistTaps="always"
+                                        >
+                                            {docComments.length === 0 && (
+                                                <Text style={{ color: '#666', fontSize: 11, textAlign: 'center', marginVertical: 20 }}>{t('projectDocuments.noComments')}</Text>
+                                            )}
+                                            {docComments.map((c: any) => (
+                                                <View key={c.id} style={{ marginBottom: 12 }}>
+                                                    {renderCommentBubble(c, false)}
+                                                    {c.replies?.map((r: any) => renderCommentBubble(r, true))}
+                                                </View>
                                             ))}
                                         </ScrollView>
-                                    </View>
-                                )}
+                                    )}
 
-                                <ScrollView
-                                    keyboardShouldPersistTaps="always"
-                                    scrollEnabled={false}
-                                    style={{ width: '100%', flexGrow: 0 }}
-                                >
+                                    {replyTo && (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingHorizontal: 4 }}>
+                                            <Text style={{ color: colors.primary, fontSize: 10 }}>{t('projectDocuments.replyingTo')}</Text>
+                                            <GestureTouchableOpacity onPress={() => setReplyTo(null)}>
+                                                <Feather name="x-circle" size={12} color="#888" />
+                                            </GestureTouchableOpacity>
+                                        </View>
+                                    )}
 
-                                    <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 }}>
-                                        <TextInput
-                                            ref={commentInputRef}
-                                            value={commentText}
-                                            onChangeText={handleInputChange}
-                                            placeholder={t('projectDocuments.addCommentPlaceholder')}
-                                            placeholderTextColor="#666"
-                                            style={{ flex: 1, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, color: '#fff', fontSize: 13 }}
-                                        />
-                                        <GestureTouchableOpacity
-                                            onPress={handleAddComment}
-                                            disabled={addingComment || !commentText.trim()}
-                                        >
-                                            <View style={{
-                                                width: 40,
-                                                height: 40,
-                                                borderRadius: 20,
-                                                backgroundColor: colors.primary,
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                opacity: (!commentText.trim() || addingComment) ? 0.5 : 1
-                                            }}>
-                                                {addingComment
-                                                    ? <ActivityIndicator size="small" color="#fff" />
-                                                    : <Feather name="send" size={16} color="#fff" />
-                                                }
-                                            </View>
-                                        </GestureTouchableOpacity>
-                                    </View>
-                                </ScrollView>
-                                <View style={{ height: Math.max(insets.bottom, 10) }} />
-                            </ScrollView>
-                        </View>
-                    )}
+                                    {showMentions && (
+                                        <View style={{ position: 'absolute', bottom: 65, left: 16, right: 16, backgroundColor: '#1a1a1a', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', zIndex: 1000, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 }}>
+                                            <ScrollView style={{ maxHeight: 150 }} keyboardShouldPersistTaps="always">
+                                                {projectMembers.filter(m => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).map((m) => (
+                                                    <GestureTouchableOpacity
+                                                        key={m.id}
+                                                        onPress={() => handleSelectMention(m)}
+                                                    >
+                                                        <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                                                                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700' }}>{m.name.substring(0, 1).toUpperCase()}</Text>
+                                                            </View>
+                                                            <Text style={{ color: '#fff', fontSize: 12 }}>{m.name}</Text>
+                                                        </View>
+                                                    </GestureTouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    )}
 
-
-                    {/* Sharing Overlay (Inside the PDF Viewer) */}
-                    {sharing && (
-                        <View style={{
-                            ...StyleSheet.absoluteFillObject,
-                            backgroundColor: 'rgba(0,0,0,0.6)',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            zIndex: 9999
-                        }}>
-                            <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
-                                <ActivityIndicator size="large" color={colors.primary} />
-                                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.preparing')}</Text>
-                                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingToShare')}</Text>
+                                    <ScrollView
+                                        keyboardShouldPersistTaps="always"
+                                        scrollEnabled={false}
+                                        style={{ width: '100%', flexGrow: 0 }}
+                                    >
+                                        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8, width: '100%' }}>
+                                            <TextInput
+                                                ref={commentInputRef}
+                                                value={commentText}
+                                                onChangeText={handleInputChange}
+                                                placeholder={t('projectDocuments.addCommentPlaceholder')}
+                                                placeholderTextColor="#666"
+                                                style={{ flex: 1, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, color: '#fff', fontSize: 13 }}
+                                            />
+                                            <GestureTouchableOpacity
+                                                onPress={handleAddComment}
+                                                disabled={addingComment || !commentText.trim()}
+                                            >
+                                                <View style={{
+                                                    width: 40,
+                                                    height: 40,
+                                                    borderRadius: 20,
+                                                    backgroundColor: colors.primary,
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    opacity: (!commentText.trim() || addingComment) ? 0.5 : 1
+                                                }}>
+                                                    {addingComment
+                                                        ? <ActivityIndicator size="small" color="#fff" />
+                                                        : <Feather name="send" size={16} color="#fff" />
+                                                    }
+                                                </View>
+                                            </GestureTouchableOpacity>
+                                        </View>
+                                    </ScrollView>
+                                    <View style={{ height: Math.max(insets.bottom, 10) }} />
+                                </View>
                             </View>
-                        </View>
-                    )}
+                        )}
 
-                    <FileActionMenu
-                        isVisible={actionMenuVisible && !!pdfViewerUrl}
-                        onClose={() => setActionMenuVisible(false)}
-                        onHideUnhide={() => handleToggleVisibility(activeActionFile)}
-                        onDoNotFollow={() => handleToggleDoNotFollow(activeActionFile)}
-                        onOnlyForReference={() => handleToggleOnlyForReference(activeActionFile)}
-                        onDelete={() => handleDeleteFile(activeActionFile)}
-                        onArchive={() => handleArchiveFileAction(activeActionFile)}
-                        onUnarchive={() => handleUnarchiveFile(activeActionFile)}
-                        onShare={() => handleShareDoc(activeActionFile)}
-                        onRename={() => handleRenameFileAction(activeActionFile)}
-                        onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
-                        onUploadNewVersion={
-                            !currentFolder?.name.toLowerCase().includes('archive') &&
-                                (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
-                                ? () => {
-                                    if (activeActionFile) {
-                                        setPdfViewerUrl(null);
-                                        setCurrentDoc(null);
-                                        setShowComments(false);
-                                        setDocComments([]);
-                                        setShowInfoModal(false);
-                                        setActionMenuVisible(false);
-                                        router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
+
+                        {/* Sharing Overlay (Inside the PDF Viewer) */}
+                        {sharing && (
+                            <View style={{
+                                ...StyleSheet.absoluteFillObject,
+                                backgroundColor: 'rgba(0,0,0,0.6)',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                zIndex: 9999
+                            }}>
+                                <View style={{ backgroundColor: colors.surface, padding: 30, borderRadius: 20, alignItems: 'center', gap: 15 }}>
+                                    <ActivityIndicator size="large" color={colors.primary} />
+                                    <Text style={{ color: colors.text, fontWeight: '700', fontSize: 16 }}>{t('projectDocuments.preparing')}</Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>{t('projectDocuments.downloadingToShare')}</Text>
+                                </View>
+                            </View>
+                        )}
+
+                        <FileActionMenu
+                            isVisible={actionMenuVisible && !!pdfViewerUrl}
+                            onClose={() => setActionMenuVisible(false)}
+                            onHideUnhide={() => handleToggleVisibility(activeActionFile)}
+                            onDoNotFollow={() => handleToggleDoNotFollow(activeActionFile)}
+                            onOnlyForReference={() => handleToggleOnlyForReference(activeActionFile)}
+                            onDelete={() => handleDeleteFile(activeActionFile)}
+                            onArchive={() => handleArchiveFileAction(activeActionFile)}
+                            onUnarchive={() => handleUnarchiveFile(activeActionFile)}
+                            onShare={() => handleShareDoc(activeActionFile)}
+                            onRename={() => handleRenameFileAction(activeActionFile)}
+                            onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
+                            onUploadNewVersion={
+                                !currentFolder?.name.toLowerCase().includes('archive') &&
+                                    (user.role === 'admin' || user.role === 'superadmin' || user.role === 'contributor')
+                                    ? () => {
+                                        if (activeActionFile) {
+                                            setPdfViewerUrl(null);
+                                            setCurrentDoc(null);
+                                            setShowComments(false);
+                                            setDocComments([]);
+                                            setShowInfoModal(false);
+                                            setActionMenuVisible(false);
+                                            router.push(`/(tabs)/upload?projectId=${project.id}&type=documents&folderId=${activeActionFile.folder_id || ''}&parentFileId=${activeActionFile.id}`);
+                                        }
                                     }
-                                }
-                                : undefined
-                        }
-                        clientVisible={activeActionFile?.client_visible !== false}
-                        doNotFollow={activeActionFile?.do_not_follow === true}
-                        onlyForReference={activeActionFile?.only_for_reference === true}
-                        canDelete={false}
-                        showArchive={!currentFolder?.name.toLowerCase().includes('archive')}
-                        isArchived={folders.find(f => f.id === activeActionFile?.folder_id)?.name.toLowerCase() === 'archive'}
-                        canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('archive')}
-                        isAdmin={user.role === 'admin' || user.role === 'superadmin'}
-                        isContributor={user.role === 'contributor'}
-                        isUploader={activeActionFile && String(activeActionFile.created_by) === String(user.id)}
-                        fileName={activeActionFile?.file_name || ''}
-                        processingAction={processing}
-                        useView={Platform.OS === 'ios'}
-                    />
-                    <FileInformationModal
-                        visible={showInfoModal}
-                        onClose={() => setShowInfoModal(false)}
-                        file={currentDoc}
-                        folders={folders}
-                        projectName={project?.name || ''}
-                        onUpdate={(updatedFile) => {
-                            openDoc(updatedFile);
-                            fetchFolders(true);
-                        }}
-                    />
+                                    : undefined
+                            }
+                            clientVisible={activeActionFile?.client_visible !== false}
+                            doNotFollow={activeActionFile?.do_not_follow === true}
+                            onlyForReference={activeActionFile?.only_for_reference === true}
+                            canDelete={false}
+                            showArchive={!currentFolder?.name.toLowerCase().includes('archive')}
+                            isArchived={folders.find(f => f.id === activeActionFile?.folder_id)?.name.toLowerCase() === 'archive'}
+                            canRename={['admin', 'superadmin', 'contributor'].includes(user.role) && !currentFolder?.name.toLowerCase().includes('archive')}
+                            isAdmin={user.role === 'admin' || user.role === 'superadmin'}
+                            isContributor={user.role === 'contributor'}
+                            isUploader={activeActionFile && String(activeActionFile.created_by) === String(user.id)}
+                            fileName={activeActionFile?.file_name || ''}
+                            processingAction={processing}
+                            useView={Platform.OS === 'ios'}
+                        />
+                        <FileInformationModal
+                            visible={showInfoModal}
+                            onClose={() => setShowInfoModal(false)}
+                            file={currentDoc}
+                            folders={folders}
+                            projectName={project?.name || ''}
+                            onUpdate={(updatedFile) => {
+                                openDoc(updatedFile);
+                                fetchFolders(true);
+                            }}
+                        />
 
-                </View>
+                    </View>
+                </GestureHandlerRootView>
             </Modal>
 
             {/* ── Version Selection Sheet ── */}
