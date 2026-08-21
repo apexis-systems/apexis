@@ -17,6 +17,7 @@ interface ActivateCustomPlanModalProps {
     email: string;
   } | null;
   onSuccess?: () => void;
+  onOpenSendInvoice?: (lead: any) => void;
 }
 
 export default function ActivateCustomPlanModal({
@@ -24,6 +25,7 @@ export default function ActivateCustomPlanModal({
   onClose,
   lead,
   onSuccess,
+  onOpenSendInvoice,
 }: ActivateCustomPlanModalProps) {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -61,6 +63,9 @@ export default function ActivateCustomPlanModal({
       toast.success(response.message || `Custom plan activated for ${lead.company || lead.name}!`);
       if (onSuccess) onSuccess();
       onClose();
+      if (onOpenSendInvoice) {
+        onOpenSendInvoice(lead);
+      }
     } catch (error: any) {
       console.error("Failed to activate custom plan:", error);
       toast.error(error?.response?.data?.error || "Failed to activate custom plan.");
@@ -184,15 +189,12 @@ export default function ActivateCustomPlanModal({
               <div className="flex items-start gap-2">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                 <div className="space-y-1 leading-relaxed">
-                  <p className="font-semibold text-foreground">Direct Payment Invoice Notice:</p>
+                  <p className="font-semibold text-foreground">Activation & Invoice Notice:</p>
                   <p>
-                    • <strong>No GST calculation</strong> will be applied to this invoice.
+                    • <strong>Immediate Access:</strong> The organization will gain immediate access with {planDetails.contributor_limit} seats.
                   </p>
                   <p>
-                    • A PDF invoice will be generated and automatically sent to <strong>{lead.email}</strong>.
-                  </p>
-                  <p>
-                    • The organization will gain immediate access with {planDetails.contributor_limit} seats.
+                    • <strong>Invoice Customization:</strong> Invoice will not be auto-sent. You can customize payment details (Bank Transfer / UPI) and send it via the <strong>Send Invoice</strong> button.
                   </p>
                 </div>
               </div>

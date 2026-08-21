@@ -113,7 +113,14 @@ const drawSeparator = (doc: any) => {
     doc.moveDown(1.5);
 };
 
-export const generateInvoice = async (transactionId: number): Promise<Buffer> => {
+export const generateInvoice = async (
+    transactionId: number,
+    customOverrides?: {
+        payment_amount?: number | string;
+        payment_method?: string;
+        payment_details?: any;
+    }
+): Promise<Buffer> => {
     const transaction = await db.transactions.findByPk(transactionId);
     if (!transaction) throw new Error("Transaction not found");
 
@@ -263,7 +270,8 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
             headX += colWidths[i];
         });
 
-        const grandTotal = Number(transaction.payment_amount);
+        const rawAmount = customOverrides?.payment_amount !== undefined ? customOverrides.payment_amount : transaction.payment_amount;
+        const grandTotal = Number(rawAmount || 0);
         const subtotal = isSuperadminActivated ? grandTotal : (grandTotal / 1.18);
         const totalTax = isSuperadminActivated ? 0 : (grandTotal - subtotal);
         const cgst = totalTax / 2;
@@ -282,7 +290,7 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
             .restore();
 
         const rowData = [
-            `Seat Subscription (${seatsCount} seat${seatsCount > 1 ? 's' : ''} @ ₹${unitRate}/seat)`,
+            `Seat Subscription (${seatsCount} seat${seatsCount > 1 ? 's' : ''})`,
             billingPeriodStr,
             subtotal.toFixed(2),
             totalTax.toFixed(2),
@@ -320,22 +328,48 @@ export const generateInvoice = async (transactionId: number): Promise<Buffer> =>
         drawSeparator(doc);
 
         // --- 7. Payment Information ---
-        // doc.y += 20;
-        doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('PAYMENT INFORMATION', 50);
-        doc.moveDown(0.5);
+        const effectiveMethod = (customOverrides?.payment_method || (transaction as any).payment_method || 'bank_transfer').toLowerCase();
+        let rawDetails = customOverrides?.payment_details || (transaction as any).payment_details || {};
+        if (typeof rawDetails === 'string') {
+            try { rawDetails = JSON.parse(rawDetails); } catch { /* ignore */ }
+        }
+
         const payY = doc.y;
         const payColW = (doc.page.width - 100) / 2;
 
         const drawPayLine = (label: string, value: string, x: number, y: number) => {
             doc.font('Helvetica').fontSize(8).fillColor(BRAND.muted).text(label, x, y);
-            doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND.ink).text(value, x + 80, y, { width: payColW - 85 });
+            doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND.ink).text(value || '-', x + 80, y, { width: payColW - 85 });
         };
 
-        drawPayLine('Bank Name', 'HDFC Bank Ltd', 50, payY);
-        drawPayLine('Account Name', 'APEXIS Systems Private Limited', 50 + payColW, payY);
-        drawPayLine('Account Number', '50200118128748', 50, payY + 18);
-        drawPayLine('IFSC Code', 'HDFC0009817', 50 + payColW, payY + 18);
-        drawPayLine('Branch', 'Bankhouse Banjarahills', 50, payY + 36);
+        if (effectiveMethod === 'upi') {
+            doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('PAYMENT INFORMATION (UPI)', 50);
+            doc.moveDown(0.5);
+            const dynamicPayY = doc.y;
+            drawPayLine('Payment Mode', 'UPI / QR Transfer', 50, dynamicPayY);
+            drawPayLine('UPI ID / VPA', rawDetails.upi_id || '-', 50 + payColW, dynamicPayY);
+            drawPayLine('Payee Name', rawDetails.account_name || rawDetails.payee_name || '-', 50, dynamicPayY + 18);
+            drawPayLine('Bank / App', rawDetails.bank_name || '-', 50 + payColW, dynamicPayY + 18);
+            if (rawDetails.transaction_ref || rawDetails.utr_number) {
+                drawPayLine('Txn / Ref No.', rawDetails.transaction_ref || rawDetails.utr_number, 50, dynamicPayY + 36);
+                doc.y = dynamicPayY + 54;
+            } else {
+                doc.y = dynamicPayY + 36;
+            }
+        } else {
+            doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND.orange).text('PAYMENT INFORMATION (BANK TRANSFER)', 50);
+            doc.moveDown(0.5);
+            const dynamicPayY = doc.y;
+            drawPayLine('Bank Name', rawDetails.bank_name || '-', 50, dynamicPayY);
+            drawPayLine('Account Name', rawDetails.account_name || '-', 50 + payColW, dynamicPayY);
+            drawPayLine('Account Number', rawDetails.account_number || '-', 50, dynamicPayY + 18);
+            drawPayLine('IFSC Code', rawDetails.ifsc_code || '-', 50 + payColW, dynamicPayY + 18);
+            drawPayLine('Branch', rawDetails.branch || '-', 50, dynamicPayY + 36);
+            if (rawDetails.transaction_ref || rawDetails.utr_number) {
+                drawPayLine('UTR / Ref No.', rawDetails.transaction_ref || rawDetails.utr_number, 50 + payColW, dynamicPayY + 36);
+            }
+            doc.y = dynamicPayY + 54;
+        }
 
 
         drawSeparator(doc);

@@ -14,6 +14,7 @@ import {
   Briefcase,
   Sparkles,
   CheckCircle2,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { getAllLeads, extendOrganizationTrials } from "@/services/superadminService";
 import CreateCustomPlanModal from "@/components/superadmin/CreateCustomPlanModal";
 import ActivateCustomPlanModal from "@/components/superadmin/ActivateCustomPlanModal";
+import SendCustomInvoiceModal from "@/components/superadmin/SendCustomInvoiceModal";
 
 interface Lead {
   id: number;
@@ -128,6 +130,7 @@ export default function Customers() {
   const [leadsList, setLeadsList] = useState<Lead[]>([]);
   const [customPlanLead, setCustomPlanLead] = useState<Lead | null>(null);
   const [activatePlanLead, setActivatePlanLead] = useState<Lead | null>(null);
+  const [sendInvoiceLead, setSendInvoiceLead] = useState<Lead | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [extendDays, setExtendDays] = useState("7");
@@ -579,6 +582,18 @@ export default function Customers() {
                             <span>Active Plan</span>
                           </Button>
                         ) : null}
+                        {lead.organizationId && (isCustomPlan(lead.planName) || lead.converted || !isFreemium(lead.planName)) ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSendInvoiceLead(lead)}
+                            className="h-8 gap-1 border-sky-500/40 bg-sky-500/10 px-2 text-xs font-semibold text-sky-600 hover:bg-sky-600 hover:text-white dark:text-sky-400 dark:hover:bg-sky-600 dark:hover:text-white"
+                            title="Customize & Send Invoice"
+                          >
+                            <Receipt className="h-3.5 w-3.5" />
+                            <span>Send Invoice</span>
+                          </Button>
+                        ) : null}
                         <Button
                           variant="outline"
                           size="sm"
@@ -628,6 +643,14 @@ export default function Customers() {
         isOpen={Boolean(activatePlanLead)}
         onClose={() => setActivatePlanLead(null)}
         lead={activatePlanLead}
+        onSuccess={handleRefresh}
+        onOpenSendInvoice={(lead) => setSendInvoiceLead(lead)}
+      />
+
+      <SendCustomInvoiceModal
+        isOpen={Boolean(sendInvoiceLead)}
+        onClose={() => setSendInvoiceLead(null)}
+        lead={sendInvoiceLead}
         onSuccess={handleRefresh}
       />
     </div>

@@ -72,6 +72,16 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: false,
             },
+            payment_method: {
+                type: DataTypes.STRING,
+                allowNull: true,
+                defaultValue: null,
+            },
+            payment_details: {
+                type: DataTypes.JSON,
+                allowNull: true,
+                defaultValue: null,
+            },
         },
         {
             tableName: "transactions",
