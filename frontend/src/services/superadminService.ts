@@ -237,4 +237,33 @@ export const activateCustomPlan = async (organizationId: number | string) => {
     }
 };
 
+export const getCustomPlanInvoiceDetails = async (organizationId: number | string) => {
+    try {
+        const response = await PrivateAxios.get(`/superadmin/custom-plan/invoice-details/${organizationId}`);
+        return response.data;
+    } catch (error) {
+        console.error("getCustomPlanInvoiceDetails Error", error);
+        throw error;
+    }
+};
+
+export const sendCustomPlanInvoice = async (payload: {
+    organizationId: number | string;
+    transactionId?: number | string;
+    paymentAmount: number;
+    paymentMethod: 'bank_transfer' | 'upi';
+    paymentDetails: any;
+    recipientEmail?: string;
+    customNotes?: string;
+}) => {
+    try {
+        const response = await PrivateAxios.post('/superadmin/custom-plan/send-invoice', payload);
+        return response.data;
+    } catch (error) {
+        console.error("sendCustomPlanInvoice Error", error);
+        throw error;
+    }
+};
+
+
 
