@@ -9,10 +9,12 @@ import { useCallback, useLayoutEffect } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system/legacy';
+import { compressVideo } from '@/utils/videoCompressor';
 import { Accelerometer } from 'expo-sensors';
 import Constants from 'expo-constants';
 import { parseApiError } from '@/helpers/apiError';
@@ -81,13 +83,18 @@ export default function UploadScreen() {
 
     // Permissions
     const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+    const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
 
     // Refs for camera
     const cameraRef = useRef<CameraView>(null);
 
-
     // State: Flow Control
     const [mode, setMode] = useState<Mode>('capture');
+    const [cameraCaptureMode, setCameraCaptureMode] = useState<'photo' | 'video'>('photo');
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingDuration, setRecordingDuration] = useState(0);
+    const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const [processingText, setProcessingText] = useState('');
 
     const [fileQueue, setFileQueue] = useState<FileProgress[]>([]);
 
@@ -96,7 +103,7 @@ export default function UploadScreen() {
         const uris = queue.map(item => item.asset.uri).filter((uri): uri is string => !!uri && uri.startsWith('file://'));
         if (uris.length === 0) return;
         const { deleteFilesAsync } = require('@/services/cacheService');
-        deleteFilesAsync(uris).catch(() => {});
+        deleteFilesAsync(uris).catch(() => { });
     };
 
     const fileQueueRef = useRef(fileQueue);
@@ -111,7 +118,7 @@ export default function UploadScreen() {
                 const uris = queue.map(item => item.asset.uri).filter((uri): uri is string => !!uri && uri.startsWith('file://'));
                 if (uris.length > 0) {
                     const { deleteFilesAsync } = require('@/services/cacheService');
-                    deleteFilesAsync(uris).catch(() => {});
+                    deleteFilesAsync(uris).catch(() => { });
                 }
             }
         };
@@ -209,9 +216,9 @@ export default function UploadScreen() {
     const handleManualZoom = (factor: number) => {
         const z = (factor - MIN_ZOOM) / (MAX_ZOOM_FACTOR - MIN_ZOOM);
         const clamped = Math.max(0, Math.min(1, z));
-        
+
         // Sync everything immediately
-        zoomShared.value = clamped; 
+        zoomShared.value = clamped;
         showZoomLabel(clamped);
     };
 
@@ -383,13 +390,122 @@ export default function UploadScreen() {
     };
 
 
+    const processAndAddVideo = async (uri: string, originalName?: string, source: 'camera' | 'gallery' = 'camera') => {
+        setIsProcessing(true);
+        setProcessingText('Compressing video...');
+        try {
+            const compressed = await compressVideo(uri);
+            const finalUri = compressed.uri || uri;
+            let finalSize = compressed.size || 0;
+            if (!finalSize) {
+                const fileInfo = await FileSystem.getInfoAsync(finalUri);
+                finalSize = fileInfo.exists ? fileInfo.size : 0;
+            }
+
+            const sizeInMb = finalSize / (1024 * 1024);
+            if (sizeInMb > 150) {
+                Alert.alert(t('upload.limitTitle'), 'Compressed video exceeds the 150 MB limit.');
+                if (compressed.uri && compressed.uri !== uri && compressed.uri.startsWith('file://')) {
+                    const { deleteFileAsync } = require('@/services/cacheService');
+                    deleteFileAsync(compressed.uri).catch(() => {});
+                }
+                return;
+            }
+
+            const fileName = originalName || `video_${Date.now()}.mp4`;
+
+            addToQueue([{
+                asset: {
+                    uri: finalUri,
+                    fileName,
+                    type: 'video/mp4',
+                    size: finalSize,
+                },
+                progress: 0,
+                status: 'pending',
+                anim: new Animated.Value(0),
+                source,
+            }]);
+        } catch (err: any) {
+            console.error('Error processing video:', err);
+            Alert.alert('Video Error', err?.message || 'Failed to process video');
+        } finally {
+            setIsProcessing(false);
+            setProcessingText('');
+        }
+    };
+
+    const startRecordingVideo = async () => {
+        if (!cameraRef.current || isProcessing || isRecording) return;
+        if (fileQueue.length >= 20) {
+            Alert.alert(t('upload.limitTitle'), t('upload.queueFull'));
+            return;
+        }
+
+        if (!microphonePermission?.granted) {
+            const res = await requestMicrophonePermission();
+            if (!res.granted) {
+                Alert.alert('Microphone Permission', 'Microphone access is required to record video with audio.');
+                return;
+            }
+        }
+
+        try {
+            setIsRecording(true);
+            setRecordingDuration(0);
+
+            if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+            recordTimerRef.current = setInterval(() => {
+                setRecordingDuration((prev) => {
+                    if (prev >= 300) {
+                        stopRecordingVideo();
+                        return 300;
+                    }
+                    return prev + 1;
+                });
+            }, 1000);
+
+            const video = await cameraRef.current.recordAsync({
+                maxDuration: 300,
+            });
+
+            if (video?.uri) {
+                await processAndAddVideo(video.uri, `video_${Date.now()}.mp4`, 'camera');
+            }
+        } catch (err: any) {
+            console.error('Video recording error:', err);
+            Alert.alert(t('upload.cameraError'), err?.message || 'Failed to record video');
+        } finally {
+            setIsRecording(false);
+            if (recordTimerRef.current) {
+                clearInterval(recordTimerRef.current);
+                recordTimerRef.current = null;
+            }
+        }
+    };
+
+    const stopRecordingVideo = () => {
+        if (cameraRef.current && isRecording) {
+            try {
+                cameraRef.current.stopRecording();
+            } catch (e) {
+                console.warn('stopRecording error:', e);
+            }
+            if (recordTimerRef.current) {
+                clearInterval(recordTimerRef.current);
+                recordTimerRef.current = null;
+            }
+            setIsRecording(false);
+        }
+    };
+
     const pickFromGallery = async () => {
         try {
             const maxAllowed = 20 - fileQueue.length;
             if (maxAllowed <= 0) return;
 
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
+                mediaTypes: isDocMode ? ['images'] : ['images', 'videos'],
                 allowsMultipleSelection: true,
                 selectionLimit: maxAllowed,
                 quality: 0.8,
@@ -397,42 +513,86 @@ export default function UploadScreen() {
 
             if (result.canceled || !result.assets?.length) return;
 
+            setIsProcessing(true);
             const queue: FileProgress[] = [];
+
             for (const asset of result.assets) {
-                let uri = asset.uri;
-                try {
-                    // Capping the larger dimension to 1920px (matches Android feel)
-                    const { width, height } = asset;
-                    const resizeOptions = width > height ? { width: 1920 } : { height: 1920 };
+                const isVideo =
+                    asset.type === 'video' ||
+                    asset.mimeType?.startsWith('video/') ||
+                    asset.uri.toLowerCase().endsWith('.mp4') ||
+                    asset.uri.toLowerCase().endsWith('.mov') ||
+                    asset.uri.toLowerCase().endsWith('.m4v');
 
-                    const manipulated = await ImageManipulator.manipulateAsync(
-                        uri,
-                        [{ resize: resizeOptions }],
-                        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-                    );
-                    uri = manipulated.uri;
-                } catch (e) {
-                    console.warn('Gallery ImageManipulator failed:', e);
+                if (isVideo) {
+                    setProcessingText('Compressing video...');
+                    const compressed = await compressVideo(asset.uri);
+                    const finalUri = compressed.uri || asset.uri;
+                    const finalSize = compressed.size || asset.fileSize || 0;
+                    const sizeInMb = finalSize / (1024 * 1024);
+
+                    if (sizeInMb > 150) {
+                        Alert.alert(t('upload.limitTitle'), `Video "${asset.fileName || 'selected'}" exceeds the 150 MB limit.`);
+                        if (compressed.uri && compressed.uri !== asset.uri && compressed.uri.startsWith('file://')) {
+                            const { deleteFileAsync } = require('@/services/cacheService');
+                            deleteFileAsync(compressed.uri).catch(() => {});
+                        }
+                        continue;
+                    }
+
+                    queue.push({
+                        asset: {
+                            uri: finalUri,
+                            fileName: asset.fileName || `video_${Date.now()}.mp4`,
+                            type: asset.mimeType || 'video/mp4',
+                            size: finalSize,
+                        },
+                        progress: 0,
+                        status: 'pending',
+                        anim: new Animated.Value(0),
+                        source: 'gallery',
+                    });
+                } else {
+                    setProcessingText('Optimizing image...');
+                    let uri = asset.uri;
+                    try {
+                        const { width, height } = asset;
+                        const resizeOptions = width > height ? { width: 1920 } : { height: 1920 };
+
+                        const manipulated = await ImageManipulator.manipulateAsync(
+                            uri,
+                            [{ resize: resizeOptions }],
+                            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                        );
+                        uri = manipulated.uri;
+                    } catch (e) {
+                        console.warn('Gallery ImageManipulator failed:', e);
+                    }
+
+                    queue.push({
+                        asset: {
+                            uri,
+                            fileName: asset.fileName || uri.split('/').pop(),
+                            type: 'image/jpeg',
+                            size: asset.fileSize || 0,
+                        },
+                        progress: 0,
+                        status: 'pending',
+                        anim: new Animated.Value(0),
+                        source: isDocMode ? 'scan' : 'gallery',
+                    });
                 }
-
-                queue.push({
-                    asset: {
-                        uri,
-                        fileName: asset.fileName || uri.split('/').pop(),
-                        type: 'image/jpeg',
-                        size: asset.fileSize || 0
-                    },
-                    progress: 0,
-                    status: 'pending',
-                    anim: new Animated.Value(0),
-                    source: isDocMode ? 'scan' : 'gallery',
-                });
             }
 
-            addToQueue(queue);
+            if (queue.length > 0) {
+                addToQueue(queue);
+            }
         } catch (error) {
             console.error('Gallery Error:', error);
             Alert.alert(t('upload.limitTitle'), t('upload.galleryError'));
+        } finally {
+            setIsProcessing(false);
+            setProcessingText('');
         }
     };
 
@@ -938,11 +1098,34 @@ export default function UploadScreen() {
                                             facing="back"
                                             ref={cameraRef}
                                             ratio="4:3"
+                                            mode={cameraCaptureMode === 'video' ? 'video' : 'picture'}
                                             zoom={cameraZoom}
-                                        //animatedProps={animatedCameraProps}
                                         />
                                     </View>
                                 </GestureDetector>
+
+                                {/* Video Recording Active Indicator */}
+                                {isRecording && (
+                                    <View style={{
+                                        position: 'absolute',
+                                        top: 16,
+                                        alignSelf: 'center',
+                                        backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                                        paddingHorizontal: 14,
+                                        paddingVertical: 6,
+                                        borderRadius: 20,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        zIndex: 50,
+                                    }}>
+                                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' }} />
+                                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
+                                            REC {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60) < 10 ? '0' : ''}{recordingDuration % 60}
+                                        </Text>
+                                    </View>
+                                )}
+
                                 {/* Dynamic Zoom Indicator */}
                                 <Reanimated.View
                                     pointerEvents="none"
@@ -985,23 +1168,82 @@ export default function UploadScreen() {
                         </View>
                     )}
 
+                    {/* Processing Overlay */}
+                    {isProcessing && (
+                        <View style={{
+                            ...StyleSheet.absoluteFillObject,
+                            backgroundColor: 'rgba(0,0,0,0.75)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            zIndex: 100,
+                        }}>
+                            <ActivityIndicator size="large" color="#ea8c0a" />
+                            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600', marginTop: 12 }}>
+                                {processingText || 'Processing...'}
+                            </Text>
+                        </View>
+                    )}
+
                     <View style={{
                         position: 'absolute', bottom: 0, left: 0, right: 0,
                         backgroundColor: 'rgba(0,0,0,0.6)', paddingBottom: insets.bottom + 20, paddingTop: 10
                     }}>
+                        {/* Photo / Video Mode Selector when not in doc mode */}
+                        {!isDocMode && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 28, marginBottom: 12 }}>
+                                <TouchableOpacity
+                                    disabled={isRecording}
+                                    onPress={() => setCameraCaptureMode('photo')}
+                                    style={{ paddingHorizontal: 10, paddingVertical: 4 }}
+                                >
+                                    <Text style={{
+                                        fontSize: 13,
+                                        fontWeight: '700',
+                                        color: cameraCaptureMode === 'photo' ? '#ea8c0a' : 'rgba(255,255,255,0.6)',
+                                        letterSpacing: 0.8,
+                                    }}>
+                                        PHOTO
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    disabled={isRecording}
+                                    onPress={() => setCameraCaptureMode('video')}
+                                    style={{ paddingHorizontal: 10, paddingVertical: 4 }}
+                                >
+                                    <Text style={{
+                                        fontSize: 13,
+                                        fontWeight: '700',
+                                        color: cameraCaptureMode === 'video' ? '#ef4444' : 'rgba(255,255,255,0.6)',
+                                        letterSpacing: 0.8,
+                                    }}>
+                                        VIDEO
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
                         {/* PREVIEW ROW ABOVE BUTTONS */}
                         {fileQueue.length > 0 && (
-                            <View style={{ paddingBottom: 20, paddingHorizontal: 20 }}>
+                            <View style={{ paddingBottom: 16, paddingHorizontal: 20 }}>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingTop: 8, paddingRight: 12 }}>
                                     {fileQueue.map((item, idx) => (
                                         <View key={idx} style={{ position: 'relative' }}>
-                                            <Image source={{ uri: item.asset.uri }} style={{ width: 56, height: 56, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' }} />
+                                            <Image source={{ uri: item.asset.uri }} style={{ width: 56, height: 56, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: '#222' }} />
+                                            {(item.asset.type?.startsWith('video/') || item.asset.type === 'video' || item.asset.mimeType?.startsWith('video/')) && (
+                                                <View style={{
+                                                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                                    backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 10,
+                                                    justifyContent: 'center', alignItems: 'center',
+                                                }}>
+                                                    <Feather name="play" size={18} color="#fff" />
+                                                </View>
+                                            )}
                                             <TouchableOpacity
                                                 onPress={() => {
                                                     const itemToRemove = fileQueue[idx];
                                                     if (itemToRemove && itemToRemove.asset.uri && itemToRemove.asset.uri.startsWith('file://')) {
                                                         const { deleteFileAsync } = require('@/services/cacheService');
-                                                        deleteFileAsync(itemToRemove.asset.uri).catch(() => {});
+                                                        deleteFileAsync(itemToRemove.asset.uri).catch(() => { });
                                                     }
                                                     setFileQueue(prev => prev.filter((_, i) => i !== idx));
                                                 }}
@@ -1020,7 +1262,7 @@ export default function UploadScreen() {
                         )}
 
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 30 }}>
-                            <TouchableOpacity onPress={handlePick} style={{ alignItems: 'center', width: 70 }}>
+                            <TouchableOpacity onPress={handlePick} disabled={isRecording} style={{ alignItems: 'center', width: 70 }}>
                                 <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
                                     <Feather name={isDocMode ? "file-plus" : "image"} size={22} color="#fff" />
                                 </View>
@@ -1028,18 +1270,44 @@ export default function UploadScreen() {
                             </TouchableOpacity>
 
 
-                            <TouchableOpacity onPress={() => isDocMode ? captureScan() : capturePhoto()} disabled={isProcessing} style={{ alignItems: 'center' }}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    if (isDocMode) {
+                                        captureScan();
+                                    } else if (cameraCaptureMode === 'video') {
+                                        if (isRecording) {
+                                            stopRecordingVideo();
+                                        } else {
+                                            startRecordingVideo();
+                                        }
+                                    } else {
+                                        capturePhoto();
+                                    }
+                                }}
+                                disabled={isProcessing}
+                                style={{ alignItems: 'center' }}
+                            >
                                 <View style={{
                                     width: 76, height: 76, borderRadius: 38,
                                     borderWidth: 4, borderColor: '#fff',
-                                    backgroundColor: isDocMode ? colors.primary : '#ea8c0a',
+                                    backgroundColor: isDocMode ? colors.primary : (cameraCaptureMode === 'video' ? 'transparent' : '#ea8c0a'),
                                     alignItems: 'center', justifyContent: 'center',
                                 }}>
-                                    <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#fff' }} />
+                                    {cameraCaptureMode === 'video' && !isDocMode ? (
+                                        <View style={{
+                                            width: isRecording ? 28 : 52,
+                                            height: isRecording ? 28 : 52,
+                                            borderRadius: isRecording ? 6 : 26,
+                                            backgroundColor: '#ef4444',
+                                        }} />
+                                    ) : (
+                                        <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#fff' }} />
+                                    )}
                                 </View>
                             </TouchableOpacity>
 
                             <TouchableOpacity
+                                disabled={isRecording}
                                 onPress={() => {
                                     const toggleMode = () => {
                                         const nextIsDoc = !isDocMode;
@@ -1071,11 +1339,11 @@ export default function UploadScreen() {
                                 <Text style={{ color: '#ccc', fontSize: 10, marginTop: 5 }}>{isDocMode ? t('upload.photo') : t('upload.scan')}</Text>
                             </TouchableOpacity>
                         </View>
-                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, textAlign: 'center', marginTop: 12 }}>Max size: 100 MB</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, textAlign: 'center', marginTop: 12 }}>Max size: 150 MB</Text>
                     </View>
                 </View>
 
-                {fileQueue.length > 0 && (
+                {fileQueue.length > 0 && !isRecording && (
                     <TouchableOpacity
                         onPress={() => setMode('selection')}
                         style={{
@@ -1136,8 +1404,17 @@ export default function UploadScreen() {
 
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                                     {fileQueue.map((item, idx) => (
-                                        <View key={idx}>
-                                            <Image source={{ uri: item.asset.uri }} style={{ width: 64, height: 64, borderRadius: 10, borderWidth: 1, borderColor: colors.border }} />
+                                        <View key={idx} style={{ position: 'relative' }}>
+                                            <Image source={{ uri: item.asset.uri }} style={{ width: 64, height: 64, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: '#222' }} />
+                                            {(item.asset.type?.startsWith('video/') || item.asset.type === 'video' || item.asset.mimeType?.startsWith('video/')) && (
+                                                <View style={{
+                                                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                                    backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 10,
+                                                    justifyContent: 'center', alignItems: 'center',
+                                                }}>
+                                                    <Feather name="play" size={20} color="#fff" />
+                                                </View>
+                                            )}
                                         </View>
                                     ))}
                                 </ScrollView>
@@ -1366,8 +1643,8 @@ export default function UploadScreen() {
                                                     <Feather name="user" size={14} color={colors.primary} />
                                                 </View>
                                                 <Text numberOfLines={1} style={{ fontSize: 14, color: assignedToIds.length > 0 ? colors.text : colors.textMuted, flex: 1 }}>
-                                                    {assignedToIds.length > 0 
-                                                        ? projectMembers.filter(m => assignedToIds.includes(String(m.user.id))).map(m => m.user.name).join(', ') 
+                                                    {assignedToIds.length > 0
+                                                        ? projectMembers.filter(m => assignedToIds.includes(String(m.user.id))).map(m => m.user.name).join(', ')
                                                         : t('upload.selectAssignee')}
                                                 </Text>
                                             </View>
@@ -1494,9 +1771,9 @@ export default function UploadScreen() {
                                             key={m.user.id}
                                             onPress={() => {
                                                 const userId = String(m.user.id);
-                                                setAssignedToIds(prev => 
-                                                    prev.includes(userId) 
-                                                        ? prev.filter(id => id !== userId) 
+                                                setAssignedToIds(prev =>
+                                                    prev.includes(userId)
+                                                        ? prev.filter(id => id !== userId)
                                                         : [...prev, userId]
                                                 );
                                             }}

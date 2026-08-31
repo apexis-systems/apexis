@@ -27,6 +27,8 @@ import FileInformationModal from '../shared/FileInformationModal';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView, TouchableOpacity as GestureTouchableOpacity } from 'react-native-gesture-handler';
 import ZoomableImage from '../shared/ZoomableImage';
+import ZoomableVideo from '../shared/ZoomableVideo';
+import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import FileActionMenu from './FileActionMenu';
 import FolderActionMenu from './FolderActionMenu';
@@ -112,6 +114,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
     const [sharing, setSharing] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     const isUserScrollingRef = useRef(false);
+    const [isViewerScrolling, setIsViewerScrolling] = useState(false);
     const breadcrumbsScrollRef = useRef<ScrollView>(null);
     const [viewerActiveTab, setViewerActiveTab] = useState<'discussion' | 'links'>('discussion');
     const [showLinkModal, setShowLinkModal] = useState(false);
@@ -431,7 +434,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
             if (viewerOpenRef.current) return;
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) {
-                setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
+                setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/') || file.file_type?.startsWith('video/')));
             }
         } catch (e) {
             console.error('fetchFiles', e);
@@ -2229,12 +2232,29 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                 zIndex: 5,
                                                             }}
                                                         />
-                                                        <Image
-                                                            source={photo.downloadUrl}
-                                                            style={{ width: '100%', height: '100%' }}
-                                                            contentFit="cover"
-                                                            transition={200}
-                                                        />
+                                                        {photo.file_type?.startsWith('video/') ? (
+                                                            <>
+                                                                <Video
+                                                                    source={{ uri: photo.downloadUrl }}
+                                                                    style={{ width: '100%', height: '100%' }}
+                                                                    resizeMode={ResizeMode.COVER}
+                                                                    shouldPlay={false}
+                                                                    isMuted={true}
+                                                                />
+                                                                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                                                                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' }}>
+                                                                        <Feather name="play" size={14} color="#fff" style={{ marginLeft: 2 }} />
+                                                                    </View>
+                                                                </View>
+                                                            </>
+                                                        ) : (
+                                                            <Image
+                                                                source={photo.downloadUrl}
+                                                                style={{ width: '100%', height: '100%' }}
+                                                                contentFit="cover"
+                                                                transition={200}
+                                                            />
+                                                        )}
 
                                                         {isSelected && (
                                                             <View style={{ position: 'absolute', top: 4, right: 4, backgroundColor: colors.primary, borderRadius: 10, width: 16, height: 16, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
@@ -2306,8 +2326,23 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                                                 zIndex: 5,
                                                             }}
                                                         />
-                                                        <View style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.surface }}>
-                                                            <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                                                        <View style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.surface, position: 'relative' }}>
+                                                            {photo.file_type?.startsWith('video/') ? (
+                                                                <>
+                                                                    <Video
+                                                                        source={{ uri: photo.downloadUrl }}
+                                                                        style={{ width: '100%', height: '100%' }}
+                                                                        resizeMode={ResizeMode.COVER}
+                                                                        shouldPlay={false}
+                                                                        isMuted={true}
+                                                                    />
+                                                                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.25)' }}>
+                                                                        <Feather name="play" size={16} color="#fff" />
+                                                                    </View>
+                                                                </>
+                                                            ) : (
+                                                                <Image source={{ uri: photo.downloadUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                                                            )}
                                                         </View>
                                                         {isSelected && (
                                                             <View style={{ position: 'absolute', top: 2, left: 2, backgroundColor: colors.primary, borderRadius: 12, width: 18, height: 18, alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
@@ -2780,6 +2815,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                             getItemLayout={(_, i) => ({ length: SCREEN_W, offset: SCREEN_W * i, index: i })}
                             onScrollBeginDrag={() => {
                                 isUserScrollingRef.current = true;
+                                setIsViewerScrolling(true);
                             }}
                             onMomentumScrollEnd={(e) => {
                                 if (isUserScrollingRef.current) {
@@ -2787,6 +2823,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                     if (idx !== viewerIndex) setViewerIndex(idx);
                                     isUserScrollingRef.current = false;
                                 }
+                                setIsViewerScrolling(false);
                             }}
                             onScrollEndDrag={(e) => {
                                 const velocity = e.nativeEvent.velocity;
@@ -2796,23 +2833,38 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                                         if (idx !== viewerIndex) setViewerIndex(idx);
                                         isUserScrollingRef.current = false;
                                     }
+                                    setIsViewerScrolling(false);
                                 }
                             }}
-                            renderItem={({ item }) => {
+                            renderItem={({ item, index }) => {
                                 const viewerHeight = SCREEN_H - insets.top - insets.bottom;
                                 return (
                                     <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
                                         <View style={{ width: SCREEN_W, height: viewerHeight, justifyContent: 'center', alignItems: 'center' }}>
-                                            <ZoomableImage
-                                                uri={item.downloadUrl}
-                                                width={SCREEN_W}
-                                                height={viewerHeight}
-                                                onZoomStateChange={setIsViewerZoomed}
-                                                onTap={() => setShowViewerUI(prev => !prev)}
-                                                onDismiss={closeViewer}
-                                                gesturesEnabled={keyboardHeight === 0}
-                                                keyboardOpen={keyboardHeight > 0}
-                                            />
+                                            {item.file_type?.startsWith('video/') ? (
+                                                <ZoomableVideo
+                                                    uri={item.downloadUrl}
+                                                    width={SCREEN_W}
+                                                    height={viewerHeight}
+                                                    isActive={viewerOpen && viewerIndex === index && !isViewerScrolling}
+                                                    onZoomStateChange={setIsViewerZoomed}
+                                                    onTap={() => setShowViewerUI(prev => !prev)}
+                                                    onDismiss={closeViewer}
+                                                    gesturesEnabled={keyboardHeight === 0}
+                                                    keyboardOpen={keyboardHeight > 0}
+                                                />
+                                            ) : (
+                                                <ZoomableImage
+                                                    uri={item.downloadUrl}
+                                                    width={SCREEN_W}
+                                                    height={viewerHeight}
+                                                    onZoomStateChange={setIsViewerZoomed}
+                                                    onTap={() => setShowViewerUI(prev => !prev)}
+                                                    onDismiss={closeViewer}
+                                                    gesturesEnabled={keyboardHeight === 0}
+                                                    keyboardOpen={keyboardHeight > 0}
+                                                />
+                                            )}
                                         </View>
                                     </View>
                                 );
@@ -2962,8 +3014,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                     onRename={() => handleRenameFileAction(activeActionFile)}
                     onArchive={() => handleArchiveFile(activeActionFile)}
                     onUnarchive={() => handleUnarchivePhoto(activeActionFile)}
-                    onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
-                    onCreateSnag={() => handleStartCreateSnag(activeActionFile)}
+                    onCreateRfi={activeActionFile?.file_type?.startsWith('video/') ? undefined : () => handleStartCreateRfi(activeActionFile)}
+                    onCreateSnag={activeActionFile?.file_type?.startsWith('video/') ? undefined : () => handleStartCreateSnag(activeActionFile)}
                     showArchive={currentFolder?.name.toLowerCase().includes('confirmation')}
                     isArchived={currentFolder?.name.toLowerCase().includes('archive')}
                     fileName={activeActionFile?.file_name || ''}
@@ -3035,8 +3087,8 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                 onRename={() => handleRenameFileAction(activeActionFile)}
                 onArchive={() => handleArchiveFile(activeActionFile)}
                 onUnarchive={() => handleUnarchivePhoto(activeActionFile)}
-                onCreateRfi={() => handleStartCreateRfi(activeActionFile)}
-                onCreateSnag={() => handleStartCreateSnag(activeActionFile)}
+                onCreateRfi={activeActionFile?.file_type?.startsWith('video/') ? undefined : () => handleStartCreateRfi(activeActionFile)}
+                onCreateSnag={activeActionFile?.file_type?.startsWith('video/') ? undefined : () => handleStartCreateSnag(activeActionFile)}
                 showArchive={currentFolder?.name.toLowerCase().includes('confirmation')}
                 isArchived={currentFolder?.name.toLowerCase().includes('archive')}
                 fileName={activeActionFile?.file_name || ''}
