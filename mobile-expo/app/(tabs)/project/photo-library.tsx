@@ -155,6 +155,7 @@ export default function PhotoLibraryScreen() {
 
     const renderPhotoItem = ({ item, index }: { item: any; index: number }) => {
         const photoUrl = item.downloadUrl || item.file_url;
+        const isVideo = item.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(photoUrl || item.file_name || '');
         return (
             <TouchableOpacity
                 activeOpacity={0.8}
@@ -170,6 +171,11 @@ export default function PhotoLibraryScreen() {
                     contentFit="cover"
                     transition={150}
                 />
+                {isVideo && (
+                    <View style={styles.videoBadge}>
+                        <Feather name="play" size={14} color="#fff" />
+                    </View>
+                )}
             </TouchableOpacity>
         );
     };
@@ -439,6 +445,17 @@ const styles = StyleSheet.create({
     photo: {
         width: '100%',
         height: '100%',
+    },
+    videoBadge: {
+        position: 'absolute',
+        bottom: 6,
+        right: 6,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     footerLoader: {
         paddingVertical: 20,

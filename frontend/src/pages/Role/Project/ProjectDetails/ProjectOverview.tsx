@@ -281,7 +281,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           let photos = 0, docs = 0;
           if (d.fileData) {
             d.fileData.forEach((file: any) => {
-              if (file.file_type?.startsWith('image/')) photos++;
+              if (file.file_type?.startsWith('image/') || file.file_type?.startsWith('video/')) photos++;
               else docs++;
             });
           }
@@ -329,7 +329,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         let photos = 0, docs = 0;
         if (data.fileData) {
           data.fileData.forEach((file: any) => {
-            if (file.file_type?.startsWith('image/')) photos++;
+            if (file.file_type?.startsWith('image/') || file.file_type?.startsWith('video/')) photos++;
             else docs++;
           });
         }

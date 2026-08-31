@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { getFiles, getLinkedItems } from '@/services/fileService';
 import { Input } from '@/components/ui/input';
-import { FileText, Folder, CornerLeftUp, Check, X, Search, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { FileText, Folder, CornerLeftUp, Check, X, Search, Image as ImageIcon, Loader2, Video, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -115,7 +115,7 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
         if (f.folder_id !== null && f.folder_id !== undefined) {
           if (folders.some(fold => String(fold.id) === String(f.folder_id))) return false;
         }
-        return (f.file_type?.startsWith('image/') ? 'photo' : 'document') === activeTab;
+        return ((f.file_type?.startsWith('image/') || f.file_type?.startsWith('video/')) ? 'photo' : 'document') === activeTab;
       } else {
         if (String(f.folder_id) !== String(currentParentId)) return false;
         return true;
@@ -126,11 +126,10 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
     files.filter(f => {
       if (String(f.id) === String(currentFileId)) return false;
       if (!f.file_name?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      const isImg = f.file_type?.startsWith('image/') ||
-        f.file_name?.toLowerCase().endsWith('.jpg') ||
-        f.file_name?.toLowerCase().endsWith('.png') ||
-        f.file_name?.toLowerCase().endsWith('.jpeg');
-      return (isImg ? 'photo' : 'document') === activeTab;
+      const isImgOrVid = f.file_type?.startsWith('image/') ||
+        f.file_type?.startsWith('video/') ||
+        /\.(jpg|jpeg|png|gif|webp|mp4|mov|webm|m4v)$/i.test(f.file_name || '');
+      return (isImgOrVid ? 'photo' : 'document') === activeTab;
     });
 
   const getBreadcrumbs = () => {
@@ -169,8 +168,10 @@ export default function LinkFileModal({ open, onOpenChange, projectId, currentFi
   const isFilePhoto = (item: any) => {
     const name = (item.title || item.file_name || item.name || '').toLowerCase();
     return item.file_type?.startsWith('image/') ||
+      item.file_type?.startsWith('video/') ||
       name.endsWith('.jpg') || name.endsWith('.jpeg') ||
-      name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
+      name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp') ||
+      name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v');
   };
 
   const linkedDocs = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && !isFilePhoto(i));
@@ -442,9 +443,9 @@ function FileCard({ item, linkedItems, selectedIds, setSelectedIds }: { item: an
   const isSelected = selectedIds.has(item.id);
 
   const isImage = item.file_type?.startsWith('image/') ||
-    item.file_name?.toLowerCase().endsWith('.jpg') ||
-    item.file_name?.toLowerCase().endsWith('.png') ||
-    item.file_name?.toLowerCase().endsWith('.jpeg');
+    ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => item.file_name?.toLowerCase().endsWith(ext));
+  const isVideo = item.file_type?.startsWith('video/') ||
+    ['mp4', 'mov', 'webm', 'm4v'].some(ext => item.file_name?.toLowerCase().endsWith(ext));
 
   const toggleSelect = () => {
     if (isAlreadyLinked) return;
@@ -483,6 +484,28 @@ function FileCard({ item, linkedItems, selectedIds, setSelectedIds }: { item: an
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-muted">
                 <ImageIcon className="h-8 w-8 text-muted-foreground opacity-50" />
+              </div>
+            )}
+          </div>
+          <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+            <p className="text-[10px] font-medium text-white text-center truncate w-full" title={item.file_name}>
+              {item.file_name}
+            </p>
+          </div>
+        </>
+      ) : isVideo ? (
+        <>
+          <div className="absolute inset-0">
+            {item.downloadUrl ? (
+              <>
+                <video src={item.downloadUrl} className="w-full h-full object-cover pointer-events-none" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <Play className="h-4 w-4 text-white fill-white" />
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-muted">
+                <Video className="h-8 w-8 text-muted-foreground opacity-50" />
               </div>
             )}
           </div>

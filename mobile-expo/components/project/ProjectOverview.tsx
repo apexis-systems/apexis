@@ -460,7 +460,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     let photos = 0, docs = 0;
                     if (d.fileData) {
                         d.fileData.forEach((file: any) => {
-                            if (file.file_type?.startsWith('image/')) photos++;
+                            const isMedia = file.file_type?.startsWith('image/') || file.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(file.file_name || file.name || '');
+                            if (isMedia) photos++;
                             else docs++;
                         });
                     }
@@ -533,8 +534,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             try {
                 const data = await getProjectFiles(projectId);
                 const fileList = data.fileData || [];
-                const photos = fileList.filter((f: any) => f.file_type?.startsWith('image/'));
-                const docs = fileList.filter((f: any) => !f.file_type?.startsWith('image/'));
+                const isMedia = (f: any) => f.file_type?.startsWith('image/') || f.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(f.file_name || f.name || '');
+                const photos = fileList.filter(isMedia);
+                const docs = fileList.filter((f: any) => !isMedia(f));
                 setPhotosCount(photos.length);
                 setDocsCount(docs.length);
             } catch (err) {

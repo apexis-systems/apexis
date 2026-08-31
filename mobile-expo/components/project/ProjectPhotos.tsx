@@ -2719,7 +2719,7 @@ export default function ProjectPhotos({ project, user, initialFolderId, initialF
                         .then((data) => {
                             if (data.folderData) setFolders(data.folderData);
                             if (data.fileData) {
-                                setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
+                                setPhotos(data.fileData.filter((file: any) => file.file_type?.startsWith('image/') || file.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(file.file_name || file.name || '')));
                             }
                         });
                     clearSelection();

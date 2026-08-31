@@ -154,7 +154,12 @@ export const getOrgPhotos = async (req: Request, res: Response) => {
         const whereCondition: any = {
             [Op.and]: [
                 projectOrFolderCond,
-                { file_type: { [Op.iLike]: "image/%" } },
+                {
+                    [Op.or]: [
+                        { file_type: { [Op.iLike]: "image/%" } },
+                        { file_type: { [Op.iLike]: "video/%" } }
+                    ]
+                },
                 { is_current: true }
             ]
         };

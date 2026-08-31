@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project, User, Folder } from '@/types';
-import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle, HelpCircle, CheckCircle2, Archive, MoreVertical, Plus, Lock, Unlock, Key, Shield, ShieldOff } from 'lucide-react';
+import { Camera, Upload, Eye, EyeOff, Folder as FolderIcon, ArrowLeft, FolderPlus, Share2, Trash2, Move, X, List, Grid, LayoutGrid, ChevronDown, Pencil, ShieldAlert, AlertCircle, AlertTriangle, HelpCircle, CheckCircle2, Archive, MoreVertical, Plus, Lock, Unlock, Key, Shield, ShieldOff, Video, Play } from 'lucide-react';
 import FolderPasswordDialog from '@/components/Project/FolderPasswordDialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -304,7 +304,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
         setFolders(json.folderData);
       }
       if (json.fileData) {
-        setPhotos(json.fileData.filter((file: any) => file.file_type?.startsWith('image/')));
+        setPhotos(json.fileData.filter((file: any) => file.file_type?.startsWith('image/') || file.file_type?.startsWith('video/')));
       }
     } catch (e) {
       console.error("Failed to fetch folders/files", e);
@@ -959,6 +959,7 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
           <div className={viewMode === 'grid' ? "grid grid-cols-4 gap-0.5" : "space-y-1"}>
             {sortedPhotos.map((photo) => {
               const isSelected = selectedFiles.has(photo.id);
+              const isVideo = photo.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(photo.file_name || '');
 
               if (viewMode === 'list') {
                 return (
@@ -972,8 +973,17 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     {isSelectionMode && (
                       <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection('file', photo.id)} className="mr-1" />
                     )}
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary overflow-hidden">
-                      <img src={photo.downloadUrl} alt={photo.file_name} className="w-full h-full object-cover" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary overflow-hidden relative">
+                      {isVideo ? (
+                        <>
+                          <video src={photo.downloadUrl} className="w-full h-full object-cover pointer-events-none" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <Play className="h-3 w-3 text-white fill-white" />
+                          </div>
+                        </>
+                      ) : (
+                        <img src={photo.downloadUrl} alt={photo.file_name} className="w-full h-full object-cover" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0 flex items-center gap-2">
                       <div
@@ -1087,7 +1097,18 @@ const ProjectPhotos = ({ project, user }: ProjectPhotosProps) => {
                     }}
                     className="absolute inset-0 flex items-center justify-center overflow-hidden"
                   >
-                    <img src={photo.downloadUrl} alt={photo.file_name} className={`w-full h-full object-cover ${isSelected ? 'opacity-80' : ''}`} />
+                    {isVideo ? (
+                      <>
+                        <video src={photo.downloadUrl} className={`w-full h-full object-cover pointer-events-none ${isSelected ? 'opacity-80' : ''}`} />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                          <div className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center border border-white/20 shadow-md">
+                            <Play className="h-4 w-4 text-white fill-white ml-0.5" />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <img src={photo.downloadUrl} alt={photo.file_name} className={`w-full h-full object-cover ${isSelected ? 'opacity-80' : ''}`} />
+                    )}
                   </button>
 
                   {isSelectionMode && (

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Project, User } from '@/types';
-import { Camera, ArrowLeft, Folder as FolderIcon, Loader2, RefreshCw, ShieldAlert, Image as ImageIcon, ArrowUpDown, Filter } from 'lucide-react';
+import { Camera, ArrowLeft, Folder as FolderIcon, Loader2, RefreshCw, ShieldAlert, Image as ImageIcon, ArrowUpDown, Filter, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { getProjectPhotosPaginated, getProjects } from '@/services/projectService';
@@ -217,6 +217,7 @@ const PhotoLibrary = ({ project, user: userProp, onBack }: PhotoLibraryProps) =>
             {photos.map((photo, index) => {
               const displayUrl = photo.downloadUrl || photo.file_url;
               const folderName = photo.folder?.name;
+              const isVideo = photo.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(photo.file_name || '');
 
               return (
                 <div
@@ -224,12 +225,26 @@ const PhotoLibrary = ({ project, user: userProp, onBack }: PhotoLibraryProps) =>
                   onClick={() => setViewerState({ open: true, index })}
                   className="group relative aspect-square rounded-xl overflow-hidden bg-secondary/50 border border-border/60 hover:border-accent cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md"
                 >
-                  <img
-                    src={displayUrl}
-                    alt={photo.file_name || 'Project Photo'}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    loading="lazy"
-                  />
+                  {isVideo ? (
+                    <>
+                      <video
+                        src={displayUrl}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 pointer-events-none"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                        <div className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center border border-white/20 shadow-md">
+                          <Play className="h-4 w-4 text-white fill-white ml-0.5" />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <img
+                      src={displayUrl}
+                      alt={photo.file_name || 'Project Photo'}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  )}
 
                   {/* Top Gradient & Folder Badge */}
                   <div className="absolute inset-x-0 top-0 p-2 bg-gradient-to-b from-black/70 via-black/30 to-transparent opacity-90 transition-opacity">
