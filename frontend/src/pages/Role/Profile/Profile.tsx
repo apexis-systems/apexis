@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, Shield, User, Camera, Loader2, X, ArrowLeft, Briefcase, Trash2, ChevronRight } from 'lucide-react';
+import { LogOut, Shield, User, Camera, Loader2, X, ArrowLeft, Briefcase, Trash2, ChevronRight, Archive } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { updateUserProfilePic, updateUserName } from '@/services/userService';
 import { getSecureFileUrl } from '@/services/fileService';
@@ -493,6 +493,27 @@ const Profile = () => {
                     </div>
                 )}
 
+                {/* Archived Projects (Zipped Vault) */}
+                {(user.role === 'admin' || user.role === 'superadmin') && (
+                    <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
+                        <button
+                            onClick={() => router.push(`/${user.role}/profile/archives`)}
+                            className="w-full flex items-center justify-between p-4 hover:bg-secondary/20 transition-colors"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                                    <Archive className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex flex-col items-start">
+                                    <span className="font-bold text-sm uppercase tracking-wide">Archived Projects (Zipped Vault)</span>
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold">Offline Zipped Backups & Restore</span>
+                                </div>
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                    </div>
+                )}
+
                 {/* Trash Settings */}
                 {(user.role === 'admin' || user.role === 'superadmin') && (
                     <div className="border border-border rounded-2xl overflow-hidden bg-secondary/10">
@@ -513,6 +534,7 @@ const Profile = () => {
                         </button>
                     </div>
                 )}
+
 
                 <Button
                     variant="outline"

@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { Project, UserRole } from '@/types';
-import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2, BarChart3, ChevronRight, Mail, Phone, Trash2, UserPlus, Folder } from 'lucide-react';
+import { CalendarDays, FileText, Camera, Download, Clock, Loader2, Copy, Check, Pencil, PlayCircle, Share2, CheckCircle2, BarChart3, ChevronRight, Mail, Phone, Trash2, UserPlus, Folder, Archive, PackageCheck, RotateCcw } from 'lucide-react';
 
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember, updateProject } from '@/services/projectService';
+import { archiveProject } from '@/services/archiveService';
+import { useRouter } from 'next/navigation';
 import { useSocket } from '@/contexts/SocketContext';
 import { getReports, Report } from '@/services/reportService';
 import { getFiles, getSecureFileUrl } from '@/services/fileService';
@@ -31,11 +33,17 @@ interface ProjectOverviewProps {
 
 const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEditClick }: ProjectOverviewProps) => {
   const { t } = useLanguage();
+  const router = useRouter();
   if (!project) return <div className="p-4 text-center text-sm text-muted-foreground">{t('loading_overview')}</div>;
   const canManageMembers = userRole === 'admin' || userRole === 'superadmin';
   const isClient = userRole === 'client';
 
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveStatusText, setArchiveStatusText] = useState('');
+
   const [reports, setReports] = useState<Report[]>([]);
+
   const [loading, setLoading] = useState(true);
 
   const [photosCount, setPhotosCount] = useState<number>(0);
@@ -67,22 +75,22 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
     setLoadingMembers(true);
     getProjectMembers(project.id)
       .then(async data => {
-         const fetchedMembers = data.members.filter((m: any) => {
-            if (memberModalType === 'contributor') {
-               return m.role === 'contributor' || m.role === 'consultant' || m.role === 'vendor';
-            }
-            return m.role === memberModalType;
-         });
-         const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
-            if (m.user.profile_pic) {
-                try {
-                   const url = await getSecureFileUrl(m.user.profile_pic);
-                   return { ...m, secure_pic: url };
-                } catch { return m; }
-            }
-            return m;
-         }));
-         setMembers(membersWithPics);
+        const fetchedMembers = data.members.filter((m: any) => {
+          if (memberModalType === 'contributor') {
+            return m.role === 'contributor' || m.role === 'consultant' || m.role === 'vendor';
+          }
+          return m.role === memberModalType;
+        });
+        const membersWithPics = await Promise.all(fetchedMembers.map(async (m: any) => {
+          if (m.user.profile_pic) {
+            try {
+              const url = await getSecureFileUrl(m.user.profile_pic);
+              return { ...m, secure_pic: url };
+            } catch { return m; }
+          }
+          return m;
+        }));
+        setMembers(membersWithPics);
       })
       .catch((e) => toast.error("Failed to load members"))
       .finally(() => setLoadingMembers(false));
@@ -210,15 +218,15 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           setIsExporting(true);
           setExportStatusText(data.activeExport.statusText);
           if (data.activeExport.etaMs !== undefined) {
-             setIsCountingDown(true);
-             setExportTimerMs(data.activeExport.etaMs);
+            setIsCountingDown(true);
+            setExportTimerMs(data.activeExport.etaMs);
           } else {
-             setIsCountingDown(false);
-             setExportTimerMs(Date.now() - data.activeExport.startTime);
+            setIsCountingDown(false);
+            setExportTimerMs(Date.now() - data.activeExport.startTime);
           }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [project?.id, userRole]);
 
   // Socket listener for export progress
@@ -229,7 +237,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
 
     const handleExportStatus = (data: any) => {
       if (data.projectId !== project?.id) return;
-      
+
       if (!isExporting && data.statusType === 'progress') {
         setIsExporting(true);
         setExportTimerMs(0);
@@ -239,8 +247,8 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       setExportStatusText(data.status);
 
       if (data.etaMs !== undefined) {
-         setIsCountingDown(true);
-         setExportTimerMs(data.etaMs);
+        setIsCountingDown(true);
+        setExportTimerMs(data.etaMs);
       }
 
       if (data.statusType === 'success') {
@@ -256,9 +264,9 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
     socket.on('export-status', handleExportStatus);
 
     if (isExporting) {
-       timerInterval = setInterval(() => {
-         setExportTimerMs(prev => isCountingDown ? Math.max(0, prev - 1000) : prev + 1000);
-       }, 1000);
+      timerInterval = setInterval(() => {
+        setExportTimerMs(prev => isCountingDown ? Math.max(0, prev - 1000) : prev + 1000);
+      }, 1000);
     }
 
     return () => {
@@ -266,6 +274,30 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       if (timerInterval) clearInterval(timerInterval);
     };
   }, [socket, isExporting, isCountingDown, project?.id, userRole]);
+
+  // Socket listener for archive status
+  useEffect(() => {
+    if (!socket || (userRole !== 'admin' && userRole !== 'superadmin')) return;
+
+    const handleArchiveStatus = (data: any) => {
+      if (data.projectId !== project?.id) return;
+      if (data.statusType === 'progress') {
+        setIsArchiving(true);
+        setArchiveStatusText(data.status);
+      } else if (data.statusType === 'success') {
+        setIsArchiving(false);
+        setIsArchiveModalOpen(false);
+        toast.success("Project successfully zipped and archived to database vault!");
+        router.push(`/${userRole}/dashboard`);
+      } else if (data.statusType === 'failed') {
+        setIsArchiving(false);
+        toast.error(data.status || "Project archival failed");
+      }
+    };
+
+    socket.on('archive-status', handleArchiveStatus);
+    return () => { socket.off('archive-status', handleArchiveStatus); };
+  }, [socket, project?.id, userRole, router]);
 
   // Real-time stat updates
   useEffect(() => {
@@ -281,14 +313,14 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           let photos = 0, docs = 0;
           if (d.fileData) {
             d.fileData.forEach((file: any) => {
-              if (file.file_type?.startsWith('image/')) photos++;
+              if (file.file_type?.startsWith('image/') || file.file_type?.startsWith('video/')) photos++;
               else docs++;
             });
           }
           setPhotosCount(photos);
           setDocsCount(docs);
         })
-        .catch(() => {})
+        .catch(() => { })
         .finally(() => setCounting(false));
     };
 
@@ -310,6 +342,23 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
     }
   };
 
+  const handleStartArchive = async () => {
+    try {
+      if (!project?.id) return;
+      setIsArchiving(true);
+      setArchiveStatusText("Starting archival and packaging...");
+      await archiveProject(project.id);
+      setIsArchiving(false);
+      setIsArchiveModalOpen(false);
+      toast.success("Project successfully zipped and stored in vault!");
+      router.push(`/${userRole}/dashboard`);
+    } catch (e: any) {
+      setIsArchiving(false);
+      toast.error(getApiErrorMessage(e, "Failed to archive project"));
+    }
+  };
+
+
   const formatElapsed = (ms: number) => {
     const s = Math.floor(ms / 1000);
     const m = Math.floor(s / 60);
@@ -329,7 +378,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         let photos = 0, docs = 0;
         if (data.fileData) {
           data.fileData.forEach((file: any) => {
-            if (file.file_type?.startsWith('image/')) photos++;
+            if (file.file_type?.startsWith('image/') || file.file_type?.startsWith('video/')) photos++;
             else docs++;
           });
         }
@@ -373,7 +422,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
       <div className="grid grid-cols-2 gap-3">
         {!isClient && (
           <>
-            <div 
+            <div
               className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
               onClick={() => (userRole === 'admin' || userRole === 'superadmin') && onEditClick?.('start_date')}
             >
@@ -383,7 +432,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
               </div>
               <div className="mt-1 text-sm font-semibold">{project.start_date ? new Date(project.start_date).toLocaleDateString() : '—'}</div>
             </div>
-            <div 
+            <div
               className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
               onClick={() => (userRole === 'admin' || userRole === 'superadmin') && onEditClick?.('end_date')}
             >
@@ -395,7 +444,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
             </div>
           </>
         )}
-        <div 
+        <div
           className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
           onClick={() => onTabChange?.('documents')}
         >
@@ -405,7 +454,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           </div>
           <div className="mt-1 text-xl font-bold text-accent">{counting ? '...' : docsCount}</div>
         </div>
-        <div 
+        <div
           className="rounded-xl bg-card border border-border p-4 cursor-pointer hover:bg-secondary/50 transition-colors group"
           onClick={() => onTabChange?.('photos')}
         >
@@ -504,29 +553,29 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                   <span className="text-[10px] text-muted-foreground italic">Restricted</span>
                 )}
               </div>
-              <span 
-                 className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
-                 onClick={() => setMemberModalType('contributor')}
+              <span
+                className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+                onClick={() => setMemberModalType('contributor')}
               >
-                  {(project as any).totalContributors || 0} {t('active_label')} {t('contributor')}s
-                  <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+                {(project as any).totalContributors || 0} {t('active_label')} {t('contributor')}s
+                <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
               </span>
             </div>
-            
+
             <div className="flex flex-col gap-1 justify-center">
-               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('client_list_label')}</span>
-               <div className="flex items-center justify-between bg-card/50 border border-border/50 border-dashed rounded-lg px-3 py-2">
+              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-tighter">{t('client_list_label')}</span>
+              <div className="flex items-center justify-between bg-card/50 border border-border/50 border-dashed rounded-lg px-3 py-2">
                 <span className="text-xs text-muted-foreground italic">{t('code_restricted')}</span>
                 <div className="p-1.5 opacity-30">
                   <Share2 className="h-4 w-4" />
                 </div>
               </div>
-              <span 
-                 className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
-                 onClick={() => setMemberModalType('client')}
+              <span
+                className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+                onClick={() => setMemberModalType('client')}
               >
-                  {(project as any).totalClients || 0} {t('active_label')} {t('client')}s
-                  <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+                {(project as any).totalClients || 0} {t('active_label')} {t('client')}s
+                <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
               </span>
             </div>
           </div>
@@ -560,12 +609,12 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                 </div>
               </div>
               <div className="flex items-center justify-between mt-1">
-                <span 
-                   className="text-[10px] font-semibold text-muted-foreground ml-1 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
-                   onClick={() => setMemberModalType('contributor')}
+                <span
+                  className="text-[10px] font-semibold text-muted-foreground ml-1 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+                  onClick={() => setMemberModalType('contributor')}
                 >
-                    {(project as any).totalContributors || 0} {t('active_label')} {t('contributor')}s
-                    <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+                  {(project as any).totalContributors || 0} {t('active_label')} {t('contributor')}s
+                  <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
                 </span>
               </div>
             </div>
@@ -590,12 +639,12 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                   </button>
                 </div>
               </div>
-              <span 
-                 className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
-                 onClick={() => setMemberModalType('client')}
+              <span
+                className="text-[10px] font-semibold text-muted-foreground ml-1 mt-0.5 flex items-center hover:text-foreground cursor-pointer transition-colors w-fit group"
+                onClick={() => setMemberModalType('client')}
               >
-                  {(project as any).totalClients || 0} {t('active_label')} {t('client')}s
-                  <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
+                {(project as any).totalClients || 0} {t('active_label')} {t('client')}s
+                <ChevronRight className="h-3 w-3 ml-0.5 text-accent group-hover:translate-x-0.5 transition-transform" />
               </span>
             </div>
           </div>
@@ -658,7 +707,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground">{t('final_handover_report')}</h3>
           </div>
-          
+
           {isExporting ? (
             <div className="flex flex-col items-center justify-center py-6 gap-3 bg-secondary/30 rounded-lg border border-border/50">
               <Loader2 className="h-6 w-6 animate-spin text-accent" />
@@ -685,9 +734,9 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                       </span>
                     </div>
                   </div>
-                  <Button 
-                    variant="default" 
-                    size="sm" 
+                  <Button
+                    variant="default"
+                    size="sm"
                     className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                     onClick={() => window.open(latestExport.url, '_blank')}
                   >
@@ -695,19 +744,123 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
                   </Button>
                 </div>
               )}
-              
-              <Button 
-                variant="outline" 
+
+              <Button
+                variant="outline"
                 className="w-full h-11 rounded-xl border-dashed text-sm"
                 onClick={handleStartExport}
               >
-                <PlayCircle className="h-4 w-4 mr-2" /> 
+                <PlayCircle className="h-4 w-4 mr-2" />
                 {latestExport ? t('generate_new_report') : t('export_final_handover')}
               </Button>
             </>
           )}
         </div>
       )}
+
+      {/* Archive & Zip Project (Admin Only) */}
+      {(userRole === 'admin' || userRole === 'superadmin') && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Archive className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-bold text-foreground">Archive & Zip Project</h3>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+              Admin Action
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            When this project is completed, package and zip all drawings, files, RFIs, snags, and discussions. The project is safely offloaded from active projects and stored in the database vault. You can unzip and restore it anytime from <strong>Settings</strong>.
+          </p>
+          <Button
+            variant="outline"
+            className="w-full h-11 rounded-xl border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground font-semibold text-sm transition-all"
+            onClick={() => setIsArchiveModalOpen(true)}
+            disabled={isArchiving}
+          >
+            <Archive className="h-4 w-4 mr-2" />
+            Archive & Zip Project
+          </Button>
+        </div>
+      )}
+
+      {/* Archive Confirmation & Progress Dialog */}
+      <Dialog open={isArchiveModalOpen} onOpenChange={(open) => !open && !isArchiving && setIsArchiveModalOpen(false)}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <Archive className="h-5 w-5 text-primary" />
+              Archive & Zip Project
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Package <strong className="text-foreground">{project.name}</strong> into offline ZIP & database snapshot.
+            </DialogDescription>
+          </DialogHeader>
+
+          {isArchiving ? (
+            <div className="py-6 flex flex-col items-center justify-center gap-3 bg-secondary/30 rounded-xl border border-border/50">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="text-center space-y-1">
+                <p className="text-sm font-semibold animate-pulse">{archiveStatusText || "Zipping and archiving project..."}</p>
+                <p className="text-[11px] text-muted-foreground">Packaging files, discussions, pin links, and database snapshot...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3 text-xs text-muted-foreground">
+              <div className="p-3.5 bg-secondary/40 rounded-xl space-y-2 border border-border/60">
+                <div className="flex items-center gap-2 text-foreground font-semibold">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                  <span>Full lossless database backup</span>
+                </div>
+                <p className="text-[11px] pl-6">
+                  Captures all folders, photos, drawings with pins, RFIs, snags, comments, and permissions.
+                </p>
+                <div className="flex items-center gap-2 text-foreground font-semibold pt-1">
+                  <PackageCheck className="h-4 w-4 text-primary shrink-0" />
+                  <span>Frees up active organization project capacity</span>
+                </div>
+                <p className="text-[11px] pl-6">
+                  Decrements your active project count against your subscription plan.
+                </p>
+                <div className="flex items-center gap-2 text-foreground font-semibold pt-1">
+                  <RotateCcw className="h-4 w-4 text-accent shrink-0" />
+                  <span>Unzip & Restore at any time</span>
+                </div>
+                <p className="text-[11px] pl-6">
+                  Accessible from <strong>Settings &gt; Archived Projects (Zipped Vault)</strong>.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsArchiveModalOpen(false)}
+              disabled={isArchiving}
+              className="rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleStartArchive}
+              disabled={isArchiving}
+              className="rounded-xl bg-primary text-primary-foreground font-bold"
+            >
+              {isArchiving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Archiving...
+                </>
+              ) : (
+                "Confirm Archive & Zip"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* EditProjectModal moved to Project.tsx */}
 
@@ -726,67 +879,67 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="capitalize flex items-center gap-2 text-xl tracking-wide">
-              <span className="text-accent uppercase tracking-widest text-sm bg-accent/10 px-3 py-1 rounded-full">{memberModalType}s</span> 
+              <span className="text-accent uppercase tracking-widest text-sm bg-accent/10 px-3 py-1 rounded-full">{memberModalType}s</span>
             </DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-3 mt-4 max-h-[60vh] overflow-y-auto pr-2">
-             {loadingMembers ? (
-                <div className="flex justify-center p-6"><Loader2 className="h-6 w-6 animate-spin text-accent" /></div>
-             ) : members.length === 0 ? (
-                <div className="text-center p-6 text-sm text-muted-foreground bg-secondary/30 rounded-xl border border-dashed border-border/50">{t('no_active_members').replace('{role}', memberModalType || '')}</div>
-             ) : (
-                members.map((m, idx) => (
-                  <div key={idx} className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
-                     {m.secure_pic ? (
-                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full shadow-sm border border-border/50 bg-background">
-                           <img src={m.secure_pic} alt={m.user.name} className="h-full w-full object-cover" />
-                        </div>
-                     ) : (
-                        <div className="h-11 w-11 shrink-0 flex items-center justify-center rounded-full bg-secondary text-foreground font-semibold shadow-sm border border-border/50">
-                           {m.user.name?.charAt(0).toUpperCase()}
-                        </div>
-                     )}
-                     <div className="flex flex-col flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                           <span className="text-sm font-bold truncate text-foreground">{m.user.name} {m.user.is_primary && t('primary_label')}</span>
-                           {m.role === 'consultant' && (
-                             <span className="text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded-full">
-                               Consultant
-                             </span>
-                           )}
-                           {m.role === 'vendor' && (
-                             <span className="text-[9px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full">
-                               Vendor
-                             </span>
-                           )}
-                           {m.role === 'contributor' && (
-                             <span className="text-[9px] font-bold uppercase tracking-wider bg-accent/10 text-accent px-2 py-0.5 rounded-full">
-                               Contributor
-                             </span>
-                           )}
-                        </div>
-                        <div className="flex flex-col gap-1 mt-1.5">
-                           {m.user.email && (
-                             <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium"><Mail className="h-3 w-3 text-accent" />{m.user.email}</span>
-                           )}
-                           {m.user.phone_number && (
-                             <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium"><Phone className="h-3 w-3 text-accent" />{m.user.phone_number}</span>
-                          )}
-                        </div>
-                     </div>
-                     {canManageMembers && memberModalType && (
-                        <button
-                          onClick={() => setDeleteMemberObj(m)}
-                          disabled={removingMemberId === m.user.id}
-                          className="shrink-0 rounded-xl border border-destructive/20 bg-destructive/5 p-2.5 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-                          title="Remove from project"
-                        >
-                          {removingMemberId === m.user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        </button>
-                     )}
+            {loadingMembers ? (
+              <div className="flex justify-center p-6"><Loader2 className="h-6 w-6 animate-spin text-accent" /></div>
+            ) : members.length === 0 ? (
+              <div className="text-center p-6 text-sm text-muted-foreground bg-secondary/30 rounded-xl border border-dashed border-border/50">{t('no_active_members').replace('{role}', memberModalType || '')}</div>
+            ) : (
+              members.map((m, idx) => (
+                <div key={idx} className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
+                  {m.secure_pic ? (
+                    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full shadow-sm border border-border/50 bg-background">
+                      <img src={m.secure_pic} alt={m.user.name} className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="h-11 w-11 shrink-0 flex items-center justify-center rounded-full bg-secondary text-foreground font-semibold shadow-sm border border-border/50">
+                      {m.user.name?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold truncate text-foreground">{m.user.name} {m.user.is_primary && t('primary_label')}</span>
+                      {m.role === 'consultant' && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded-full">
+                          Consultant
+                        </span>
+                      )}
+                      {m.role === 'vendor' && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full">
+                          Vendor
+                        </span>
+                      )}
+                      {m.role === 'contributor' && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-accent/10 text-accent px-2 py-0.5 rounded-full">
+                          Contributor
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1 mt-1.5">
+                      {m.user.email && (
+                        <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium"><Mail className="h-3 w-3 text-accent" />{m.user.email}</span>
+                      )}
+                      {m.user.phone_number && (
+                        <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium"><Phone className="h-3 w-3 text-accent" />{m.user.phone_number}</span>
+                      )}
+                    </div>
                   </div>
-                ))
-             )}
+                  {canManageMembers && memberModalType && (
+                    <button
+                      onClick={() => setDeleteMemberObj(m)}
+                      disabled={removingMemberId === m.user.id}
+                      className="shrink-0 rounded-xl border border-destructive/20 bg-destructive/5 p-2.5 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                      title="Remove from project"
+                    >
+                      {removingMemberId === m.user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -860,7 +1013,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
               <span className="text-accent uppercase tracking-widest text-sm bg-accent/10 px-3 py-1 rounded-full">Invite Vendor</span>
             </DialogTitle>
           </DialogHeader>
-          
+
           {generatedInviteUrl ? (
             <div className="space-y-4 py-4">
               <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-2">
@@ -915,11 +1068,11 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Folder Permissions</label>
                 <div className="flex flex-wrap gap-2">
-                  <Button 
+                  <Button
                     type="button"
-                    variant="outline" 
-                    size="sm" 
-                    className="h-10 w-full justify-start text-xs font-semibold" 
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full justify-start text-xs font-semibold"
                     onClick={() => setShowFolderPicker(true)}
                   >
                     <Folder className="h-4 w-4 mr-2 text-accent" />
@@ -951,7 +1104,7 @@ const ProjectOverview = ({ project, userRole, onProjectUpdate, onTabChange, onEd
         </DialogContent>
       </Dialog>
 
-      <FolderPickerDialog 
+      <FolderPickerDialog
         open={showFolderPicker}
         onOpenChange={setShowFolderPicker}
         project={project}

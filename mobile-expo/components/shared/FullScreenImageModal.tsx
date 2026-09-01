@@ -33,6 +33,7 @@ import {
 import { getMemberForTag } from '@/services/projectService';
 
 import ZoomableImage from './ZoomableImage';
+import ZoomableVideo from './ZoomableVideo';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -621,21 +622,35 @@ export default function FullScreenImageModal({
                                 }
                             }
                         }}
-                        renderItem={({ item }) => {
+                        renderItem={({ item, index }) => {
                             const itemUri = getPhotoUri(item);
+                            const isVideo = item?.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(itemUri || item?.file_name || '');
                             const viewerHeight = SCREEN_H - insets.top - insets.bottom;
                             return (
                                 <View style={{ width: SCREEN_W, height: SCREEN_H, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
                                     <View style={{ width: SCREEN_W, height: viewerHeight, justifyContent: 'center', alignItems: 'center' }}>
-                                        <ZoomableImage
-                                            uri={itemUri || ''}
-                                            width={SCREEN_W}
-                                            height={viewerHeight}
-                                            onZoomStateChange={setIsZoomed}
-                                            onTap={() => setShowUI(prev => !prev)}
-                                            onDismiss={onClose}
-                                            gesturesEnabled={keyboardHeight === 0}
-                                        />
+                                        {isVideo ? (
+                                            <ZoomableVideo
+                                                uri={itemUri || ''}
+                                                width={SCREEN_W}
+                                                height={viewerHeight}
+                                                isActive={currentIndex === index && !isUserScrollingRef.current}
+                                                onZoomStateChange={setIsZoomed}
+                                                onTap={() => setShowUI(prev => !prev)}
+                                                onDismiss={onClose}
+                                                gesturesEnabled={keyboardHeight === 0}
+                                            />
+                                        ) : (
+                                            <ZoomableImage
+                                                uri={itemUri || ''}
+                                                width={SCREEN_W}
+                                                height={viewerHeight}
+                                                onZoomStateChange={setIsZoomed}
+                                                onTap={() => setShowUI(prev => !prev)}
+                                                onDismiss={onClose}
+                                                gesturesEnabled={keyboardHeight === 0}
+                                            />
+                                        )}
                                     </View>
                                 </View>
                             );

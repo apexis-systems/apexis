@@ -340,7 +340,7 @@ const ProjectDocuments = ({ project, user }: ProjectDocumentsProps) => {
         setFolders(json.folderData);
       }
       if (json.fileData) {
-        setDocs(json.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+        setDocs(json.fileData.filter((file: any) => !file.file_type?.startsWith('image/') && !file.file_type?.startsWith('video/')));
       }
     } catch (e) {
       console.error("Failed to fetch folders/files", e);

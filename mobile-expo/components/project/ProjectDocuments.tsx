@@ -532,7 +532,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             const data = await getProjectFiles(project.id, 'document', searchQuery);
             if (data.folderData) setFolders(data.folderData);
             if (data.fileData) {
-                setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+                setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/') && !file.file_type?.startsWith('video/') && !/\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(file.file_name || file.name || '')));
             }
         } catch (error) {
             console.error("Error fetching folders:", error);
@@ -636,8 +636,10 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             if (itemType === 'file') {
                 const fileName = (item.title || item.file_name || item.name || '').toLowerCase();
                 const isPhoto = item.file_type?.startsWith('image/') ||
+                    item.file_type?.startsWith('video/') ||
                     fileName.endsWith('.jpg') || fileName.endsWith('.png') || fileName.endsWith('.jpeg') ||
-                    fileName.endsWith('.gif') || fileName.endsWith('.webp');
+                    fileName.endsWith('.gif') || fileName.endsWith('.webp') || fileName.endsWith('.mp4') ||
+                    fileName.endsWith('.mov') || fileName.endsWith('.webm') || fileName.endsWith('.m4v');
 
                 if (isPhoto) {
                     setPdfViewerUrl(null);
@@ -2132,7 +2134,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
             // Refresh
             const data = await getProjectFiles(project.id, 'document');
             if (data.folderData) setFolders(data.folderData);
-            if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+            if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/') && !file.file_type?.startsWith('video/') && !/\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(file.file_name || file.name || '')));
             clearSelection();
         } catch (e) {
             Alert.alert(t('projectDocuments.error'), t('projectDocuments.failedToUpdateVisibility'));
@@ -2150,7 +2152,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                 // Refresh
                 const data = await getProjectFiles(project.id);
                 if (data.folderData) setFolders(data.folderData);
-                if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+                if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/') && !file.file_type?.startsWith('video/') && !/\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(file.file_name || file.name || '')));
                 clearSelection();
             }
         } catch (e) {
@@ -3695,7 +3697,7 @@ export default function ProjectDocuments({ project, user, initialFolderId, initi
                     }
                     const data = await getProjectFiles(project.id, 'document');
                     if (data.folderData) setFolders(data.folderData);
-                    if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/')));
+                    if (data.fileData) setDocs(data.fileData.filter((file: any) => !file.file_type?.startsWith('image/') && !file.file_type?.startsWith('video/') && !/\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(file.file_name || file.name || '')));
                     clearSelection();
                     setMovingContentsOf(null);
                 }}

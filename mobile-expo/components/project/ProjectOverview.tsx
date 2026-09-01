@@ -15,12 +15,14 @@ import { inviteUser } from '@/services/userService';
 import { getFolders } from '@/services/folderService';
 import MobileFolderPickerDialog from './MobileFolderPickerDialog';
 
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { getSnags } from '@/services/snagService';
 import { getSecureFileUrl } from '@/services/fileService';
 
 import { useSocket } from '@/contexts/SocketContext';
 import { exportHandoverPackage, getLatestExport, getProjectShareLinks, getProjectMembers, removeProjectMember, updateProject } from '@/services/projectService';
+import { archiveProject } from '@/services/archiveService';
+
 import { parseApiError } from '@/helpers/apiError';
 import CountryCodePicker, { countries, Country } from '@/components/CountryCodePicker';
 
@@ -44,12 +46,17 @@ const getWeekNumber = (dateStr: string): number => {
 export default function ProjectOverview({ project, userRole, onUpdate, onActionPress }: Props) {
     const { colors } = useTheme();
     const { t, i18n } = useTranslation();
+    const router = useRouter();
 
     const projectId = (project as any)?.id;
     const canManageMembers = userRole === 'admin' || userRole === 'superadmin';
     const isClient = userRole === 'client';
 
+    const [isArchiving, setIsArchiving] = useState(false);
+    const [archiveStatusText, setArchiveStatusText] = useState('');
+
     const [photosCount, setPhotosCount] = useState<number>(0);
+
     const [docsCount, setDocsCount] = useState<number>(0);
     const [counting, setCounting] = useState(true);
 
@@ -445,6 +452,32 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         };
     }, [socket, isExporting, isCountingDown, projectId, userRole]);
 
+    // Archive Socket Listener
+    useEffect(() => {
+        if (!socket || (userRole !== 'admin' && userRole !== 'superadmin')) return;
+
+        const handleArchiveStatus = (data: any) => {
+            if (data.projectId !== projectId) return;
+            if (data.statusType === 'progress') {
+                setIsArchiving(true);
+                setArchiveStatusText(data.status);
+            } else if (data.statusType === 'success') {
+                setIsArchiving(false);
+                Alert.alert(
+                    "Project Archived",
+                    "Project successfully zipped and moved to Database Vault. You can restore it anytime from Settings.",
+                    [{ text: "OK", onPress: () => router.replace('/(tabs)') }]
+                );
+            } else if (data.statusType === 'failed') {
+                setIsArchiving(false);
+                Alert.alert("Archival Failed", data.status || "Failed to archive project");
+            }
+        };
+
+        socket.on('archive-status', handleArchiveStatus);
+        return () => { socket.off('archive-status', handleArchiveStatus); };
+    }, [socket, projectId, userRole, router]);
+
     // Join project room and listen for real-time stats updates
     useEffect(() => {
         if (!socket || !projectId) return;
@@ -460,7 +493,8 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                     let photos = 0, docs = 0;
                     if (d.fileData) {
                         d.fileData.forEach((file: any) => {
-                            if (file.file_type?.startsWith('image/')) photos++;
+                            const isMedia = file.file_type?.startsWith('image/') || file.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(file.file_name || file.name || '');
+                            if (isMedia) photos++;
                             else docs++;
                         });
                     }
@@ -493,6 +527,39 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
         }
 
     };
+
+    const handleArchiveProject = () => {
+        if (!projectId) return;
+        Alert.alert(
+            "Archive & Zip Project",
+            `Are you sure you want to archive and zip "${(project as any)?.name || 'this project'}"?\n\nAll folders, drawings, photos, RFIs, and snags will be compressed into an offline package and stored in the database vault. This will offload the project from your active workspace and free your project limit.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Archive & Zip",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            setIsArchiving(true);
+                            setArchiveStatusText("Preparing project packaging...");
+                            await archiveProject(projectId);
+                            setIsArchiving(false);
+                            Alert.alert(
+                                "Project Archived",
+                                "Project has been zipped and stored in your vault. You can unzip and restore it anytime from Settings.",
+                                [{ text: "OK", onPress: () => router.replace('/(tabs)') }]
+                            );
+                        } catch (err: any) {
+                            setIsArchiving(false);
+                            const { message } = parseApiError(err, "Failed to archive project");
+                            Alert.alert("Archive Failed", message);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
 
     const formatElapsed = (ms: number) => {
         const s = Math.floor(ms / 1000);
@@ -533,8 +600,9 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
             try {
                 const data = await getProjectFiles(projectId);
                 const fileList = data.fileData || [];
-                const photos = fileList.filter((f: any) => f.file_type?.startsWith('image/'));
-                const docs = fileList.filter((f: any) => !f.file_type?.startsWith('image/'));
+                const isMedia = (f: any) => f.file_type?.startsWith('image/') || f.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(f.file_name || f.name || '');
+                const photos = fileList.filter(isMedia);
+                const docs = fileList.filter((f: any) => !isMedia(f));
                 setPhotosCount(photos.length);
                 setDocsCount(docs.length);
             } catch (err) {
@@ -1016,6 +1084,54 @@ export default function ProjectOverview({ project, userRole, onUpdate, onActionP
                                 )}
                             </View>
                         )}
+
+                        {/* Archive & Zip Project (Admin Only) */}
+                        {(userRole === 'admin' || userRole === 'superadmin') && (
+                            <View style={{ backgroundColor: 'rgba(249, 116, 22, 0.06)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(249, 116, 22, 0.2)', gap: 12 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <Feather name="archive" size={16} color={colors.primary} />
+                                        <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>Archive & Zip Project</Text>
+                                    </View>
+                                    <View style={{ backgroundColor: 'rgba(249, 116, 22, 0.12)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                                        <Text style={{ fontSize: 9, fontWeight: '700', color: colors.primary, textTransform: 'uppercase' }}>Admin</Text>
+                                    </View>
+                                </View>
+
+                                <Text style={{ fontSize: 12, color: colors.textMuted, lineHeight: 18 }}>
+                                    When completed, package and zip this project. Offloads from active workspace and stores in the Database Vault. Unzip anytime from Settings.
+                                </Text>
+
+                                {isArchiving ? (
+                                    <View style={{ paddingVertical: 16, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                                        <ActivityIndicator size="small" color={colors.primary} />
+                                        <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text }}>{archiveStatusText || "Zipping & Archiving..."}</Text>
+                                    </View>
+                                ) : (
+                                    <TouchableOpacity
+                                        onPress={handleArchiveProject}
+                                        style={{
+                                            width: '100%',
+                                            height: 46,
+                                            borderRadius: 12,
+                                            borderWidth: 1,
+                                            borderColor: colors.primary,
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: 8,
+                                            backgroundColor: colors.background,
+                                        }}
+                                    >
+                                        <Feather name="archive" size={15} color={colors.primary} />
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.primary }}>
+                                            Archive & Zip Project
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
+
 
                         {/* EditProjectModal moved to [id].tsx */}
                     </View>

@@ -744,7 +744,7 @@ export const getPlatformInsights = async () => {
     const [rfiCount, snagCount, photoCount, documentCount, chatRoomCount] = await Promise.all([
         rfis.count().catch(() => 0),
         snags.count().catch(() => 0),
-        files.count({ where: { file_type: { [Op.like]: 'image/%' } } }).catch(() => 0),
+        files.count({ where: { [Op.or]: [{ file_type: { [Op.like]: 'image/%' } }, { file_type: { [Op.like]: 'video/%' } }] } }).catch(() => 0),
         files.count({ where: { file_type: 'application/pdf' } }).catch(() => 0),
         rooms.count().catch(() => 0)
     ]);
@@ -878,7 +878,10 @@ export const getCompanyUsageData = async () => {
                         required: true
                     }],
                     where: {
-                        file_type: { [Op.like]: 'image/%' }
+                        [Op.or]: [
+                            { file_type: { [Op.like]: 'image/%' } },
+                            { file_type: { [Op.like]: 'video/%' } }
+                        ]
                     }
                 }),
                 files.count({
@@ -926,7 +929,10 @@ export const getProductUsageData = async () => {
             projects.count({ where: { createdAt: { [Op.lte]: endOfMonth } } }),
             files.count({
                 where: {
-                    file_type: { [Op.like]: 'image/%' },
+                    [Op.or]: [
+                        { file_type: { [Op.like]: 'image/%' } },
+                        { file_type: { [Op.like]: 'video/%' } }
+                    ],
                     createdAt: { [Op.lte]: endOfMonth }
                 }
             }),

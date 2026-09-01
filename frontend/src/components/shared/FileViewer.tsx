@@ -56,6 +56,8 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const currentFile = localActiveFile || parentFile;
   const isImage = currentFile?.file_type?.toLowerCase().includes('image') ||
     ['jpg', 'jpeg', 'png', 'gif', 'webp'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
+  const isVideo = currentFile?.file_type?.toLowerCase().includes('video') ||
+    ['mp4', 'mov', 'webm', 'm4v', 'avi', 'mkv'].some(ext => currentFile?.file_name?.toLowerCase().endsWith(ext));
   const isPdf = currentFile?.file_type?.toLowerCase().includes('pdf') ||
     currentFile?.file_name?.toLowerCase().endsWith('.pdf');
 
@@ -168,8 +170,10 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
   const isFilePhoto = (item: any) => {
     const name = (item.title || item.file_name || item.name || '').toLowerCase();
     return item.file_type?.startsWith('image/') ||
+      item.file_type?.startsWith('video/') ||
       name.endsWith('.jpg') || name.endsWith('.jpeg') ||
-      name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
+      name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp') ||
+      name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v');
   };
 
   const linkedDocs = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && !isFilePhoto(i));
@@ -965,6 +969,18 @@ const FileViewer = ({ files, initialIndex, open, onOpenChange, user, onUpdate, t
                     alt={currentFile.file_name}
                     className="max-w-[90%] max-h-[90%] object-contain pointer-events-none drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-500"
                   />
+                </div>
+              ) : isVideo ? (
+                <div className="w-full h-full flex items-center justify-center p-4 md:p-8">
+                  <video
+                    src={currentFile.downloadUrl}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="max-w-[90%] max-h-[90%] rounded-xl shadow-2xl bg-black"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
                 </div>
               ) : isPdf ? (
                 <div

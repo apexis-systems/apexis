@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Upload as UploadIcon, Check, Folder, X, ChevronRight, ChevronDown, MapPin, Tag, Camera, User } from 'lucide-react';
+import { ArrowLeft, Upload as UploadIcon, Check, Folder, X, ChevronRight, ChevronDown, MapPin, Tag, Camera, User, Video, Play } from 'lucide-react';
 import { Checkbox } from '@/components/ui/Checkbox';
 import ImageAnnotator from '@/components/common/ImageAnnotator';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -189,20 +189,23 @@ function UploadInner() {
             }
             const newFiles = [...files, ...selectedFiles].slice(0, 20);
             setFiles(newFiles);
-            // Auto-detect upload type from file MIME types
-            const allImages = newFiles.every(f => f.type.startsWith('image/'));
+            // Auto-detect upload type from file MIME types (images or videos -> photos/media)
+            const allMedia = newFiles.every(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
             if (!urlType) {
-                const detectedType = allImages ? 'photos' : 'documents';
+                const detectedType = allMedia ? 'photos' : 'documents';
                 setUploadType(detectedType);
                 if (detectedType === 'photos') setMetaOpen(true);
                 else setMetaOpen(false);
             }
-            // Generate previews for image files
+            // Generate previews for image and video files
             selectedFiles.forEach(file => {
                 if (file.type.startsWith('image/')) {
                     const reader = new FileReader();
                     reader.onload = () => setFilePreviews(prev => [...prev, reader.result as string]);
                     reader.readAsDataURL(file);
+                } else if (file.type.startsWith('video/')) {
+                    const videoUrl = URL.createObjectURL(file);
+                    setFilePreviews(prev => [...prev, videoUrl]);
                 } else {
                     setFilePreviews(prev => [...prev, null]);
                 }
@@ -232,12 +235,16 @@ function UploadInner() {
     };
 
     const removeFile = (index: number) => {
+        const removedPreview = filePreviews[index];
+        if (removedPreview && removedPreview.startsWith('blob:')) {
+            URL.revokeObjectURL(removedPreview);
+        }
         const newFiles = files.filter((_, i) => i !== index);
         setFiles(newFiles);
         setFilePreviews(prev => prev.filter((_, i) => i !== index));
         if (newFiles.length > 0 && !urlType) {
-            const allImages = newFiles.every(f => f.type.startsWith('image/'));
-            setUploadType(allImages ? 'photos' : 'documents');
+            const allMedia = newFiles.every(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+            setUploadType(allMedia ? 'photos' : 'documents');
         } else if (newFiles.length === 0 && !urlType) {
             setUploadType(null);
             setMetaOpen(false);
@@ -278,7 +285,7 @@ function UploadInner() {
             return;
         }
 
-        const effectiveType = uploadType || (files.every(f => f.type.startsWith('image/')) ? 'photos' : 'documents');
+        const effectiveType = uploadType || (files.every(f => f.type.startsWith('image/') || f.type.startsWith('video/')) ? 'photos' : 'documents');
 
         setIsUploading(true);
         try {
@@ -418,7 +425,7 @@ function UploadInner() {
                         className="hidden"
                         multiple
                         onChange={handleFileChange}
-                        accept={isPhotos ? "image/*" : uploadType === 'documents' ? ".pdf,.dwg,.doc,.docx,.xls,.xlsx,.csv,.txt" : undefined}
+                        accept={isPhotos ? "image/*,video/*" : uploadType === 'documents' ? ".pdf,.dwg,.doc,.docx,.xls,.xlsx,.csv,.txt" : undefined}
                     />
                     <div
                         className="flex flex-col items-center rounded-xl border-2 border-dashed border-border bg-secondary/30 p-6 cursor-pointer hover:border-accent/50 transition-colors"
@@ -428,36 +435,50 @@ function UploadInner() {
                         <p className="text-sm font-medium text-foreground">
                             {files.length > 0 ? `${files.length} file(s) selected — click to add more` : 'Click to select files (Max 20)'}
                         </p>
-                        {files.length === 0 && <p className="text-xs text-muted-foreground mt-1">Documents, images, PDFs — type auto-detected</p>}
-                        <p className="text-[10px] text-muted-foreground mt-1">Max size: 100 MB</p>
+                        {files.length === 0 && <p className="text-xs text-muted-foreground mt-1">Documents, images, videos, PDFs — type auto-detected</p>}
+                        <p className="text-[10px] text-muted-foreground mt-1">Max size: 150 MB</p>
                         {files.length > 0 && uploadType && (
-                            <p className="text-xs text-accent mt-1">Detected as: {uploadType === 'photos' ? '📷 Photos' : '📄 Documents'}</p>
+                            <p className="text-xs text-accent mt-1">Detected as: {uploadType === 'photos' ? '📷 Photos / Videos' : '📄 Documents'}</p>
                         )}
                     </div>
                     {files.length > 0 && (
                         isPhotos ? (
                             <div className="flex flex-wrap gap-2 pt-1">
-                                {files.map((f, i) => (
-                                    <div key={f.name + i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border group">
-                                        {filePreviews[i] ? (
-                                            <img src={filePreviews[i]!} alt="Preview" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full bg-secondary flex items-center justify-center">
-                                                <Camera className="h-5 w-5 text-muted-foreground" />
-                                            </div>
-                                        )}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                            {filePreviews[i] && (
-                                                <button onClick={() => setAnnotatingIdx(i)} className="bg-accent p-1.5 rounded-full hover:scale-110 transition-transform">
-                                                    <Camera className="h-3 w-3 text-white" />
-                                                </button>
+                                {files.map((f, i) => {
+                                    const isVideo = f.type.startsWith('video/');
+                                    return (
+                                        <div key={f.name + i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border group bg-secondary">
+                                            {filePreviews[i] ? (
+                                                isVideo ? (
+                                                    <div className="relative w-full h-full">
+                                                        <video src={filePreviews[i]!} className="w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                                            <div className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center">
+                                                                <Play className="h-3 w-3 text-white fill-white ml-0.5" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <img src={filePreviews[i]!} alt="Preview" className="w-full h-full object-cover" />
+                                                )
+                                            ) : (
+                                                <div className="w-full h-full bg-secondary flex items-center justify-center">
+                                                    {isVideo ? <Video className="h-5 w-5 text-muted-foreground" /> : <Camera className="h-5 w-5 text-muted-foreground" />}
+                                                </div>
                                             )}
-                                            <button onClick={() => removeFile(i)} className="bg-destructive p-1.5 rounded-full hover:scale-110 transition-transform">
-                                                <X className="h-3 w-3 text-white" />
-                                            </button>
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                {filePreviews[i] && !isVideo && (
+                                                    <button onClick={() => setAnnotatingIdx(i)} className="bg-accent p-1.5 rounded-full hover:scale-110 transition-transform">
+                                                        <Camera className="h-3 w-3 text-white" />
+                                                    </button>
+                                                )}
+                                                <button onClick={() => removeFile(i)} className="bg-destructive p-1.5 rounded-full hover:scale-110 transition-transform">
+                                                    <X className="h-3 w-3 text-white" />
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="space-y-1.5 max-h-36 overflow-y-auto">

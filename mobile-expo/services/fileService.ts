@@ -6,7 +6,7 @@ export const uploadFile = async (data: FormData) => {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
-            timeout: 120000
+            timeout: 300000
         });
         return response.data;
     } catch (error) {
@@ -24,7 +24,7 @@ export const uploadFileWithProgress = async (
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
-            timeout: 120000,
+            timeout: 300000,
             onUploadProgress: (progressEvent) => {
                 if (progressEvent.total) {
                     const pct = Math.min(100, Math.round((progressEvent.loaded * 100) / progressEvent.total));

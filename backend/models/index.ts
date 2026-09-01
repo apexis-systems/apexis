@@ -236,6 +236,15 @@ db.users.hasMany(db.transactions, { foreignKey: 'user_id' });
 db.blogs.belongsTo(db.users, { foreignKey: 'created_by', as: 'author' });
 db.users.hasMany(db.blogs, { foreignKey: 'created_by' });
 
+// Organization <-> ArchivedProject
+db.archived_projects.belongsTo(db.organizations, { foreignKey: 'organization_id' });
+db.organizations.hasMany(db.archived_projects, { foreignKey: 'organization_id' });
+
+// User <-> ArchivedProject (Archiver & Creator)
+db.archived_projects.belongsTo(db.users, { as: 'archiver', foreignKey: 'archived_by' });
+db.archived_projects.belongsTo(db.users, { as: 'creator', foreignKey: 'created_by' });
+db.users.hasMany(db.archived_projects, { foreignKey: 'archived_by' });
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
@@ -266,6 +275,8 @@ export const project_member_folders = db.project_member_folders;
 export const blocked_users = db.blocked_users;
 export const file_flag_history = db.file_flag_history;
 export const blogs = db.blogs;
+export const archived_projects = db.archived_projects;
 
 export { sequelize, Sequelize };
 export default db;
+

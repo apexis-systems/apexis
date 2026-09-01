@@ -599,7 +599,7 @@ const Billing = () => {
                       Seats: <span className="text-base font-black text-orange-600 dark:text-orange-400">{pendingCustomPlan.contributor_limit} Contributor Seats</span>
                     </div>
                     <div className="rounded-lg border border-orange-500/20 bg-background/80 px-3 py-2">
-                      Storage: <span className="text-base font-black text-orange-600 dark:text-orange-400">{Math.round(pendingCustomPlan.storage_limit_mb / 1024)} GB Storage</span>
+                      Storage: <span className="text-base font-black text-orange-600 dark:text-orange-400">{Math.round(pendingCustomPlan.storage_limit_mb / 1024)} GB Storage per Project</span>
                     </div>
                     <div className="rounded-lg border border-orange-500/20 bg-background/80 px-3 py-2">
                       Cycle: <span className="text-base font-black capitalize text-orange-600 dark:text-orange-400">{pendingCustomPlan.subscription_cycle || "monthly"}</span>

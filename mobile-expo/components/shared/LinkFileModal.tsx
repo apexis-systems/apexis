@@ -167,7 +167,8 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
                 if (f.folder_id !== null && f.folder_id !== undefined) {
                     if (folders.some(fold => String(fold.id) === String(f.folder_id))) return false;
                 }
-                return (f.file_type?.startsWith('image/') ? 'photo' : 'document') === activeTab;
+                const isMedia = f.file_type?.startsWith('image/') || f.file_type?.startsWith('video/') || /\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(f.file_name || f.name || '');
+                return (isMedia ? 'photo' : 'document') === activeTab;
             } else {
                 if (String(f.folder_id) !== String(currentParentId)) return false;
                 return true;
@@ -177,12 +178,11 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
     const getFilteredSearchFiles = () =>
         files.filter(f => {
             if (String(f.id) === String(currentFileId)) return false;
-            if (!f.file_name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-            const isImg = f.file_type?.startsWith('image/') ||
-                f.file_name?.toLowerCase().endsWith('.jpg') ||
-                f.file_name?.toLowerCase().endsWith('.png') ||
-                f.file_name?.toLowerCase().endsWith('.jpeg');
-            return (isImg ? 'photo' : 'document') === activeTab;
+            if (!f.file_name?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            const isMedia = f.file_type?.startsWith('image/') ||
+                f.file_type?.startsWith('video/') ||
+                /\.(mp4|mov|webm|m4v|png|jpe?g|webp|gif)$/i.test(f.file_name || f.name || '');
+            return (isMedia ? 'photo' : 'document') === activeTab;
         });
 
     const getBreadcrumbs = () => {
@@ -203,13 +203,19 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
         setCurrentParentId(currentFolderObj ? (currentFolderObj.parent_id ?? null) : null);
     };
 
+    const isFilePhoto = (item: any) => {
+        const name = (item.title || item.file_name || item.name || '').toLowerCase();
+        return item.file_type?.startsWith('image/') ||
+            item.file_type?.startsWith('video/') ||
+            name.endsWith('.jpg') || name.endsWith('.jpeg') ||
+            name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp') ||
+            name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.webm') || name.endsWith('.m4v');
+    };
+
     const renderFileGridItem = (item: any) => {
         const isAlreadyLinked = linkedItems.some(link => link.type === 'file' && String(link.id) === String(item.id));
         const isSelected = selectedIds.has(item.id);
-        const isImage = item.file_type?.startsWith('image/') ||
-            item.file_name?.toLowerCase().endsWith('.jpg') ||
-            item.file_name?.toLowerCase().endsWith('.png') ||
-            item.file_name?.toLowerCase().endsWith('.jpeg');
+        const isMedia = isFilePhoto(item);
 
         const toggleSelect = () => {
             if (isAlreadyLinked) return;
@@ -235,7 +241,7 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
             </View>
         );
 
-        if (isImage) {
+        if (isMedia) {
             return (
                 <TouchableOpacity key={item.id} onPress={toggleSelect} activeOpacity={0.85}
                     style={{ width: '30.5%', height: 125, backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden', borderWidth: isSelected ? 2 : 1, borderColor: isSelected ? colors.primary : colors.border, marginBottom: 12, position: 'relative' }}>
@@ -267,13 +273,6 @@ export default function LinkFileModal({ visible, onClose, onLink, onRemoveLink, 
                 </TouchableOpacity>
             );
         }
-    };
-
-    const isFilePhoto = (item: any) => {
-        const name = (item.title || item.file_name || item.name || '').toLowerCase();
-        return item.file_type?.startsWith('image/') ||
-            name.endsWith('.jpg') || name.endsWith('.jpeg') ||
-            name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp');
     };
 
     const linkedDocs = linkedItems.filter(i => (i.type === 'file' || i.target_type === 'file') && !isFilePhoto(i));

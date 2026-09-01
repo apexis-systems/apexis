@@ -184,11 +184,11 @@ export const getProjects = async (req: Request, res: Response) => {
 
         if (activeRole === 'client') {
             totalPhotosQuery = [
-                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id" AND "folders"."client_visible" = true) AND "files"."client_visible" = true AND "files"."file_type" LIKE 'image/%')`),
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id" AND "folders"."client_visible" = true) AND "files"."client_visible" = true AND ("files"."file_type" LIKE 'image/%' OR "files"."file_type" LIKE 'video/%'))`),
                 'totalPhotos'
             ];
             totalDocsQuery = [
-                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id" AND "folders"."client_visible" = true) AND "files"."client_visible" = true AND "files"."file_type" NOT LIKE 'image/%')`),
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id" AND "folders"."client_visible" = true) AND "files"."client_visible" = true AND "files"."file_type" NOT LIKE 'image/%' AND "files"."file_type" NOT LIKE 'video/%')`),
                 'totalDocs'
             ];
             totalFoldersQuery = [
@@ -197,11 +197,11 @@ export const getProjects = async (req: Request, res: Response) => {
             ];
         } else if (activeRole === 'consultant' || activeRole === 'vendor') {
             totalPhotosQuery = [
-                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT pmf."folder_id" FROM "project_member_folders" pmf JOIN "project_members" pm ON pmf."project_member_id" = pm."id" WHERE pm."user_id" = ${authUser.user_id} AND pm."project_id" = "projects"."id") AND "files"."file_type" LIKE 'image/%')`),
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT pmf."folder_id" FROM "project_member_folders" pmf JOIN "project_members" pm ON pmf."project_member_id" = pm."id" WHERE pm."user_id" = ${authUser.user_id} AND pm."project_id" = "projects"."id") AND ("files"."file_type" LIKE 'image/%' OR "files"."file_type" LIKE 'video/%'))`),
                 'totalPhotos'
             ];
             totalDocsQuery = [
-                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT pmf."folder_id" FROM "project_member_folders" pmf JOIN "project_members" pm ON pmf."project_member_id" = pm."id" WHERE pm."user_id" = ${authUser.user_id} AND pm."project_id" = "projects"."id") AND "files"."file_type" NOT LIKE 'image/%')`),
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT pmf."folder_id" FROM "project_member_folders" pmf JOIN "project_members" pm ON pmf."project_member_id" = pm."id" WHERE pm."user_id" = ${authUser.user_id} AND pm."project_id" = "projects"."id") AND "files"."file_type" NOT LIKE 'image/%' AND "files"."file_type" NOT LIKE 'video/%')`),
                 'totalDocs'
             ];
             totalFoldersQuery = [
@@ -210,11 +210,11 @@ export const getProjects = async (req: Request, res: Response) => {
             ];
         } else {
             totalPhotosQuery = [
-                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id") AND "files"."file_type" LIKE 'image/%')`),
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id") AND ("files"."file_type" LIKE 'image/%' OR "files"."file_type" LIKE 'video/%'))`),
                 'totalPhotos'
             ];
             totalDocsQuery = [
-                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id") AND "files"."file_type" NOT LIKE 'image/%')`),
+                literal(`(SELECT CAST(COUNT(*) AS INTEGER) FROM "files" WHERE "files"."folder_id" IN (SELECT "id" FROM "folders" WHERE "folders"."project_id" = "projects"."id") AND "files"."file_type" NOT LIKE 'image/%' AND "files"."file_type" NOT LIKE 'video/%')`),
                 'totalDocs'
             ];
             totalFoldersQuery = [
@@ -995,7 +995,12 @@ export const getProjectPhotos = async (req: Request, res: Response) => {
         const whereCondition: any = {
             [Op.and]: [
                 projectOrFolderCond,
-                { file_type: { [Op.iLike]: "image/%" } },
+                {
+                    [Op.or]: [
+                        { file_type: { [Op.iLike]: "image/%" } },
+                        { file_type: { [Op.iLike]: "video/%" } }
+                    ]
+                },
                 { is_current: true }
             ]
         };
