@@ -33,6 +33,7 @@ import searchRoutes from "./routes/searchRoutes.ts";
 import trashRoutes from "./routes/trashRoutes.ts";
 import blogRoutes from "./routes/blogRoutes.ts";
 import blogPublicRoutes from "./routes/blogPublicRoutes.ts";
+import archiveRoutes from "./routes/archiveRoutes.ts";
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -69,6 +70,7 @@ app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/qr", qrAuthRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/archives", archiveRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/folders", folderRoutes);
@@ -89,6 +91,7 @@ app.use("/api/search", searchRoutes);
 app.use("/api/trash", trashRoutes);
 app.use("/api/blogs", blogRoutes);
 app.use("/api/public/blogs", blogPublicRoutes);
+
 
 // Global Error Handler
 app.use((err: any, req: Request, res: Response, next: any) => {

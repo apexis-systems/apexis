@@ -564,6 +564,29 @@ export default function ProfileScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
+                                    onPress={() => router.push('/archived-projects' as any)}
+                                    style={{
+                                        borderRadius: 16,
+                                        backgroundColor: colors.surface,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                        padding: 16,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 14
+                                    }}
+                                >
+                                    <View style={{ backgroundColor: 'rgba(249, 116, 22, 0.1)', width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Feather name="archive" size={20} color={colors.primary} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }}>Archived Projects (Zipped Vault)</Text>
+                                        <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>Offline Zipped Backups & Restore</Text>
+                                    </View>
+                                    <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
                                     onPress={() => router.push('/trash')}
                                 style={{
                                     borderRadius: 16,
@@ -587,6 +610,7 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                             </>
                         )}
+
                     </View>
 
                     {user.role === 'admin' && (

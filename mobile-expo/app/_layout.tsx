@@ -430,6 +430,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="subscription" options={{ headerShown: false }} />
+        <Stack.Screen name="archived-projects" options={{ headerShown: false }} />
       </Stack>
       <Modal visible={isProcessingInvitation} transparent animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>

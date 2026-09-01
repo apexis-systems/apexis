@@ -617,7 +617,7 @@ export default function SubscriptionScreen() {
                 • Seats: <Text style={{ fontFamily: "Montserrat-Bold", color: "#f97316" }}>{pendingCustomPlan.contributor_limit} Contributor Seats</Text>
               </Text>
               <Text style={{ fontFamily: "Montserrat-SemiBold", fontSize: 13, color: colors.text }}>
-                • Storage: <Text style={{ fontFamily: "Montserrat-Bold", color: "#f97316" }}>{Math.round(pendingCustomPlan.storage_limit_mb / 1024)} GB Storage</Text>
+                • Storage: <Text style={{ fontFamily: "Montserrat-Bold", color: "#f97316" }}>{Math.round(pendingCustomPlan.storage_limit_mb / 1024)} GB Storage per Project</Text>
               </Text>
               <Text style={{ fontFamily: "Montserrat-SemiBold", fontSize: 13, color: colors.text }}>
                 • Cycle: <Text style={{ fontFamily: "Montserrat-Bold", color: "#f97316", textTransform: "capitalize" }}>{pendingCustomPlan.subscription_cycle || "monthly"}</Text>
